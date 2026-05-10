@@ -1,0 +1,2 @@
+- The open folder should be hidden under file open folder.
+- The chat interface should be visible always in the app.

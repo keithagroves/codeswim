@@ -1,0 +1,57 @@
+Create or replace a mermaid diagram file (`.md`) in the workspace.
+
+Diagrams are the spec; this tool is how you propose architectural changes BEFORE writing code. The system gates code-mutating tools (`write`, `edit`) on at least one prior `diagram_edit` call in the same session — so use this first when adding features, new flows, or new subsystems.
+
+# Parameters
+- `file` (string, required): POSIX path relative to workspace root, ending in `.md`. Must not escape the root with `..` segments.
+- `content` (string, required): Full file contents. The tool always writes the whole file — there is no patch/edit mode for diagrams. Diagrams are small enough that full rewrites are clearer for the reviewer.
+
+# What the file must contain
+- YAML frontmatter at the top with `name` (string), `description` (string), `tags` (list).
+- Exactly one ` ```mermaid` fenced code block. Multiple mermaid blocks is an error — the renderer only shows the first, and additional blocks signal you should split into separate diagram files.
+- Optional prose between the frontmatter and the mermaid block to orient the reader.
+- Mermaid click handlers use `click NodeId call navigate("./relative/path")`. Targets ending in `.md` open as another diagram (push breadcrumb); anything else opens in an editor pane.
+
+# Conventions
+- `overview.md` lives at the workspace root. It links to each subsystem.
+- `architecture/<subsystem>.md` describes one subsystem and includes a "Source" section beneath the mermaid block listing the files it covers, with a one-line role for each.
+- `flows/<flow>.md` describes a sequence or flowchart for a specific request flow.
+- `decisions/adr-<n>-<slug>.md` is an architecture decision record explaining *why* a thing is the way it is.
+- Link to specific files, not directories. `[migrations](../src/db/migrations/)` is broken; `[001_initial.sql](../src/db/migrations/001_initial.sql)` is valid.
+
+# Example
+
+```
+---
+name: Auth Service
+description: JWT-based session management; issues and verifies tokens.
+tags: [architecture, auth]
+---
+
+The auth service issues short-lived JWTs on login and verifies them on each
+request. Refresh tokens are stored in the user database.
+
+```mermaid
+flowchart TD
+    Login[POST /login] --> Verify[verifyPassword]
+    Verify --> Sign[signJwt]
+    Sign --> Resp[200 + token]
+
+    click Verify call navigate("../src/auth/verify.ts")
+    click Sign call navigate("../src/auth/sign.ts")
+```
+
+## Source
+- [src/auth/verify.ts](../src/auth/verify.ts) — bcrypt comparison, rate-limit check
+- [src/auth/sign.ts](../src/auth/sign.ts) — JWT signing with `JWT_SECRET`
+```
+
+# Returns
+- `kind`: `"created"` if the file is new, `"replaced"` if it existed.
+- `file`: the relative path written.
+- `before` / `after`: previous and new contents (the renderer uses these to show a side-by-side diagram diff).
+
+# Errors
+- `frontmatter is missing or malformed` — add a `--- ... ---` block at the top with `name`, `description`, `tags`.
+- `diagram file must contain exactly one mermaid block` — split into multiple files, or remove duplicate fences.
+- `file must be a relative path` / `must end in .md` / `must not escape workspace root` — fix the path.

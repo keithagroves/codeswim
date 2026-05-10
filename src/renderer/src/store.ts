@@ -1,0 +1,92 @@
+import { createContext, useContext } from 'react'
+
+export type View = 'diagram' | 'code' | 'output'
+
+export interface Toast {
+  id: number
+  kind: 'info' | 'error'
+  message: string
+}
+
+export type RunStatus = 'running' | 'exited'
+
+export interface RunningScript {
+  name: string
+  status: RunStatus
+  exitCode: number | null
+  signal: string | null
+  output: string
+  startedAt: number
+}
+
+export interface TreeNode {
+  kind: 'file' | 'dir'
+  name: string
+  path: string
+  children?: TreeNode[]
+}
+
+export type ChatStatus = 'idle' | 'connecting' | 'ready' | 'thinking' | 'error'
+
+export interface ChatMessagePart {
+  id?: string
+  kind: 'text' | 'tool' | 'unknown'
+  text?: string
+  tool?: string
+  status?: 'running' | 'completed' | 'error'
+  metadata?: unknown
+}
+
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  parts: ChatMessagePart[]
+}
+
+export interface AppState {
+  rootPath: string | null
+  currentFile: string | null
+  breadcrumbs: string[]
+  view: View
+  fileContents: string | null
+  loading: boolean
+  toasts: Toast[]
+  scripts: string[]
+  runningScript: RunningScript | null
+  // The view we should return to when the user closes the output panel.
+  prevView: 'diagram' | 'code' | null
+  tree: TreeNode[] | null
+  sidebarOpen: boolean
+  chatStatus: ChatStatus
+  chatError: string | null
+  chatMessages: ChatMessage[]
+  chatPanelOpen: boolean
+}
+
+export interface StoreApi {
+  state: AppState
+  pickRoot(): Promise<void>
+  navigateRelative(relativePathFromCurrent: string): Promise<void>
+  navigateAbsolute(relativeToRoot: string, pushBreadcrumb: boolean): Promise<void>
+  popTo(index: number): Promise<void>
+  toast(message: string, kind?: 'info' | 'error'): void
+  reload(): Promise<void>
+  runScript(name: string): Promise<void>
+  killScript(): Promise<void>
+  showOutput(): void
+  hideOutput(): void
+  toggleSidebar(): void
+  // For markdown files: switch between rendered diagram and raw source view.
+  toggleSource(): void
+  refreshTree(): Promise<void>
+  sendChat(text: string): Promise<void>
+  toggleChatPanel(): void
+}
+
+export const StoreContext = createContext<StoreApi | null>(null)
+
+export function useStore(): StoreApi {
+  const ctx = useContext(StoreContext)
+  if (!ctx) throw new Error('useStore must be used within StoreProvider')
+  return ctx
+}
