@@ -1331,3 +1331,337 @@ button.secondary:hover {
 .read-diagram .node[role="button"]:hover path {
   filter: brightness(0.96);
 }
+
+.chat-help-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 10px 0 0;
+}
+
+.chat-help-label select,
+.chat-help-label input {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text);
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.chat-help-label select:focus,
+.chat-help-label input:focus {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.chat-help-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.chat-help-error {
+  color: var(--error-text);
+  font-size: 12px;
+  margin: 6px 0 0;
+}
+
+.chat-error-body {
+  white-space: pre-wrap;
+  font-family:
+    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+/* Fallback-clickable nodes: every mermaid node is clickable but ones without
+ * an explicit `click ... call navigate(...)` get a dashed outline so the
+ * authored vs. fallback distinction is visible. */
+.read-diagram .node.has-default-navigation rect,
+.read-diagram .node.has-default-navigation polygon,
+.read-diagram .node.has-default-navigation circle,
+.read-diagram .node.has-default-navigation ellipse,
+.read-diagram .node.has-default-navigation path {
+  stroke-dasharray: 4 3;
+  opacity: 0.92;
+}
+
+.read-diagram .node.has-default-navigation:hover rect,
+.read-diagram .node.has-default-navigation:hover polygon,
+.read-diagram .node.has-default-navigation:hover circle,
+.read-diagram .node.has-default-navigation:hover ellipse,
+.read-diagram .node.has-default-navigation:hover path {
+  filter: brightness(0.94);
+}
+
+/* Session selector — sits between the chat header and the message list. */
+.chat-session-bar {
+  position: relative;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  flex-shrink: 0;
+}
+
+.chat-session-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 12px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.chat-session-trigger:hover {
+  background: var(--bg-muted);
+  color: var(--text);
+}
+
+.chat-session-label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-session-caret {
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+.chat-session-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 8px;
+  right: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  padding: 4px;
+  z-index: 40;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.chat-session-menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 12.5px;
+  font-family: inherit;
+}
+
+.chat-session-menu-item:hover {
+  background: var(--bg-muted);
+}
+
+.chat-session-menu-item.is-current {
+  background: rgba(9, 105, 218, 0.1);
+  color: var(--accent);
+}
+
+.chat-session-menu-new {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.chat-session-menu-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 2px;
+}
+
+.chat-session-menu-empty {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.chat-session-menu-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.chat-session-menu-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Mermaid parse-error banner with "Fix with agent" action */
+.mermaid-error {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mermaid-error-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.mermaid-error-detail {
+  margin: 0;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--error-border);
+  border-radius: 4px;
+  font-family:
+    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 11.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.mermaid-error-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.mermaid-error-source {
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family:
+    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 11.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 320px;
+  overflow: auto;
+}
+
+/* Start screen — actions + recents */
+.start-screen-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.start-screen-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 0;
+}
+
+.start-recents {
+  margin-top: 24px;
+  width: 100%;
+  max-width: 480px;
+}
+
+.start-recents-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-bottom: 6px;
+  padding: 0 4px;
+}
+
+.link-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  font-weight: 500;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.link-btn:hover {
+  text-decoration: underline;
+}
+
+.start-recents-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.start-recents-list li {
+  border-bottom: 1px solid var(--border);
+}
+
+.start-recents-list li:last-child {
+  border-bottom: 0;
+}
+
+.start-recent-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.start-recent-item:hover {
+  background: var(--bg-muted);
+}
+
+.start-recent-name {
+  font-weight: 600;
+}
+
+.start-recent-path {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-family:
+    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}

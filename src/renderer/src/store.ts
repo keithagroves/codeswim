@@ -29,6 +29,13 @@ export interface TreeNode {
 
 export type ChatStatus = 'idle' | 'connecting' | 'ready' | 'thinking' | 'error'
 
+export interface SessionInfo {
+  id: string
+  title: string
+  createdAt: number
+  updatedAt: number
+}
+
 export interface ChatMessagePart {
   id?: string
   kind: 'text' | 'tool' | 'unknown'
@@ -62,6 +69,10 @@ export interface AppState {
   chatError: string | null
   chatMessages: ChatMessage[]
   chatPanelOpen: boolean
+  chatSettingsOpen: boolean
+  sessions: SessionInfo[]
+  currentSessionId: string | null
+  recents: string[]
 }
 
 export interface StoreApi {
@@ -84,6 +95,15 @@ export interface StoreApi {
   refreshTree(): Promise<void>
   sendChat(text: string): Promise<void>
   toggleChatPanel(): void
+  toggleChatSettings(): void
+  fetchProviderMethods(): Promise<Record<string, Array<{ type: 'oauth' | 'api'; label: string }>>>
+  configureProvider(provider: string, apiKey: string): Promise<void>
+  newSession(): Promise<void>
+  switchSession(sessionId: string): Promise<void>
+  refreshSessions(): Promise<void>
+  newProject(): Promise<void>
+  openRecent(path: string): Promise<void>
+  clearRecents(): Promise<void>
 }
 
 export const StoreContext = createContext<StoreApi | null>(null)

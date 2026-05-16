@@ -9,8 +9,22 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  # The opencode binary + our harness output need to be inside the package.
+  - out/harness/**
+  - node_modules/opencode-ai/**
+  - node_modules/opencode-darwin-arm64/**
+  - node_modules/opencode-darwin-x64/**
+  - node_modules/opencode-linux-arm64/**
+  - node_modules/opencode-linux-x64/**
+  - node_modules/opencode-windows-x64/**
 asarUnpack:
   - resources/**
+  # opencode is a spawned binary — must live on disk, not inside app.asar.
+  - node_modules/opencode-ai/**
+  - node_modules/opencode-*/**
+  # Our plugin is loaded by opencode via a file:// URL, which can't read
+  # inside app.asar. Unpack so the path is real.
+  - out/harness/**
 win:
   executableName: diagram-nav
 nsis:

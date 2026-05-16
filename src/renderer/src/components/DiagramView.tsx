@@ -3,6 +3,7 @@ import mermaid from 'mermaid'
 import { parseMarkdown } from '../parse'
 import { useStore } from '../store'
 import { MarkdownProse } from './MarkdownProse'
+import { MermaidErrorBanner } from './MermaidErrorBanner'
 
 let mermaidInitialized = false
 function ensureMermaidInitialized(): void {
@@ -158,10 +159,7 @@ export function DiagramView({ source }: { source: string }): React.JSX.Element {
       ) : null}
 
       {errorMessage ? (
-        <>
-          <div className="banner error">Mermaid render error: {errorMessage}</div>
-          <pre className="code-block">{currentSource}</pre>
-        </>
+        <MermaidErrorBanner error={errorMessage} source={currentSource} />
       ) : (
         <div className="diagram-canvas" ref={canvasRef} />
       )}

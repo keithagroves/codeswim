@@ -40,10 +40,11 @@ function ViewSwitcher(): React.JSX.Element | null {
 }
 
 function Header(): React.JSX.Element {
-  const { state, popTo, showOutput, toggleSidebar } = useStore()
+  const { state, popTo, showOutput, toggleSidebar, navigateAbsolute } = useStore()
   const canGoBack = state.breadcrumbs.length > 0
   const running = state.runningScript
   const chip = running !== null && state.view !== 'output' ? running : null
+  const atOverview = state.currentFile === 'overview.md'
 
   return (
     <div className="header">
@@ -57,13 +58,23 @@ function Header(): React.JSX.Element {
       </button>
       {canGoBack ? (
         <button
-          className="secondary"
+          className="icon-btn"
           onClick={() => void popTo(state.breadcrumbs.length - 1)}
           title="Back"
+          aria-label="Back"
         >
-          ← Back
+          ←
         </button>
       ) : null}
+      <button
+        className="icon-btn"
+        onClick={() => void navigateAbsolute('overview.md', true)}
+        title="Overview"
+        aria-label="Overview"
+        disabled={atOverview}
+      >
+        ⌂
+      </button>
       <Breadcrumbs />
       <div className="header-actions">
         <ViewSwitcher />
@@ -110,18 +121,55 @@ function Body(): React.JSX.Element {
 }
 
 function StartScreen(): React.JSX.Element {
-  const { pickRoot } = useStore()
+  const { state, pickRoot, newProject, openRecent, clearRecents } = useStore()
+  const recents = state.recents
+
   return (
     <div className="start-screen">
       <h1>codeswim</h1>
       <p>
-        Pick a folder containing markdown files with embedded mermaid diagrams. The agent in the
-        right panel will edit those diagrams first, then code at the leaves.
+        Pick a folder of markdown files with embedded mermaid diagrams. The agent in the right
+        panel edits diagrams first, then code at the leaves.
       </p>
-      <p className="start-screen-hint">File → Open Folder… (⌘O)</p>
-      <button className="primary" onClick={() => void pickRoot()}>
-        Open folder…
-      </button>
+      <div className="start-screen-actions">
+        <button className="primary" onClick={() => void newProject()}>
+          + New project…
+        </button>
+        <button className="secondary" onClick={() => void pickRoot()}>
+          Open folder…
+        </button>
+      </div>
+      <p className="start-screen-hint">⌘N to create · ⌘O to open</p>
+
+      {recents.length > 0 ? (
+        <div className="start-recents">
+          <div className="start-recents-header">
+            <span>Recent</span>
+            <button className="link-btn" onClick={() => void clearRecents()}>
+              Clear
+            </button>
+          </div>
+          <ul className="start-recents-list">
+            {recents.map((path) => {
+              const segs = path.split('/').filter(Boolean)
+              const name = segs[segs.length - 1] ?? path
+              const parent = segs.slice(0, -1).join('/')
+              return (
+                <li key={path}>
+                  <button
+                    className="start-recent-item"
+                    onClick={() => void openRecent(path)}
+                    title={path}
+                  >
+                    <span className="start-recent-name">{name}</span>
+                    <span className="start-recent-path">{parent || '/'}</span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      ) : null}
     </div>
   )
 }

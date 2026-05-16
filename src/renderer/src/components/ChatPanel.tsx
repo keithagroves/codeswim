@@ -99,31 +99,176 @@ function PartView({
   return <div className="chat-text chat-text-muted">[unsupported part]</div>
 }
 
-function NoProviderHelp(): React.JSX.Element {
-  const [copied, setCopied] = useState(false)
-  const cmd = 'opencode auth login'
-  const copy = async (): Promise<void> => {
+const PROVIDER_LABELS: Record<string, string> = {
+  anthropic: 'Anthropic',
+  openai: 'OpenAI',
+  openrouter: 'OpenRouter',
+  google: 'Google AI',
+  groq: 'Groq',
+  xai: 'xAI',
+  mistral: 'Mistral',
+  cerebras: 'Cerebras',
+  deepseek: 'DeepSeek',
+  fireworks: 'Fireworks',
+  ollama: 'Ollama',
+  vertex: 'Google Vertex',
+  bedrock: 'AWS Bedrock',
+  azure: 'Azure',
+  'github-copilot': 'GitHub Copilot'
+}
+
+// Providers that accept a plain API key via `auth.set`, even when opencode
+// doesn't list them in /provider/auth (which only returns providers with
+// custom auth-hook plugins). We add these so users can paste an API key for
+// the common big-name providers without leaving the app.
+const COMMON_API_KEY_PROVIDERS = [
+  'anthropic',
+  'openai',
+  'openrouter',
+  'google',
+  'groq',
+  'xai',
+  'mistral',
+  'cerebras',
+  'deepseek',
+  'fireworks'
+]
+
+function prettyProvider(id: string): string {
+  return PROVIDER_LABELS[id] ?? id.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+interface ProviderOption {
+  id: string
+  label: string
+  hasApi: boolean
+  hasOauth: boolean
+}
+
+function ProviderSetup({ onCancel }: { onCancel?: () => void } = {}): React.JSX.Element {
+  const { fetchProviderMethods, configureProvider } = useStore()
+  const [methods, setMethods] = useState<ProviderOption[] | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [providerId, setProviderId] = useState('')
+  const [apiKey, setApiKey] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const raw = await fetchProviderMethods()
+        if (cancelled) return
+        const opts = new Map<string, ProviderOption>()
+        for (const [id, list] of Object.entries(raw)) {
+          opts.set(id, {
+            id,
+            label: prettyProvider(id),
+            hasApi: list.some((m) => m.type === 'api'),
+            hasOauth: list.some((m) => m.type === 'oauth')
+          })
+        }
+        // Augment with common API-key providers that aren't in /provider/auth.
+        for (const id of COMMON_API_KEY_PROVIDERS) {
+          if (opts.has(id)) continue
+          opts.set(id, { id, label: prettyProvider(id), hasApi: true, hasOauth: false })
+        }
+        const sorted = [...opts.values()]
+          .filter((o) => o.hasApi || o.hasOauth)
+          .sort((a, b) => a.label.localeCompare(b.label))
+        setMethods(sorted)
+        const preferred =
+          sorted.find((o) => o.id === 'anthropic') ??
+          sorted.find((o) => o.id === 'openai') ??
+          sorted.find((o) => o.hasApi)
+        if (preferred) setProviderId(preferred.id)
+      } catch (err) {
+        if (cancelled) return
+        const msg = err instanceof Error ? err.message : String(err)
+        setLoadError(msg)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [fetchProviderMethods])
+
+  const selected = methods?.find((o) => o.id === providerId) ?? null
+  const canSave = selected?.hasApi === true && apiKey.trim().length > 0 && !saving
+
+  const onSave = async (): Promise<void> => {
+    if (!selected || !canSave) return
+    setSaving(true)
+    setSaveError(null)
     try {
-      await navigator.clipboard.writeText(cmd)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      // ignore — user can select+copy manually
+      await configureProvider(selected.id, apiKey.trim())
+      // chat-status flips to 'ready' inside configureProvider via ensureAgent;
+      // this component will unmount when chatStatus !== 'error'.
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setSaveError(msg)
+    } finally {
+      setSaving(false)
     }
   }
+
   return (
     <div className="chat-help">
-      <div className="chat-help-title">No AI provider configured</div>
-      <p>Run this in a terminal to set one up, then come back and try again:</p>
-      <div className="chat-help-cmd">
-        <code>{cmd}</code>
-        <button className="secondary" onClick={() => void copy()}>
-          {copied ? 'Copied' : 'Copy'}
-        </button>
-      </div>
-      <p className="chat-help-note">
-        opencode supports Anthropic, OpenAI, OpenRouter, GitHub Copilot, and others. Pick one.
-      </p>
+      <div className="chat-help-title">Configure an AI provider</div>
+      {loadError ? (
+        <p className="chat-help-error">Couldn’t load providers: {loadError}</p>
+      ) : methods === null ? (
+        <p className="chat-help-note">Loading providers…</p>
+      ) : (
+        <>
+          <p>Pick a provider and paste an API key. The key is sent only to the local opencode server.</p>
+          <label className="chat-help-label">
+            Provider
+            <select value={providerId} onChange={(e) => setProviderId(e.target.value)}>
+              {methods.map((opt) => (
+                <option key={opt.id} value={opt.id} disabled={!opt.hasApi}>
+                  {opt.label}
+                  {!opt.hasApi && opt.hasOauth ? ' (OAuth — use terminal)' : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          {selected?.hasApi ? (
+            <label className="chat-help-label">
+              API key
+              <input
+                type="password"
+                placeholder="sk-…"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </label>
+          ) : selected?.hasOauth ? (
+            <p className="chat-help-note">
+              This provider uses OAuth. Run <code>npx opencode auth login</code> in a terminal to
+              complete the browser flow.
+            </p>
+          ) : null}
+          {saveError ? <p className="chat-help-error">{saveError}</p> : null}
+          <div className="chat-help-actions">
+            {onCancel ? (
+              <button className="secondary" onClick={onCancel} disabled={saving}>
+                Cancel
+              </button>
+            ) : null}
+            <button
+              className="primary"
+              onClick={() => void onSave()}
+              disabled={!canSave}
+            >
+              {saving ? 'Saving…' : 'Save and connect'}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -141,8 +286,90 @@ function MessageView({ message }: { message: ChatMessage }): React.JSX.Element {
   )
 }
 
+function truncateTitle(title: string, max = 40): string {
+  if (title.length <= max) return title
+  return title.slice(0, max - 1) + '…'
+}
+
+function SessionBar(): React.JSX.Element | null {
+  const { state, newSession, switchSession } = useStore()
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e: MouseEvent): void => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [open])
+
+  if (!state.rootPath) return null
+  const current = state.sessions.find((s) => s.id === state.currentSessionId) ?? null
+  const label = current ? truncateTitle(current.title) : 'No session'
+
+  return (
+    <div className="chat-session-bar" ref={ref}>
+      <button
+        className="chat-session-trigger"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={current?.title ?? 'Pick a session'}
+      >
+        <span className="chat-session-label">{label}</span>
+        <span className="chat-session-caret">▾</span>
+      </button>
+      {open ? (
+        <div className="chat-session-menu" role="menu">
+          <button
+            className="chat-session-menu-item chat-session-menu-new"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false)
+              void newSession()
+            }}
+          >
+            + New session
+          </button>
+          <div className="chat-session-menu-divider" />
+          {state.sessions.length === 0 ? (
+            <div className="chat-session-menu-empty">No sessions yet</div>
+          ) : (
+            state.sessions.map((s) => (
+              <button
+                key={s.id}
+                className={`chat-session-menu-item ${
+                  s.id === state.currentSessionId ? 'is-current' : ''
+                }`}
+                role="menuitemradio"
+                aria-checked={s.id === state.currentSessionId}
+                onClick={() => {
+                  setOpen(false)
+                  if (s.id !== state.currentSessionId) void switchSession(s.id)
+                }}
+              >
+                <span className="chat-session-menu-title">{truncateTitle(s.title, 36)}</span>
+                <span className="chat-session-menu-time">
+                  {new Date(s.updatedAt).toLocaleString(undefined, {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit'
+                  })}
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 export function ChatPanel(): React.JSX.Element {
-  const { state, sendChat, toggleChatPanel } = useStore()
+  const { state, sendChat, toggleChatPanel, toggleChatSettings } = useStore()
   const [input, setInput] = useState('')
   const listRef = useRef<HTMLDivElement | null>(null)
   const sending = state.chatStatus === 'thinking' || state.chatStatus === 'connecting'
@@ -187,6 +414,16 @@ export function ChatPanel(): React.JSX.Element {
         <StatusBadge />
         <button
           className="icon-btn"
+          onClick={toggleChatSettings}
+          title="Provider settings"
+          aria-label="Provider settings"
+          aria-pressed={state.chatSettingsOpen}
+          disabled={!state.rootPath}
+        >
+          ⚙
+        </button>
+        <button
+          className="icon-btn"
           onClick={toggleChatPanel}
           title="Hide chat"
           aria-label="Hide chat"
@@ -194,7 +431,9 @@ export function ChatPanel(): React.JSX.Element {
           ✕
         </button>
       </div>
+      <SessionBar />
       <div className="chat-list" ref={listRef}>
+        {state.chatSettingsOpen ? <ProviderSetup onCancel={toggleChatSettings} /> : null}
         {state.chatMessages.length === 0 ? (
           <div className="chat-empty">
             {state.rootPath
@@ -214,11 +453,11 @@ export function ChatPanel(): React.JSX.Element {
         ) : null}
         {state.chatStatus === 'error' && state.chatError ? (
           state.chatError.startsWith('No AI provider') ? (
-            <NoProviderHelp />
+            <ProviderSetup />
           ) : (
             <div className="chat-message chat-message-error">
               <div className="chat-message-role">Error</div>
-              <div className="chat-message-body">{state.chatError}</div>
+              <div className="chat-message-body chat-error-body">{state.chatError}</div>
             </div>
           )
         ) : null}

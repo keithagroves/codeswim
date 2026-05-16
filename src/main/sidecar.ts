@@ -17,15 +17,25 @@ export interface SidecarHandle {
 
 const SERVER_READY_TIMEOUT_MS = 30_000
 
+// In packaged builds, asarUnpack'd files live at app.asar.unpacked/ next
+// to app.asar. We unpack opencode-ai (the Node shim), the platform-specific
+// opencode-{platform}-{arch} package (which holds the actual binary), and
+// out/harness so our plugin file:// URL points at a real file.
+function resolveUnpacked(...segments: string[]): string {
+  const base = app.isPackaged
+    ? app.getAppPath().replace(/app\.asar$/, 'app.asar.unpacked')
+    : app.getAppPath()
+  return path.join(base, ...segments)
+}
+
 function resolveOpencodeBinary(): string {
-  // node_modules/.bin/opencode is a Node shim that finds the platform binary.
-  return path.join(app.getAppPath(), 'node_modules', '.bin', 'opencode')
+  // node_modules/.bin/opencode is a Node shim that finds the platform binary
+  // by walking up node_modules and looking for opencode-{platform}-{arch}.
+  return resolveUnpacked('node_modules', '.bin', 'opencode')
 }
 
 function resolveHarness(): { plugin: string; instructions: string[] } {
-  const root = app.isPackaged
-    ? path.join(process.resourcesPath, 'harness')
-    : path.join(app.getAppPath(), 'out', 'harness')
+  const root = resolveUnpacked('out', 'harness')
   return {
     plugin: pathToFileURL(path.join(root, 'plugin.mjs')).href,
     instructions: [
@@ -35,12 +45,19 @@ function resolveHarness(): { plugin: string; instructions: string[] } {
   }
 }
 
+interface ExitInfo {
+  signal: NodeJS.Signals | null
+  stderrTail: string[]
+}
+
 interface StartOptions {
   workspaceRoot: string
   onStdout?: (line: string) => void
   onStderr?: (line: string) => void
-  onExit?: (code: number | null) => void
+  onExit?: (code: number | null, info: ExitInfo) => void
 }
+
+const STDERR_TAIL_LIMIT = 40
 
 export async function startSidecar(opts: StartOptions): Promise<SidecarHandle> {
   const binary = resolveOpencodeBinary()
@@ -65,13 +82,25 @@ export async function startSidecar(opts: StartOptions): Promise<SidecarHandle> {
   }
   delete env.OPENCODE_SERVER_PASSWORD
 
+  const stderrTail: string[] = []
+  const recordStderr = (line: string): void => {
+    stderrTail.push(line)
+    if (stderrTail.length > STDERR_TAIL_LIMIT) stderrTail.shift()
+    opts.onStderr?.(line)
+  }
+
   const child = spawn(binary, ['serve', '--port', '0', '--hostname', '127.0.0.1'], {
     cwd: opts.workspaceRoot,
     env,
     stdio: ['ignore', 'pipe', 'pipe']
   })
 
-  const url = await waitForServerUrl(child, opts)
+  // One exit listener; carries stderr tail so the renderer can show *why*.
+  child.once('exit', (code, signal) => {
+    opts.onExit?.(code, { signal, stderrTail: [...stderrTail] })
+  })
+
+  const url = await waitForServerUrl(child, opts.onStdout, recordStderr)
 
   return {
     url,
@@ -79,9 +108,14 @@ export async function startSidecar(opts: StartOptions): Promise<SidecarHandle> {
   }
 }
 
-function waitForServerUrl(child: ChildProcess, opts: StartOptions): Promise<URL> {
+function waitForServerUrl(
+  child: ChildProcess,
+  onStdout: ((line: string) => void) | undefined,
+  onStderr: (line: string) => void
+): Promise<URL> {
   return new Promise((resolve, reject) => {
     let settled = false
+    const stderrSeen: string[] = []
     const settle = (fn: () => void) => {
       if (settled) return
       settled = true
@@ -99,16 +133,27 @@ function waitForServerUrl(child: ChildProcess, opts: StartOptions): Promise<URL>
     const onLine = (line: string, kind: 'stdout' | 'stderr') => {
       const match = line.match(/listening on (https?:\/\/\S+)/i)
       if (match) settle(() => resolve(new URL(match[1])))
-      if (kind === 'stdout') opts.onStdout?.(line)
-      else opts.onStderr?.(line)
+      if (kind === 'stdout') onStdout?.(line)
+      else {
+        stderrSeen.push(line)
+        onStderr(line)
+      }
     }
 
     pipeLines(child.stdout, (l) => onLine(l, 'stdout'))
     pipeLines(child.stderr, (l) => onLine(l, 'stderr'))
 
-    child.once('exit', (code) => {
-      opts.onExit?.(code)
-      settle(() => reject(new Error(`opencode serve exited with code ${code} before reporting a URL`)))
+    // Track early exit during startup; the post-startup exit listener in
+    // startSidecar handles later exits.
+    child.once('exit', (code, signal) => {
+      const detail = stderrSeen.length > 0 ? `\n  stderr:\n    ${stderrSeen.slice(-5).join('\n    ')}` : ''
+      settle(() =>
+        reject(
+          new Error(
+            `opencode serve exited (code ${code ?? 'null'}, signal ${signal ?? 'null'}) before reporting a URL.${detail}`
+          )
+        )
+      )
     })
     child.once('error', (err) => settle(() => reject(err)))
   })

@@ -30,6 +30,13 @@ export interface HarnessLogPayload {
 
 export interface HarnessExitPayload {
   code: number | null
+  signal: string | null
+  stderrTail: string[]
+}
+
+export interface NewProjectResult {
+  path: string
+  created: boolean
 }
 
 export interface DiagramNavApi {
@@ -51,6 +58,13 @@ export interface DiagramNavApi {
   onHarnessLog(cb: (payload: HarnessLogPayload) => void): () => void
   onHarnessExit(cb: (payload: HarnessExitPayload) => void): () => void
   onMenuOpenFolder(cb: () => void): () => void
+  newProject(): Promise<NewProjectResult | null>
+  getRecents(): Promise<string[]>
+  clearRecents(): Promise<string[]>
+  addRecent(path: string): Promise<string[]>
+  onMenuNewProject(cb: () => void): () => void
+  onMenuOpenRecent(cb: (path: string) => void): () => void
+  onMenuRecentsCleared(cb: () => void): () => void
 }
 
 declare global {

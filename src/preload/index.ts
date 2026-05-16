@@ -31,6 +31,13 @@ export interface HarnessLogPayload {
 
 export interface HarnessExitPayload {
   code: number | null
+  signal: string | null
+  stderrTail: string[]
+}
+
+export interface NewProjectResult {
+  path: string
+  created: boolean
 }
 
 const api = {
@@ -87,6 +94,25 @@ const api = {
     const listener = (): void => cb()
     ipcRenderer.on('menu:open-folder', listener)
     return () => ipcRenderer.removeListener('menu:open-folder', listener)
+  },
+  newProject: (): Promise<NewProjectResult | null> => ipcRenderer.invoke('new-project'),
+  getRecents: (): Promise<string[]> => ipcRenderer.invoke('get-recents'),
+  clearRecents: (): Promise<string[]> => ipcRenderer.invoke('clear-recents'),
+  addRecent: (path: string): Promise<string[]> => ipcRenderer.invoke('add-recent', path),
+  onMenuNewProject: (cb: () => void): (() => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on('menu:new-project', listener)
+    return () => ipcRenderer.removeListener('menu:new-project', listener)
+  },
+  onMenuOpenRecent: (cb: (path: string) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, path: string): void => cb(path)
+    ipcRenderer.on('menu:open-recent', listener)
+    return () => ipcRenderer.removeListener('menu:open-recent', listener)
+  },
+  onMenuRecentsCleared: (cb: () => void): (() => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on('menu:recents-cleared', listener)
+    return () => ipcRenderer.removeListener('menu:recents-cleared', listener)
   }
 }
 

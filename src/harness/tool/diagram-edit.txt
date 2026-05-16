@@ -10,7 +10,8 @@ Diagrams are the spec; this tool is how you propose architectural changes BEFORE
 - YAML frontmatter at the top with `name` (string), `description` (string), `tags` (list).
 - Exactly one ` ```mermaid` fenced code block. Multiple mermaid blocks is an error — the renderer only shows the first, and additional blocks signal you should split into separate diagram files.
 - Optional prose between the frontmatter and the mermaid block to orient the reader.
-- Mermaid click handlers use `click NodeId call navigate("./relative/path")`. Targets ending in `.md` open as another diagram (push breadcrumb); anything else opens in an editor pane.
+- **In flowchart/graph diagrams**, every node MUST have a `click NodeId call navigate("...")` handler. Specific code/diagram nodes target their file; abstract nodes (states, errors, return values) target the relevant architecture/flow doc or `overview.md`. Targets ending in `.md` open as another diagram (push breadcrumb); anything else opens in an editor pane. A flowchart with un-clicked nodes is incomplete.
+- **`click` is flowchart-only.** Sequence/class/state/ER/etc. diagrams do NOT support `click ... call navigate(...)` and will throw a parse error. For non-flowchart diagrams, put navigation as a prose bullet list immediately under the mermaid block instead.
 
 # Conventions
 - `overview.md` lives at the workspace root. It links to each subsystem.

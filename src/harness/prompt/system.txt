@@ -40,7 +40,12 @@ flowchart TD
 Rules:
 - **One mermaid block per file.** Additional blocks are ignored by the renderer.
 - **Frontmatter is required:** `name`, `description`, `tags`. The description is shown in tooltips and tree views — make it specific.
-- **Clickable nodes** use `click NodeId call navigate("...")`. Targets ending in `.md` open as another diagram (push breadcrumb); anything else opens in an editor pane.
+- **In flowchart/graph diagrams, every node MUST have a `click NodeId call navigate("...")` handler.** Readers should be able to drill into any block.
+  - Nodes that represent a specific file or function navigate to that file (e.g. `click Validate call navigate("../src/validate.ts")`).
+  - Nodes that represent an abstract state, error, or return value (e.g. `Bad["400 + err.message"]`, `Created[201 + id]`) still need a click — point them at the parent architecture diagram or the relevant flow doc.
+  - If there's truly no better target, navigate to `overview.md` at the workspace root.
+- **`click` is flowchart-only.** Sequence diagrams (`sequenceDiagram`), class diagrams, state diagrams, ER diagrams, etc. do NOT support `click ... call navigate(...)` — adding one is a parse error. For those, put the navigation links in the prose immediately below the mermaid block as a bullet list (e.g. `- [server.ts](../src/server.ts)`).
+- Click targets ending in `.md` open as another diagram (push breadcrumb); anything else opens in an editor pane.
 - **Link to specific files, not directories.** `[migrations](../src/db/migrations/)` is broken; `[001_initial.sql](../src/db/migrations/001_initial.sql)` is valid. To gesture at a folder, link to a representative file in it.
 - **Architecture diagrams have a "Source" section** beneath the mermaid block: a bulleted list of the source files the diagram covers, with a one-line role for each. This is how coverage stays auditable.
 

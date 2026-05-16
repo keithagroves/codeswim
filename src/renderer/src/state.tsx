@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, type ReactNode } from 'react'
-import { connectAgent, type AgentClient } from './agent'
+import {
+  connectAgent,
+  getProviderAuthMethods,
+  setApiKey,
+  type AgentClient,
+  type LoadedMessage,
+  type ProviderAuthMap
+} from './agent'
 import { extname, joinPosix, relativeToRoot, resolveRelative, toPosix } from './path-utils'
 import {
   StoreContext,
@@ -9,6 +16,7 @@ import {
   type ChatStatus,
   type FileView,
   type RunningScript,
+  type SessionInfo,
   type StoreApi,
   type Toast,
   type TreeNode,
@@ -31,7 +39,11 @@ const initialState: AppState = {
   chatStatus: 'idle',
   chatError: null,
   chatMessages: [],
-  chatPanelOpen: true
+  chatPanelOpen: true,
+  chatSettingsOpen: false,
+  sessions: [],
+  currentSessionId: null,
+  recents: []
 }
 
 type Action =
@@ -70,6 +82,11 @@ type Action =
   | { type: 'chat-upsert-part'; messageID: string; part: ChatMessagePart & { id: string } }
   | { type: 'chat-clear' }
   | { type: 'chat-toggle-panel' }
+  | { type: 'chat-toggle-settings' }
+  | { type: 'chat-set-settings'; open: boolean }
+  | { type: 'sessions-set'; sessions: SessionInfo[] }
+  | { type: 'session-set-current'; sessionId: string | null; messages: ChatMessage[] }
+  | { type: 'recents-set'; recents: string[] }
 
 function fileViewFor(rel: string): 'diagram' | 'code' {
   return extname(rel) === '.md' ? 'diagram' : 'code'
@@ -78,9 +95,9 @@ function fileViewFor(rel: string): 'diagram' | 'code' {
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case 'set-root':
-      return { ...initialState, rootPath: action.rootPath }
+      return { ...initialState, rootPath: action.rootPath, recents: state.recents }
     case 'clear-root':
-      return initialState
+      return { ...initialState, recents: state.recents }
     case 'load-success': {
       const breadcrumbs =
         action.pushBreadcrumb && action.previous
@@ -202,6 +219,20 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, chatMessages: [], chatStatus: 'idle', chatError: null }
     case 'chat-toggle-panel':
       return { ...state, chatPanelOpen: !state.chatPanelOpen }
+    case 'chat-toggle-settings':
+      return { ...state, chatSettingsOpen: !state.chatSettingsOpen }
+    case 'chat-set-settings':
+      return { ...state, chatSettingsOpen: action.open }
+    case 'sessions-set':
+      return { ...state, sessions: action.sessions }
+    case 'session-set-current':
+      return {
+        ...state,
+        currentSessionId: action.sessionId,
+        chatMessages: action.messages
+      }
+    case 'recents-set':
+      return { ...state, recents: action.recents }
     default:
       return state
   }
@@ -221,6 +252,24 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
     setTimeout(() => dispatch({ type: 'remove-toast', id }), 4000)
   }, [])
 
+  // Converts opencode's `LoadedMessage[]` into our `ChatMessage[]` for the
+  // chat list. Filters out empty messages (no displayable parts).
+  const toChatMessages = (messages: LoadedMessage[]): ChatMessage[] =>
+    messages
+      .map((m) => ({
+        id: m.id,
+        role: m.role,
+        parts: m.parts.map((p) => ({
+          id: p.id,
+          kind: p.kind,
+          text: p.text,
+          tool: p.tool,
+          status: p.status,
+          metadata: p.metadata
+        }))
+      }))
+      .filter((m) => m.parts.length > 0)
+
   const ensureAgent = useCallback(
     async (rootPath: string): Promise<AgentClient | null> => {
       if (agentRef.current) return agentRef.current
@@ -229,19 +278,26 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
         const conn = await window.api.startHarness(rootPath)
         const agent = await connectAgent(conn.url, rootPath)
         agentRef.current = agent
-        agent.on((event) => {
-          if (event.kind === 'part-updated') {
-            dispatch({
-              type: 'chat-upsert-part',
-              messageID: event.messageID,
-              part: event.part
-            })
-          } else if (event.kind === 'session-idle') {
-            dispatch({ type: 'chat-status', status: 'ready' })
-          } else if (event.kind === 'session-error') {
-            dispatch({ type: 'chat-status', status: 'error', error: event.message })
-          }
-        })
+
+        // Populate the session list and load the most recent session (or
+        // create one if there's no history for this workspace yet).
+        const sessions = await agent.listSessions()
+        dispatch({ type: 'sessions-set', sessions })
+
+        if (sessions.length === 0) {
+          const created = await agent.createSession()
+          dispatch({ type: 'sessions-set', sessions: [created] })
+          dispatch({ type: 'session-set-current', sessionId: created.id, messages: [] })
+        } else {
+          const latest = sessions[0]
+          const messages = await agent.loadMessages(latest.id)
+          dispatch({
+            type: 'session-set-current',
+            sessionId: latest.id,
+            messages: toChatMessages(messages)
+          })
+        }
+
         dispatch({ type: 'chat-status', status: 'ready' })
         return agent
       } catch (err) {
@@ -264,6 +320,11 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       }
       const agent = await ensureAgent(root)
       if (!agent) return
+      const sessionId = stateRef.current.currentSessionId
+      if (!sessionId) {
+        toast('No active session — try opening the folder again.', 'error')
+        return
+      }
 
       const userMsgId = `u-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
       dispatch({
@@ -273,9 +334,17 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       dispatch({ type: 'chat-status', status: 'thinking' })
 
       try {
-        await agent.send(trimmed)
-        // Reply parts arrive via the event subscription set up in ensureAgent.
-        // chat-status flips back to 'ready' on session.idle.
+        const reply = await agent.send(sessionId, trimmed)
+        for (const part of reply.parts) {
+          dispatch({ type: 'chat-upsert-part', messageID: reply.messageID, part })
+        }
+        dispatch({ type: 'chat-status', status: 'ready' })
+
+        // Session title may have been auto-filled by opencode based on the
+        // first user prompt. Refresh the sessions list to pick that up.
+        void agent.listSessions().then((sessions) => {
+          dispatch({ type: 'sessions-set', sessions })
+        })
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         dispatch({ type: 'chat-status', status: 'error', error: msg })
@@ -285,7 +354,91 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
     [ensureAgent, toast]
   )
 
+  const newSession = useCallback(async () => {
+    const root = stateRef.current.rootPath
+    if (!root) return
+    const agent = await ensureAgent(root)
+    if (!agent) return
+    try {
+      const created = await agent.createSession()
+      const sessions = await agent.listSessions()
+      dispatch({ type: 'sessions-set', sessions })
+      dispatch({ type: 'session-set-current', sessionId: created.id, messages: [] })
+      dispatch({ type: 'chat-status', status: 'ready' })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      toast(`Couldn't create session: ${msg}`, 'error')
+    }
+  }, [ensureAgent, toast])
+
+  const switchSession = useCallback(
+    async (sessionId: string) => {
+      const root = stateRef.current.rootPath
+      if (!root) return
+      const agent = await ensureAgent(root)
+      if (!agent) return
+      try {
+        dispatch({ type: 'chat-status', status: 'connecting' })
+        const messages = await agent.loadMessages(sessionId)
+        dispatch({
+          type: 'session-set-current',
+          sessionId,
+          messages: toChatMessages(messages)
+        })
+        dispatch({ type: 'chat-status', status: 'ready' })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        dispatch({ type: 'chat-status', status: 'error', error: msg })
+        toast(`Couldn't load session: ${msg}`, 'error')
+      }
+    },
+    [ensureAgent, toast]
+  )
+
+  const refreshSessions = useCallback(async () => {
+    const root = stateRef.current.rootPath
+    if (!root) return
+    const agent = agentRef.current
+    if (!agent) return
+    try {
+      const sessions = await agent.listSessions()
+      dispatch({ type: 'sessions-set', sessions })
+    } catch {
+      // best-effort
+    }
+  }, [])
+
   const toggleChatPanel = useCallback(() => dispatch({ type: 'chat-toggle-panel' }), [])
+  const toggleChatSettings = useCallback(
+    () => dispatch({ type: 'chat-toggle-settings' }),
+    []
+  )
+
+  const fetchProviderMethods = useCallback(async (): Promise<ProviderAuthMap> => {
+    const root = stateRef.current.rootPath
+    if (!root) throw new Error('Open a folder first')
+    const conn = await window.api.startHarness(root)
+    return getProviderAuthMethods(conn.url, root)
+  }, [])
+
+  const configureProvider = useCallback(
+    async (provider: string, apiKey: string): Promise<void> => {
+      const root = stateRef.current.rootPath
+      if (!root) throw new Error('Open a folder first')
+      const conn = await window.api.startHarness(root)
+      await setApiKey(conn.url, root, provider, apiKey)
+      // Reconnect with the new credentials. If we already had a connected
+      // agent (settings opened from a working session), close it first so
+      // the next call picks up the new provider list.
+      if (agentRef.current) {
+        await agentRef.current.close().catch(() => {})
+        agentRef.current = null
+      }
+      await ensureAgent(root)
+      dispatch({ type: 'chat-set-settings', open: false })
+    },
+    [ensureAgent]
+  )
 
   const readFileSafe = useCallback(
     async (
@@ -385,43 +538,82 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
     }
   }, [state.rootPath, toast])
 
+  const openWorkspace = useCallback(
+    async (picked: string) => {
+      // Drop any agent attached to a previous workspace; the new harness
+      // will be started lazily on the first chat or eagerly below.
+      void agentRef.current?.close().catch(() => {})
+      agentRef.current = null
+      void window.api.stopHarness().catch(() => {})
+      dispatch({ type: 'set-root', rootPath: picked })
+
+      const [scripts, entry, tree, recents] = await Promise.all([
+        window.api.readPackageScripts(picked),
+        findEntryFile(picked),
+        window.api.listTree(picked).catch(() => [] as TreeNode[]),
+        window.api.addRecent(picked).catch(() => [] as string[])
+      ])
+      dispatch({ type: 'set-scripts', scripts })
+      dispatch({ type: 'set-tree', tree })
+      if (recents.length > 0) dispatch({ type: 'recents-set', recents })
+
+      await window.api.watch(picked)
+
+      // Connect the agent eagerly so this workspace's session list and
+      // most recent conversation load right away, without waiting for the
+      // first chat send.
+      void ensureAgent(picked)
+
+      if (!entry) {
+        toast('No markdown files found. Pick a file from the sidebar.', 'info')
+        return
+      }
+      const result = await readFileSafe(picked, entry)
+      if (!result) return
+      dispatch({
+        type: 'load-success',
+        file: entry,
+        contents: result.contents,
+        view: result.view,
+        pushBreadcrumb: false,
+        previous: null
+      })
+    },
+    [ensureAgent, findEntryFile, readFileSafe, toast]
+  )
+
   const pickRoot = useCallback(async () => {
     const picked = await window.api.pickFolder()
     if (!picked) return
-    // Drop any agent attached to a previous workspace; the new harness will
-    // be started lazily on the first chat or eagerly below.
-    void agentRef.current?.close().catch(() => {})
-    agentRef.current = null
-    void window.api.stopHarness().catch(() => {})
-    dispatch({ type: 'set-root', rootPath: picked })
+    await openWorkspace(picked)
+  }, [openWorkspace])
 
-    const [scripts, entry, tree] = await Promise.all([
-      window.api.readPackageScripts(picked),
-      findEntryFile(picked),
-      window.api.listTree(picked).catch(() => [] as TreeNode[])
-    ])
-    dispatch({ type: 'set-scripts', scripts })
-    dispatch({ type: 'set-tree', tree })
-
-    await window.api.watch(picked)
-
-    if (!entry) {
-      // No markdown found — leave the user on the empty state with the
-      // sidebar open so they can pick a file manually.
-      toast('No markdown files found. Pick a file from the sidebar.', 'info')
-      return
+  const newProject = useCallback(async () => {
+    try {
+      const result = await window.api.newProject()
+      if (!result) return
+      await openWorkspace(result.path)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      toast(`Could not create project: ${msg}`, 'error')
     }
-    const result = await readFileSafe(picked, entry)
-    if (!result) return
-    dispatch({
-      type: 'load-success',
-      file: entry,
-      contents: result.contents,
-      view: result.view,
-      pushBreadcrumb: false,
-      previous: null
-    })
-  }, [findEntryFile, readFileSafe, toast])
+  }, [openWorkspace, toast])
+
+  const openRecent = useCallback(
+    async (path: string) => {
+      await openWorkspace(path)
+    },
+    [openWorkspace]
+  )
+
+  const clearRecents = useCallback(async () => {
+    try {
+      const next = await window.api.clearRecents()
+      dispatch({ type: 'recents-set', recents: next })
+    } catch {
+      // ignore
+    }
+  }, [])
 
   const reload = useCallback(async () => {
     if (!state.rootPath || !state.currentFile) return
@@ -520,12 +712,14 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
   // Surface harness exit as a toast so the user knows when the agent stops
   // working — useful when the spawned opencode crashes.
   useEffect(() => {
-    return window.api.onHarnessExit(({ code }) => {
+    return window.api.onHarnessExit(({ code, signal, stderrTail }) => {
       agentRef.current = null
+      const tail = stderrTail.length > 0 ? `\n\nLast stderr:\n${stderrTail.slice(-10).join('\n')}` : ''
+      const sigPart = signal ? `, signal ${signal}` : ''
       dispatch({
         type: 'chat-status',
         status: 'error',
-        error: `opencode exited (code ${code ?? 'null'})`
+        error: `opencode exited (code ${code ?? 'null'}${sigPart})${tail}`
       })
     })
   }, [])
@@ -536,6 +730,35 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       void pickRoot()
     })
   }, [pickRoot])
+
+  // Native menu bar: File → New Project…
+  useEffect(() => {
+    return window.api.onMenuNewProject(() => {
+      void newProject()
+    })
+  }, [newProject])
+
+  // Native menu bar: File → Open Recent → <path>
+  useEffect(() => {
+    return window.api.onMenuOpenRecent((path) => {
+      void openRecent(path)
+    })
+  }, [openRecent])
+
+  // Native menu bar: File → Open Recent → Clear Recents
+  useEffect(() => {
+    return window.api.onMenuRecentsCleared(() => {
+      dispatch({ type: 'recents-set', recents: [] })
+    })
+  }, [])
+
+  // Initial load of recents so the start screen has them right away.
+  useEffect(() => {
+    void window.api
+      .getRecents()
+      .then((recents) => dispatch({ type: 'recents-set', recents }))
+      .catch(() => {})
+  }, [])
 
   const api = useMemo<StoreApi>(
     () => ({
@@ -555,7 +778,16 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       setView,
       refreshTree,
       sendChat,
-      toggleChatPanel
+      toggleChatPanel,
+      toggleChatSettings,
+      fetchProviderMethods,
+      configureProvider,
+      newSession,
+      switchSession,
+      refreshSessions,
+      newProject,
+      openRecent,
+      clearRecents
     }),
     [
       state,
@@ -574,7 +806,16 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       setView,
       refreshTree,
       sendChat,
-      toggleChatPanel
+      toggleChatPanel,
+      toggleChatSettings,
+      fetchProviderMethods,
+      configureProvider,
+      newSession,
+      switchSession,
+      refreshSessions,
+      newProject,
+      openRecent,
+      clearRecents
     ]
   )
 

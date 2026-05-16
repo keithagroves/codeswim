@@ -1,8 +1,9 @@
-// Streaming wrapper over @opencode-ai/sdk's client.
+// Thin session-aware wrapper over @opencode-ai/sdk's client.
 //
-// Lifecycle: `connectAgent` creates a session and subscribes to the global
-// event stream. `send` fires `promptAsync` and returns immediately; replies
-// arrive via `on(handler)` events. `close` aborts the subscription.
+// `connectAgent` doesn't create a session — it just opens the SDK client and
+// exposes session primitives (list/create/load/send). The renderer decides
+// which session is active. This lets us load past sessions for a workspace
+// and switch between them.
 
 import { createOpencodeClient } from '@opencode-ai/sdk/client'
 
@@ -15,21 +16,30 @@ export interface AssistantPart {
   metadata?: unknown
 }
 
-export type AgentEvent =
-  | { kind: 'part-updated'; messageID: string; part: AssistantPart }
-  | { kind: 'session-idle' }
-  | { kind: 'session-error'; message: string }
-
-export interface AgentClient {
-  sessionId: string
-  send(text: string): Promise<void>
-  on(handler: (e: AgentEvent) => void): () => void
-  close(): Promise<void>
+export interface SessionInfo {
+  id: string
+  title: string
+  createdAt: number
+  updatedAt: number
 }
 
-interface RawEvent {
-  type: string
-  properties?: Record<string, unknown>
+export interface LoadedMessage {
+  id: string
+  role: 'user' | 'assistant'
+  parts: AssistantPart[]
+}
+
+export interface AgentSendResult {
+  messageID: string
+  parts: AssistantPart[]
+}
+
+export interface AgentClient {
+  listSessions(): Promise<SessionInfo[]>
+  createSession(): Promise<SessionInfo>
+  loadMessages(sessionId: string): Promise<LoadedMessage[]>
+  send(sessionId: string, text: string): Promise<AgentSendResult>
+  close(): Promise<void>
 }
 
 interface RawPart {
@@ -43,14 +53,56 @@ interface RawPart {
   metadata?: unknown
 }
 
+interface RawSession {
+  id: string
+  title?: string
+  time?: { created?: number; updated?: number }
+}
+
+interface RawMessage {
+  info: { id: string; role: 'user' | 'assistant' }
+  parts: RawPart[]
+}
+
 export class NoProviderError extends Error {
   constructor() {
-    super(
-      'No AI provider is configured. Run `opencode auth login` in a terminal, ' +
-        'pick a provider, then come back and try again.'
-    )
+    super('No AI provider is configured.')
     this.name = 'NoProviderError'
   }
+}
+
+export type AuthMethodType = 'oauth' | 'api'
+
+export interface AuthMethod {
+  type: AuthMethodType
+  label: string
+}
+
+export interface ProviderAuthMap {
+  [providerId: string]: AuthMethod[]
+}
+
+export async function getProviderAuthMethods(
+  url: string,
+  directory: string
+): Promise<ProviderAuthMap> {
+  const client = createOpencodeClient({ baseUrl: url, directory })
+  const result = await client.provider.auth({ query: { directory }, throwOnError: true })
+  return result.data as ProviderAuthMap
+}
+
+export async function setApiKey(
+  url: string,
+  directory: string,
+  provider: string,
+  key: string
+): Promise<void> {
+  const client = createOpencodeClient({ baseUrl: url, directory })
+  await client.auth.set({
+    path: { id: provider },
+    body: { type: 'api', key },
+    throwOnError: true
+  })
 }
 
 export async function connectAgent(url: string, directory: string): Promise<AgentClient> {
@@ -60,80 +112,79 @@ export async function connectAgent(url: string, directory: string): Promise<Agen
   const list = (providers.data as { providers?: Array<{ id?: string }> })?.providers ?? []
   if (list.length === 0) throw new NoProviderError()
 
-  const created = await client.session.create({
-    query: { directory },
-    throwOnError: true
-  })
-  const sessionId = (created.data as { id: string }).id
-
-  const handlers = new Set<(e: AgentEvent) => void>()
   const abort = new AbortController()
 
-  void (async () => {
-    try {
-      const sse = await client.event.subscribe({
+  return {
+    async listSessions(): Promise<SessionInfo[]> {
+      const result = await client.session.list({
         query: { directory },
+        throwOnError: true,
         signal: abort.signal
       })
-      for await (const raw of sse.stream) {
-        const event = raw as RawEvent
-        const mapped = mapEvent(event, sessionId)
-        if (!mapped) continue
-        for (const h of handlers) h(mapped)
-      }
-    } catch (err) {
-      if (abort.signal.aborted) return
-      const message = err instanceof Error ? err.message : String(err)
-      for (const h of handlers) h({ kind: 'session-error', message })
-    }
-  })()
+      const sessions = (result.data ?? []) as RawSession[]
+      return sessions
+        .map(toSessionInfo)
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+    },
 
-  return {
-    sessionId,
-    async send(text: string): Promise<void> {
-      await client.session.promptAsync({
+    async createSession(): Promise<SessionInfo> {
+      const result = await client.session.create({
+        query: { directory },
+        throwOnError: true,
+        signal: abort.signal
+      })
+      return toSessionInfo(result.data as RawSession)
+    },
+
+    async loadMessages(sessionId: string): Promise<LoadedMessage[]> {
+      const result = await client.session.messages({
         path: { id: sessionId },
         query: { directory },
-        body: {
-          parts: [{ type: 'text', text }]
-        },
-        throwOnError: true
+        throwOnError: true,
+        signal: abort.signal
       })
+      const messages = (result.data ?? []) as RawMessage[]
+      return messages.map((m) => ({
+        id: m.info.id,
+        role: m.info.role,
+        parts: m.parts
+          .map(toAssistantPart)
+          .filter((p): p is AssistantPart => p !== null)
+      }))
     },
-    on(handler) {
-      handlers.add(handler)
-      return () => {
-        handlers.delete(handler)
+
+    async send(sessionId: string, text: string): Promise<AgentSendResult> {
+      const result = await client.session.prompt({
+        path: { id: sessionId },
+        query: { directory },
+        body: { parts: [{ type: 'text', text }] },
+        throwOnError: true,
+        signal: abort.signal
+      })
+      const data = result.data as { info: { id: string }; parts: RawPart[] }
+      return {
+        messageID: data.info.id,
+        parts: data.parts
+          .map(toAssistantPart)
+          .filter((p): p is AssistantPart => p !== null)
       }
     },
+
     async close(): Promise<void> {
       abort.abort()
-      handlers.clear()
     }
   }
 }
 
-function mapEvent(ev: RawEvent, sessionId: string): AgentEvent | null {
-  if (ev.type === 'message.part.updated') {
-    const part = (ev.properties as { part?: RawPart })?.part
-    if (!part || part.sessionID !== sessionId) return null
-    const mapped = toAssistantPart(part)
-    if (!mapped) return null
-    return { kind: 'part-updated', messageID: part.messageID, part: mapped }
+function toSessionInfo(s: RawSession): SessionInfo {
+  const created = s.time?.created ?? Date.now()
+  const updated = s.time?.updated ?? created
+  return {
+    id: s.id,
+    title: s.title?.trim() || `Session ${s.id.slice(-6)}`,
+    createdAt: created,
+    updatedAt: updated
   }
-  if (ev.type === 'session.idle') {
-    const props = ev.properties as { sessionID?: string } | undefined
-    if (props?.sessionID !== sessionId) return null
-    return { kind: 'session-idle' }
-  }
-  if (ev.type === 'session.error') {
-    const props = ev.properties as
-      | { sessionID?: string; error?: { message?: string } }
-      | undefined
-    if (props?.sessionID !== sessionId) return null
-    return { kind: 'session-error', message: props?.error?.message ?? 'agent error' }
-  }
-  return null
 }
 
 function toAssistantPart(p: RawPart): AssistantPart | null {
