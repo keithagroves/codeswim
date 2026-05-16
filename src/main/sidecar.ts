@@ -22,13 +22,16 @@ function resolveOpencodeBinary(): string {
   return path.join(app.getAppPath(), 'node_modules', '.bin', 'opencode')
 }
 
-function resolveHarness(): { plugin: string; instructions: string } {
+function resolveHarness(): { plugin: string; instructions: string[] } {
   const root = app.isPackaged
     ? path.join(process.resourcesPath, 'harness')
     : path.join(app.getAppPath(), 'out', 'harness')
   return {
     plugin: pathToFileURL(path.join(root, 'plugin.mjs')).href,
-    instructions: path.join(root, 'prompt', 'system.txt')
+    instructions: [
+      path.join(root, 'prompt', 'system.txt'),
+      path.join(root, 'prompt', 'mdd-fixes.md')
+    ]
   }
 }
 
@@ -45,7 +48,7 @@ export async function startSidecar(opts: StartOptions): Promise<SidecarHandle> {
 
   const config = {
     plugin: [harness.plugin],
-    instructions: [harness.instructions],
+    instructions: harness.instructions,
     // Auto-approve all tool prompts. The diagrams-first gate in our plugin
     // still blocks `write`/`edit` until a `diagram_edit` happens, so this
     // doesn't undermine the opinionation. A future permission-prompt UI in

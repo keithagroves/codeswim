@@ -1,69 +1,52 @@
-import { useEffect, useRef, useState } from 'react'
 import { Breadcrumbs } from './components/Breadcrumbs'
 import { ChatPanel } from './components/ChatPanel'
 import { CodeView } from './components/CodeView'
 import { DiagramView } from './components/DiagramView'
 import { FileTree } from './components/FileTree'
+import { ReadView } from './components/ReadView'
 import { ScriptControls } from './components/ScriptControls'
 import { ScriptOutput } from './components/ScriptOutput'
 import { Toasts } from './components/Toasts'
 import { extname } from './path-utils'
 import { StoreProvider } from './state'
-import { useStore } from './store'
+import { useStore, type FileView } from './store'
 
-function FileMenu(): React.JSX.Element {
-  const { pickRoot } = useStore()
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement | null>(null)
+function ViewSwitcher(): React.JSX.Element | null {
+  const { state, setView } = useStore()
+  if (!state.currentFile) return null
+  if (extname(state.currentFile) !== '.md') return null
+  if (state.view === 'output') return null
 
-  useEffect(() => {
-    if (!open) return
-    const onDocClick = (e: MouseEvent): void => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
-  }, [open])
+  const options: Array<{ key: FileView; label: string }> = [
+    { key: 'read', label: 'Read' },
+    { key: 'diagram', label: 'Diagram' },
+    { key: 'code', label: 'Source' }
+  ]
 
   return (
-    <div className="menu" ref={ref}>
-      <button
-        className="secondary menu-trigger"
-        onClick={() => setOpen((o) => !o)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-      >
-        File ▾
-      </button>
-      {open ? (
-        <div className="menu-popover" role="menu">
-          <button
-            role="menuitem"
-            className="menu-item"
-            onClick={() => {
-              setOpen(false)
-              void pickRoot()
-            }}
-          >
-            Open folder…
-          </button>
-        </div>
-      ) : null}
+    <div className="view-switcher" role="group" aria-label="View mode">
+      {options.map((opt) => (
+        <button
+          key={opt.key}
+          className={`view-switcher-btn ${state.view === opt.key ? 'is-active' : ''}`}
+          onClick={() => setView(opt.key)}
+          aria-pressed={state.view === opt.key}
+        >
+          {opt.label}
+        </button>
+      ))}
     </div>
   )
 }
 
 function Header(): React.JSX.Element {
-  const { state, popTo, showOutput, toggleSidebar, toggleSource } = useStore()
+  const { state, popTo, showOutput, toggleSidebar } = useStore()
   const canGoBack = state.breadcrumbs.length > 0
   const running = state.runningScript
   const chip = running !== null && state.view !== 'output' ? running : null
-  const isMarkdown = state.currentFile !== null && extname(state.currentFile) === '.md'
-  const showSourceToggle = isMarkdown && (state.view === 'diagram' || state.view === 'code')
 
   return (
     <div className="header">
-      <FileMenu />
       <button
         className="icon-btn"
         onClick={toggleSidebar}
@@ -83,15 +66,7 @@ function Header(): React.JSX.Element {
       ) : null}
       <Breadcrumbs />
       <div className="header-actions">
-        {showSourceToggle ? (
-          <button
-            className="secondary"
-            onClick={toggleSource}
-            title={state.view === 'diagram' ? 'View raw markdown' : 'View rendered diagram'}
-          >
-            {state.view === 'diagram' ? '{ } Source' : '◉ Rendered'}
-          </button>
-        ) : null}
+        <ViewSwitcher />
         {chip ? (
           <button
             className={`run-chip ${chip.status === 'running' ? 'is-running' : 'is-exited'}`}
@@ -128,6 +103,9 @@ function Body(): React.JSX.Element {
   if (state.view === 'diagram') {
     return <DiagramView source={state.fileContents} />
   }
+  if (state.view === 'read') {
+    return <ReadView source={state.fileContents} />
+  }
   return <CodeView path={state.currentFile} contents={state.fileContents} />
 }
 
@@ -140,6 +118,7 @@ function StartScreen(): React.JSX.Element {
         Pick a folder containing markdown files with embedded mermaid diagrams. The agent in the
         right panel will edit those diagrams first, then code at the leaves.
       </p>
+      <p className="start-screen-hint">File → Open Folder… (⌘O)</p>
       <button className="primary" onClick={() => void pickRoot()}>
         Open folder…
       </button>
@@ -153,9 +132,6 @@ function Shell(): React.JSX.Element {
   if (!state.rootPath) {
     return (
       <div className="app">
-        <div className="header">
-          <FileMenu />
-        </div>
         <div className="main-row">
           <div className="content">
             <StartScreen />

@@ -50,6 +50,7 @@ export interface DiagramNavApi {
   stopHarness(): Promise<void>
   onHarnessLog(cb: (payload: HarnessLogPayload) => void): () => void
   onHarnessExit(cb: (payload: HarnessExitPayload) => void): () => void
+  onMenuOpenFolder(cb: () => void): () => void
 }
 
 declare global {

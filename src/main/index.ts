@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, Menu, type MenuItemConstructorOptions } from 'electron'
 import { join } from 'path'
 import { promises as fs } from 'fs'
 import { spawn, ChildProcess } from 'child_process'
@@ -263,8 +263,36 @@ function shellEscape(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`
 }
 
+function buildAppMenu(): Menu {
+  const isMac = process.platform === 'darwin'
+
+  const fileMenu: MenuItemConstructorOptions = {
+    label: 'File',
+    submenu: [
+      {
+        label: 'Open Folder…',
+        accelerator: 'CmdOrCtrl+O',
+        click: () => mainWindow?.webContents.send('menu:open-folder')
+      },
+      { type: 'separator' },
+      isMac ? { role: 'close' } : { role: 'quit' }
+    ]
+  }
+
+  const template: MenuItemConstructorOptions[] = [
+    ...(isMac ? ([{ role: 'appMenu' }] as MenuItemConstructorOptions[]) : []),
+    fileMenu,
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' }
+  ]
+
+  return Menu.buildFromTemplate(template)
+}
+
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.codeswim.diagram-nav')
+  Menu.setApplicationMenu(buildAppMenu())
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)

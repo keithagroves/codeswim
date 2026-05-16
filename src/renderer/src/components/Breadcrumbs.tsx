@@ -1,29 +1,27 @@
-import { basename } from '../path-utils'
 import { useStore } from '../store'
 
-function label(path: string): string {
-  const base = basename(path)
-  return base.replace(/\.md$/i, '')
+function trimMd(name: string): string {
+  return name.replace(/\.md$/i, '')
 }
 
 export function Breadcrumbs(): React.JSX.Element {
-  const { state, popTo } = useStore()
+  const { state } = useStore()
   if (!state.currentFile) return <div className="breadcrumbs" />
 
-  const stack = state.breadcrumbs
+  const segments = state.currentFile.split('/').filter(Boolean)
+  const dirs = segments.slice(0, -1)
+  const file = segments[segments.length - 1] ?? state.currentFile
 
   return (
     <div className="breadcrumbs">
-      {stack.map((path, i) => (
-        <span key={`${i}-${path}`} style={{ display: 'inline-flex', alignItems: 'center' }}>
-          <button className="breadcrumb" onClick={() => void popTo(i)} title={path}>
-            {label(path)}
-          </button>
+      {dirs.map((seg, i) => (
+        <span key={i} style={{ display: 'inline-flex', alignItems: 'center' }}>
+          <span className="breadcrumb">{seg}</span>
           <span className="breadcrumb-separator"> / </span>
         </span>
       ))}
       <span className="breadcrumb current" title={state.currentFile}>
-        {label(state.currentFile)}
+        {trimMd(file)}
       </span>
     </div>
   )

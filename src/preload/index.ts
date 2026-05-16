@@ -82,6 +82,11 @@ const api = {
       cb(payload)
     ipcRenderer.on('harness:exit', listener)
     return () => ipcRenderer.removeListener('harness:exit', listener)
+  },
+  onMenuOpenFolder: (cb: () => void): (() => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on('menu:open-folder', listener)
+    return () => ipcRenderer.removeListener('menu:open-folder', listener)
   }
 }
 

@@ -1,5 +1,6 @@
 import { build, context } from 'esbuild'
-import { copyFile, mkdir } from 'node:fs/promises'
+import { copyFile, mkdir, readdir } from 'node:fs/promises'
+import path from 'node:path'
 
 const watch = process.argv.includes('--watch')
 const minify = !watch
@@ -18,7 +19,11 @@ const config = {
 }
 
 await mkdir('out/harness/prompt', { recursive: true })
-await copyFile('src/harness/prompt/system.txt', 'out/harness/prompt/system.txt')
+const promptSrc = 'src/harness/prompt'
+for (const file of await readdir(promptSrc)) {
+  if (!/\.(txt|md)$/i.test(file)) continue
+  await copyFile(path.join(promptSrc, file), path.join('out/harness/prompt', file))
+}
 
 if (watch) {
   const ctx = await context(config)

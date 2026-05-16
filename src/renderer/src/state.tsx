@@ -7,6 +7,7 @@ import {
   type ChatMessage,
   type ChatMessagePart,
   type ChatStatus,
+  type FileView,
   type RunningScript,
   type StoreApi,
   type Toast,
@@ -63,6 +64,7 @@ type Action =
   | { type: 'set-tree'; tree: TreeNode[] }
   | { type: 'toggle-sidebar' }
   | { type: 'toggle-source' }
+  | { type: 'set-view'; view: FileView }
   | { type: 'chat-status'; status: ChatStatus; error?: string | null }
   | { type: 'chat-add-message'; message: ChatMessage }
   | { type: 'chat-upsert-part'; messageID: string; part: ChatMessagePart & { id: string } }
@@ -164,12 +166,18 @@ function reducer(state: AppState, action: Action): AppState {
     case 'toggle-sidebar':
       return { ...state, sidebarOpen: !state.sidebarOpen }
     case 'toggle-source': {
-      // Only meaningful for markdown files. Flip diagram <-> code.
+      // Only meaningful for markdown files. Flip rendered <-> raw source.
       if (!state.currentFile) return state
       if (extname(state.currentFile) !== '.md') return state
-      if (state.view === 'diagram') return { ...state, view: 'code' }
       if (state.view === 'code') return { ...state, view: 'diagram' }
-      return state
+      return { ...state, view: 'code' }
+    }
+    case 'set-view': {
+      if (!state.currentFile) return state
+      const isMd = extname(state.currentFile) === '.md'
+      // Non-markdown files only support 'code'.
+      if (!isMd && action.view !== 'code') return state
+      return { ...state, view: action.view, prevView: null }
     }
     case 'chat-status':
       return { ...state, chatStatus: action.status, chatError: action.error ?? null }
@@ -457,6 +465,7 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
   const hideOutput = useCallback(() => dispatch({ type: 'hide-output' }), [])
   const toggleSidebar = useCallback(() => dispatch({ type: 'toggle-sidebar' }), [])
   const toggleSource = useCallback(() => dispatch({ type: 'toggle-source' }), [])
+  const setView = useCallback((view: FileView) => dispatch({ type: 'set-view', view }), [])
 
   // Live reload: re-read the current file when it changes on disk.
   useEffect(() => {
@@ -521,6 +530,13 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
     })
   }, [])
 
+  // Native menu bar: File → Open Folder…
+  useEffect(() => {
+    return window.api.onMenuOpenFolder(() => {
+      void pickRoot()
+    })
+  }, [pickRoot])
+
   const api = useMemo<StoreApi>(
     () => ({
       state,
@@ -536,6 +552,7 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       hideOutput,
       toggleSidebar,
       toggleSource,
+      setView,
       refreshTree,
       sendChat,
       toggleChatPanel
@@ -554,6 +571,7 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       hideOutput,
       toggleSidebar,
       toggleSource,
+      setView,
       refreshTree,
       sendChat,
       toggleChatPanel

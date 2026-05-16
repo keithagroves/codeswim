@@ -10,6 +10,10 @@ type MarkdownBlock =
 interface MarkdownProseProps {
   source: string
   onNavigate(target: string): void
+  // Heading levels in the source are renormalized to stay within this offset.
+  // Default 2 → `# Foo` becomes h3, `## Foo` becomes h4 (the previous compact
+  // behavior). Use 0 to render headings at their natural levels (h1, h2, …).
+  headingOffset?: number
 }
 
 function isFence(line: string): boolean {
@@ -137,19 +141,26 @@ function renderInline(text: string, onNavigate: (target: string) => void): React
   return nodes
 }
 
-export function MarkdownProse({ source, onNavigate }: MarkdownProseProps): React.JSX.Element {
+function headingTag(level: number, offset: number): 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' {
+  const target = Math.max(1, Math.min(6, level + offset))
+  return (`h${target}`) as 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
+}
+
+export function MarkdownProse({
+  source,
+  onNavigate,
+  headingOffset = 2
+}: MarkdownProseProps): React.JSX.Element {
   const blocks = parseBlocks(source)
 
   return (
     <div className="diagram-prose">
       {blocks.map((block, index) => {
         switch (block.kind) {
-          case 'heading':
-            return block.level <= 2 ? (
-              <h3 key={index}>{renderInline(block.text, onNavigate)}</h3>
-            ) : (
-              <h4 key={index}>{renderInline(block.text, onNavigate)}</h4>
-            )
+          case 'heading': {
+            const Tag = headingTag(block.level, headingOffset)
+            return <Tag key={index}>{renderInline(block.text, onNavigate)}</Tag>
+          }
           case 'paragraph':
             return <p key={index}>{renderInline(block.text, onNavigate)}</p>
           case 'unordered-list':

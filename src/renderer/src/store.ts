@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react'
 
-export type View = 'diagram' | 'code' | 'output'
+export type View = 'diagram' | 'code' | 'read' | 'output'
+export type FileView = 'diagram' | 'code' | 'read'
 
 export interface Toast {
   id: number
@@ -54,7 +55,7 @@ export interface AppState {
   scripts: string[]
   runningScript: RunningScript | null
   // The view we should return to when the user closes the output panel.
-  prevView: 'diagram' | 'code' | null
+  prevView: FileView | null
   tree: TreeNode[] | null
   sidebarOpen: boolean
   chatStatus: ChatStatus
@@ -78,6 +79,8 @@ export interface StoreApi {
   toggleSidebar(): void
   // For markdown files: switch between rendered diagram and raw source view.
   toggleSource(): void
+  // Switch directly to one of the file-level views (read/diagram/code).
+  setView(view: FileView): void
   refreshTree(): Promise<void>
   sendChat(text: string): Promise<void>
   toggleChatPanel(): void
