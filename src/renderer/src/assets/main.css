@@ -1665,3 +1665,11 @@ button.secondary:hover {
   white-space: nowrap;
   max-width: 100%;
 }
+
+/* Line-range highlight in CodeView — applied to each line in the navigate
+ * target's #L10-L22 range. Warm GitHub-yellow tint plus a left-edge bar
+ * so the range is visible even without scrolling. */
+.cm-target-line {
+  background: rgba(212, 167, 44, 0.18);
+  box-shadow: -3px 0 0 #d4a72c inset;
+}

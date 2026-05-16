@@ -117,7 +117,13 @@ function Body(): React.JSX.Element {
   if (state.view === 'read') {
     return <ReadView source={state.fileContents} />
   }
-  return <CodeView path={state.currentFile} contents={state.fileContents} />
+  return (
+    <CodeView
+      path={state.currentFile}
+      contents={state.fileContents}
+      highlightRange={state.currentRange}
+    />
+  )
 }
 
 function StartScreen(): React.JSX.Element {

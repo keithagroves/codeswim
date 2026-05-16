@@ -12,6 +12,7 @@ Diagrams are the spec; this tool is how you propose architectural changes BEFORE
 - Optional prose between the frontmatter and the mermaid block to orient the reader.
 - **In flowchart/graph diagrams**, every node MUST have a `click NodeId call navigate("...")` handler. Specific code/diagram nodes target their file; abstract nodes (states, errors, return values) target the relevant architecture/flow doc or `overview.md`. Targets ending in `.md` open as another diagram (push breadcrumb); anything else opens in an editor pane. A flowchart with un-clicked nodes is incomplete.
 - **`click` is flowchart-only.** Sequence/class/state/ER/etc. diagrams do NOT support `click ... call navigate(...)` and will throw a parse error. For non-flowchart diagrams, put navigation as a prose bullet list immediately under the mermaid block instead.
+- **Line refs.** Navigate targets MAY include a GitHub-style line ref: `navigate("../src/server.ts#L25-L40")` jumps to and highlights lines 25–40. `#L42` is a single line. Prefer line refs when a node maps to a specific function/handler/block rather than the whole file.
 
 # Conventions
 - `overview.md` lives at the workspace root. It links to each subsystem.
@@ -38,8 +39,8 @@ flowchart TD
     Verify --> Sign[signJwt]
     Sign --> Resp[200 + token]
 
-    click Verify call navigate("../src/auth/verify.ts")
-    click Sign call navigate("../src/auth/sign.ts")
+    click Verify call navigate("../src/auth/verify.ts#L12-L34")
+    click Sign call navigate("../src/auth/sign.ts#L8-L19")
 ```
 
 ## Source

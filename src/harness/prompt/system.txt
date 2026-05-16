@@ -46,6 +46,7 @@ Rules:
   - If there's truly no better target, navigate to `overview.md` at the workspace root.
 - **`click` is flowchart-only.** Sequence diagrams (`sequenceDiagram`), class diagrams, state diagrams, ER diagrams, etc. do NOT support `click ... call navigate(...)` — adding one is a parse error. For those, put the navigation links in the prose immediately below the mermaid block as a bullet list (e.g. `- [server.ts](../src/server.ts)`).
 - Click targets ending in `.md` open as another diagram (push breadcrumb); anything else opens in an editor pane.
+- **Line refs are encouraged.** A target MAY include a GitHub-style line ref: `navigate("../src/server.ts#L25-L40")` jumps to that range and highlights it. Use `#L42` for a single line. Prefer line refs whenever a node maps to a specific function, handler, or block — not just the whole file. Lines are 1-indexed; ranges are inclusive.
 - **Link to specific files, not directories.** `[migrations](../src/db/migrations/)` is broken; `[001_initial.sql](../src/db/migrations/001_initial.sql)` is valid. To gesture at a folder, link to a representative file in it.
 - **Architecture diagrams have a "Source" section** beneath the mermaid block: a bulleted list of the source files the diagram covers, with a one-line role for each. This is how coverage stays auditable.
 

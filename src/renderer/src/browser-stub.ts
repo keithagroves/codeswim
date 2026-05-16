@@ -40,8 +40,39 @@ export function installBrowserApiStub(): void {
 
   const stub: DiagramNavApi = {
     pickFolder: async () => readTestConfig().rootPath,
-    readFile: notInBrowser<string>('readFile'),
-    listMarkdown: () => Promise.resolve([]),
+    readFile: async (absPath: string) => {
+      const cfg = readTestConfig()
+      if (!cfg.harnessUrl || !cfg.rootPath) {
+        throw new Error('readFile is only available inside the Electron app')
+      }
+      // Convert absolute path back to workspace-relative for opencode.
+      const root = cfg.rootPath.replace(/\/$/, '')
+      const rel = absPath.startsWith(root + '/') ? absPath.slice(root.length + 1) : absPath
+      const url = new URL('/file/content', cfg.harnessUrl)
+      url.searchParams.set('directory', cfg.rootPath)
+      url.searchParams.set('path', rel)
+      const res = await fetch(url.toString())
+      if (!res.ok) throw new Error(`readFile via opencode: ${res.status} ${res.statusText}`)
+      const data = (await res.json()) as { type: string; content: string }
+      return data.content
+    },
+    listMarkdown: async () => {
+      const cfg = readTestConfig()
+      if (!cfg.harnessUrl || !cfg.rootPath) return []
+      try {
+        const url = new URL('/find/file', cfg.harnessUrl)
+        url.searchParams.set('directory', cfg.rootPath)
+        url.searchParams.set('query', 'md')
+        const res = await fetch(url.toString())
+        if (!res.ok) return []
+        const data = (await res.json()) as string[]
+        return data
+          .filter((p) => /\.md$/i.test(p) && !p.includes('node_modules/'))
+          .map((p) => `${cfg.rootPath}/${p}`)
+      } catch {
+        return []
+      }
+    },
     listTree: () => Promise.resolve([]),
     watch: () => Promise.resolve(),
     unwatch: () => Promise.resolve(),

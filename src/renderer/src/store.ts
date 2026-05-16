@@ -1,4 +1,7 @@
 import { createContext, useContext } from 'react'
+import type { LineRange } from './path-utils'
+
+export type { LineRange } from './path-utils'
 
 export type View = 'diagram' | 'code' | 'read' | 'output'
 export type FileView = 'diagram' | 'code' | 'read'
@@ -73,6 +76,9 @@ export interface AppState {
   sessions: SessionInfo[]
   currentSessionId: string | null
   recents: string[]
+  // Highlight range when navigating to a source file with a #L10-L22 ref;
+  // null otherwise. Reset on workspace change.
+  currentRange: LineRange | null
 }
 
 export interface StoreApi {

@@ -7,7 +7,15 @@ import {
   type LoadedMessage,
   type ProviderAuthMap
 } from './agent'
-import { extname, joinPosix, relativeToRoot, resolveRelative, toPosix } from './path-utils'
+import {
+  extname,
+  joinPosix,
+  parseTarget,
+  relativeToRoot,
+  resolveRelative,
+  toPosix,
+  type LineRange
+} from './path-utils'
 import {
   StoreContext,
   type AppState,
@@ -43,7 +51,8 @@ const initialState: AppState = {
   chatSettingsOpen: false,
   sessions: [],
   currentSessionId: null,
-  recents: []
+  recents: [],
+  currentRange: null
 }
 
 type Action =
@@ -56,6 +65,7 @@ type Action =
       view: 'diagram' | 'code'
       pushBreadcrumb: boolean
       previous: string | null
+      range: LineRange | null
     }
   | {
       type: 'pop-to'
@@ -63,6 +73,7 @@ type Action =
       file: string
       contents: string
       view: 'diagram' | 'code'
+      range: LineRange | null
     }
   | { type: 'set-loading'; loading: boolean }
   | { type: 'add-toast'; toast: Toast }
@@ -103,26 +114,31 @@ function reducer(state: AppState, action: Action): AppState {
         action.pushBreadcrumb && action.previous
           ? [...state.breadcrumbs, action.previous]
           : state.breadcrumbs
+      // A line ref only makes sense in source view — even for .md targets.
+      const view = action.range ? 'code' : action.view
       return {
         ...state,
         currentFile: action.file,
         fileContents: action.contents,
-        view: action.view,
+        view,
         breadcrumbs,
         loading: false,
-        prevView: null
+        prevView: null,
+        currentRange: action.range
       }
     }
     case 'pop-to': {
       const breadcrumbs = state.breadcrumbs.slice(0, action.index)
+      const view = action.range ? 'code' : action.view
       return {
         ...state,
         currentFile: action.file,
         fileContents: action.contents,
-        view: action.view,
+        view,
         breadcrumbs,
         loading: false,
-        prevView: null
+        prevView: null,
+        currentRange: action.range
       }
     }
     case 'set-loading':
@@ -461,20 +477,23 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
   const navigateAbsolute = useCallback(
     async (relPath: string, pushBreadcrumb: boolean) => {
       if (!state.rootPath) return
+      // The path may carry a #L10-L22 line ref; peel it off before reading.
+      const { path, range } = parseTarget(relPath)
       dispatch({ type: 'set-loading', loading: true })
       const previous = state.currentFile
-      const result = await readFileSafe(state.rootPath, relPath)
+      const result = await readFileSafe(state.rootPath, path)
       if (!result) {
         dispatch({ type: 'set-loading', loading: false })
         return
       }
       dispatch({
         type: 'load-success',
-        file: relPath,
+        file: path,
         contents: result.contents,
         view: result.view,
         pushBreadcrumb,
-        previous
+        previous,
+        range
       })
     },
     [readFileSafe, state.rootPath, state.currentFile]
@@ -483,8 +502,16 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
   const navigateRelative = useCallback(
     async (target: string) => {
       if (!state.currentFile) return
-      const resolved = resolveRelative(state.currentFile, target)
-      await navigateAbsolute(resolved, true)
+      // Peel off the line ref first so resolveRelative doesn't try to make
+      // the fragment part of the path.
+      const { path, range } = parseTarget(target)
+      const resolved = resolveRelative(state.currentFile, path)
+      // Re-attach the line ref so navigateAbsolute (which uses parseTarget)
+      // sees it.
+      const withRef = range
+        ? `${resolved}#L${range.start}${range.end !== range.start ? `-L${range.end}` : ''}`
+        : resolved
+      await navigateAbsolute(withRef, true)
     },
     [navigateAbsolute, state.currentFile]
   )
@@ -502,7 +529,8 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
         index,
         file: target,
         contents: result.contents,
-        view: result.view
+        view: result.view,
+        range: null
       })
     },
     [readFileSafe, state.rootPath, state.breadcrumbs]
@@ -576,7 +604,8 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
         contents: result.contents,
         view: result.view,
         pushBreadcrumb: false,
-        previous: null
+        previous: null,
+        range: null
       })
     },
     [ensureAgent, findEntryFile, readFileSafe, toast]
@@ -625,9 +654,12 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       contents: result.contents,
       view: result.view,
       pushBreadcrumb: false,
-      previous: null
+      previous: null,
+      // Reload (e.g. from chokidar) preserves the existing highlight range
+      // so the user doesn't lose it on every save.
+      range: state.currentRange
     })
-  }, [readFileSafe, state.rootPath, state.currentFile])
+  }, [readFileSafe, state.rootPath, state.currentFile, state.currentRange])
 
   const runScript = useCallback(
     async (name: string) => {
