@@ -628,6 +628,17 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
     }
   }, [state.rootPath, toast])
 
+  const refreshRuns = useCallback(async () => {
+    const root = state.rootPath
+    if (!root) return
+    try {
+      const runs = await window.api.listRuns(root)
+      dispatch({ type: 'set-runs', runs })
+    } catch {
+      // Ignore — runs are non-critical and the next refresh will retry.
+    }
+  }, [state.rootPath])
+
   const openWorkspace = useCallback(
     async (picked: string) => {
       // Drop any agent attached to a previous workspace; the new harness
@@ -782,16 +793,22 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
   const setView = useCallback((view: FileView) => dispatch({ type: 'set-view', view }), [])
 
   // Live reload: re-read the current file when it changes on disk.
+  // Also refresh the runs list when its source files (package.json scripts
+  // or .codeswim/runs.json) change, so the agent adding a run shows up in
+  // the dropdown without a workspace reload.
   useEffect(() => {
     const unsub = window.api.onFileChanged((absPath) => {
-      if (!state.rootPath || !state.currentFile) return
+      if (!state.rootPath) return
       const rel = relativeToRoot(toPosix(state.rootPath), toPosix(absPath))
-      if (rel === state.currentFile) {
+      if (rel === 'package.json' || rel === '.codeswim/runs.json') {
+        void refreshRuns()
+      }
+      if (state.currentFile && rel === state.currentFile) {
         void reload()
       }
     })
     return unsub
-  }, [reload, state.rootPath, state.currentFile])
+  }, [reload, refreshRuns, state.rootPath, state.currentFile])
 
   // Refresh the file tree when files are added/removed.
   useEffect(() => {

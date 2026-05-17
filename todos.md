@@ -1,6 +1,10 @@
-- the diagram zoom thing is kind of lame though because when I try to zoom in on some smaller parts of the diagram because the diagram is really wide. I can because it always fits to the width of the screen.
 
-- how do i add run scripts? The ai should be able to add any run script and not rely on package.json
+
+- There should be a button to create a run script that tells the ai to add it to the json.
+
+- pressing enter should send the chat.
+
+- When the agent is thinking we don't really see what is going on.
 
 FUTURE FEATURES:
 

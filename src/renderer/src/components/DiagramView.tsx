@@ -138,12 +138,13 @@ export function DiagramView({ source }: { source: string }): React.JSX.Element {
     const ch = viewport.clientHeight
     if (!svgW || !svgH || !cw || !ch) return
     const PADDING = 24
-    // Fit to width — diagrams here read left-to-right and are usually wider
-    // than tall. If the result overflows vertically the user can drag/zoom.
-    const scale = Math.min((cw - PADDING * 2) / svgW, MAX_ZOOM)
-    const scaledH = svgH * scale
+    // Fit-to-contain: scale so the whole diagram is visible. Works for both
+    // landscape and portrait diagrams now that the viewBox is tightened to
+    // actual content bounds (so small diagrams don't end up tiny in empty
+    // mermaid-supplied padding).
+    const scale = Math.min((cw - PADDING * 2) / svgW, (ch - PADDING * 2) / svgH, MAX_ZOOM)
     const tx = (cw - svgW * scale) / 2
-    const ty = scaledH < ch ? (ch - scaledH) / 2 : PADDING
+    const ty = (ch - svgH * scale) / 2
     setView({ scale, tx, ty })
   }, [])
 

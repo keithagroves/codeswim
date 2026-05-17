@@ -136,7 +136,13 @@ function startWatching(rootPath: string): void {
   watcher = chokidar.watch(rootPath, {
     ignored: (path: string) => {
       const base = path.split('/').pop() ?? ''
-      if (base.startsWith('.') && base !== '.env' && base !== '.gitignore' && base !== '.') {
+      if (
+        base.startsWith('.') &&
+        base !== '.env' &&
+        base !== '.gitignore' &&
+        base !== '.codeswim' &&
+        base !== '.'
+      ) {
         return true
       }
       if (TREE_IGNORED_DIRS.has(base) || TREE_IGNORED_FILES.has(base)) return true
