@@ -39,6 +39,13 @@ export interface NewProjectResult {
   created: boolean
 }
 
+export interface RunEntry {
+  source: 'npm' | 'custom'
+  name: string
+  command: string
+  description?: string
+}
+
 export interface DiagramNavApi {
   pickFolder(): Promise<string | null>
   readFile(absPath: string): Promise<string>
@@ -48,8 +55,8 @@ export interface DiagramNavApi {
   unwatch(): Promise<void>
   onFileChanged(cb: (absPath: string) => void): () => void
   onTreeChanged(cb: () => void): () => void
-  readPackageScripts(rootPath: string): Promise<string[]>
-  runScript(rootPath: string, name: string): Promise<void>
+  listRuns(rootPath: string): Promise<RunEntry[]>
+  runEntry(rootPath: string, source: 'npm' | 'custom', name: string): Promise<void>
   killScript(): Promise<void>
   onScriptOutput(cb: (payload: ScriptOutputPayload) => void): () => void
   onScriptExit(cb: (payload: ScriptExitPayload) => void): () => void

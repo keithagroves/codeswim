@@ -94,7 +94,7 @@ function ViewSwitcher(): React.JSX.Element | null {
 }
 
 function Header(): React.JSX.Element {
-  const { state, popTo, showOutput, navigateAbsolute } = useStore()
+  const { state, popTo, showOutput, navigateAbsolute, syncDiagrams } = useStore()
   const canGoBack = state.breadcrumbs.length > 0
   const running = state.runningScript
   const chip = running !== null && state.view !== 'output' ? running : null
@@ -123,6 +123,13 @@ function Header(): React.JSX.Element {
       </button>
       <Breadcrumbs />
       <div className="header-actions">
+        <button
+          className="secondary"
+          onClick={() => void syncDiagrams()}
+          title="Audit diagrams against the code and ask the agent to fix any drift"
+        >
+          ↻ Sync diagrams
+        </button>
         <ViewSwitcher />
         {chip ? (
           <button

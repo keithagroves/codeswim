@@ -1,7 +1,6 @@
-- when I open the agent bar or files the header doesn't match the menu bar of the app so it looks a little weird. maybe those should be a consistent height
-- when configuring the ai provider I have to scroll to the first message in the chat.
-- change the title to codeswim instead of Diagram Navigator.
+- the diagram zoom thing is kind of lame though because when I try to zoom in on some smaller parts of the diagram because the diagram is really wide. I can because it always fits to the width of the screen.
 
+- how do i add run scripts? The ai should be able to add any run script and not rely on package.json
 
 FUTURE FEATURES:
 

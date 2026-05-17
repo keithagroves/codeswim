@@ -40,6 +40,13 @@ export interface NewProjectResult {
   created: boolean
 }
 
+export interface RunEntry {
+  source: 'npm' | 'custom'
+  name: string
+  command: string
+  description?: string
+}
+
 const api = {
   pickFolder: (): Promise<string | null> => ipcRenderer.invoke('pick-folder'),
   readFile: (absPath: string): Promise<string> => ipcRenderer.invoke('read-file', absPath),
@@ -58,10 +65,13 @@ const api = {
     ipcRenderer.on('tree-changed', listener)
     return () => ipcRenderer.removeListener('tree-changed', listener)
   },
-  readPackageScripts: (rootPath: string): Promise<string[]> =>
-    ipcRenderer.invoke('read-package-scripts', rootPath),
-  runScript: (rootPath: string, name: string): Promise<void> =>
-    ipcRenderer.invoke('run-script', rootPath, name),
+  listRuns: (rootPath: string): Promise<RunEntry[]> =>
+    ipcRenderer.invoke('list-runs', rootPath),
+  runEntry: (
+    rootPath: string,
+    source: 'npm' | 'custom',
+    name: string
+  ): Promise<void> => ipcRenderer.invoke('run-entry', rootPath, source, name),
   killScript: (): Promise<void> => ipcRenderer.invoke('kill-script'),
   onScriptOutput: (cb: (payload: ScriptOutputPayload) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: ScriptOutputPayload): void =>

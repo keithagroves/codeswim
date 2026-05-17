@@ -1,30 +1,42 @@
 import { useState } from 'react'
 import { useStore } from '../store'
 
+function entryKey(source: 'npm' | 'custom', name: string): string {
+  return `${source}:${name}`
+}
+
 export function ScriptControls(): React.JSX.Element | null {
   const { state, runScript, killScript, showOutput } = useStore()
-  const [selected, setSelected] = useState<string>('')
+  const [selectedKey, setSelectedKey] = useState<string>('')
 
-  if (state.scripts.length === 0) return null
+  const runs = state.runs
+  if (runs.length === 0) return null
 
   const running = state.runningScript
   const isRunning = running?.status === 'running'
 
-  // Default the dropdown to the first script if nothing's selected yet.
-  const value = selected || (state.scripts.includes(selected) ? selected : state.scripts[0])
+  const knownKeys = runs.map((r) => entryKey(r.source, r.name))
+  const value = knownKeys.includes(selectedKey) ? selectedKey : knownKeys[0]
+  const selectedEntry = runs.find((r) => entryKey(r.source, r.name) === value)
 
   return (
     <div className="script-controls">
       <select
         className="script-select"
         value={value}
-        onChange={(e) => setSelected(e.target.value)}
+        onChange={(e) => setSelectedKey(e.target.value)}
         disabled={isRunning}
-        title="npm script to run"
+        title={
+          selectedEntry
+            ? selectedEntry.source === 'npm'
+              ? `npm run ${selectedEntry.name}`
+              : selectedEntry.command
+            : ''
+        }
       >
-        {state.scripts.map((s) => (
-          <option key={s} value={s}>
-            {s}
+        {runs.map((r) => (
+          <option key={entryKey(r.source, r.name)} value={entryKey(r.source, r.name)}>
+            {r.source === 'custom' ? `▸ ${r.name}` : r.name}
           </option>
         ))}
       </select>
@@ -42,8 +54,9 @@ export function ScriptControls(): React.JSX.Element | null {
       ) : (
         <button
           className="script-btn script-run"
-          onClick={() => void runScript(value)}
-          title={`npm run ${value}`}
+          onClick={() => selectedEntry && void runScript(selectedEntry)}
+          title={selectedEntry?.command ?? ''}
+          disabled={!selectedEntry}
         >
           ▶ Run
         </button>

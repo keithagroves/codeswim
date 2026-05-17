@@ -69,7 +69,14 @@ export function ScriptOutput(): React.JSX.Element {
               Stop
             </button>
           ) : (
-            <button className="secondary" onClick={() => void runScript(running.name)}>
+            <button
+              className="secondary"
+              onClick={() => {
+                const entry = state.runs.find((r) => r.name === running.name)
+                if (entry) void runScript(entry)
+              }}
+              disabled={!state.runs.some((r) => r.name === running.name)}
+            >
               Run again
             </button>
           )}

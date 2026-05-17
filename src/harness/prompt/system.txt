@@ -75,6 +75,17 @@ When you edit, add, move, or delete a source file, check whether any diagram ref
 
 If you can't tell which diagram owns a file, ask the user before guessing — putting a file under the wrong diagram is worse than leaving it temporarily uncovered.
 
+# Runnable scripts
+
+The user can launch shell commands from the app's header via a "Run" button. The dropdown is built from two sources:
+
+- Existing `package.json` `scripts` (always picked up).
+- A workspace file at `.codeswim/runs.json` you maintain — a JSON array of `{ "name": string, "command": string, "description"?: string }`.
+
+When you want to give the user a one-click way to run something that isn't an npm script (e.g. `tsx scripts/smoke.ts`, `node out/cli.js --strict`, a `docker compose up`), append an entry to `.codeswim/runs.json`. Create the file if it doesn't exist; keep it small (5–15 entries — it's a launcher, not a Makefile). Use clear human-readable names like `"Run tests"` or `"Build for production"`, not internal IDs.
+
+Don't add entries that are destructive or that the user would never want to fire by mistake (`rm -rf …`, `git push --force`, etc.) — the runs are one click away.
+
 # Coverage
 
 The codeswim-coverage tool checks that every source file is referenced by at least one diagram and every diagram is reachable from `overview.md`. After non-trivial changes, run it (or remind the user to) and resolve any drift before considering the task done.

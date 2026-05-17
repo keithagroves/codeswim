@@ -135,8 +135,63 @@ export function installBrowserApiStub(): void {
     unwatch: () => Promise.resolve(),
     onFileChanged: noopUnsub,
     onTreeChanged: noopUnsub,
-    readPackageScripts: () => Promise.resolve([]),
-    runScript: notInBrowser<void>('runScript'),
+    listRuns: async () => {
+      const cfg = readTestConfig()
+      if (!cfg.harnessUrl || !cfg.rootPath) return []
+      const fetchText = async (rel: string): Promise<string | null> => {
+        try {
+          const url = new URL('/file/content', cfg.harnessUrl!)
+          url.searchParams.set('directory', cfg.rootPath!)
+          url.searchParams.set('path', rel)
+          const res = await fetch(url.toString())
+          if (!res.ok) return null
+          const data = (await res.json()) as { type: string; content: string }
+          return data.content
+        } catch {
+          return null
+        }
+      }
+      const out: Array<{
+        source: 'npm' | 'custom'
+        name: string
+        command: string
+        description?: string
+      }> = []
+      const customRaw = await fetchText('.codeswim/runs.json')
+      if (customRaw) {
+        try {
+          const parsed = JSON.parse(customRaw)
+          if (Array.isArray(parsed)) {
+            for (const entry of parsed) {
+              if (!entry || typeof entry !== 'object') continue
+              const e = entry as Record<string, unknown>
+              if (typeof e.name !== 'string' || typeof e.command !== 'string') continue
+              out.push({
+                source: 'custom',
+                name: e.name,
+                command: e.command,
+                description: typeof e.description === 'string' ? e.description : undefined
+              })
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+      const pkgRaw = await fetchText('package.json')
+      if (pkgRaw) {
+        try {
+          const pkg = JSON.parse(pkgRaw) as { scripts?: Record<string, string> }
+          for (const name of Object.keys(pkg.scripts ?? {}).sort()) {
+            out.push({ source: 'npm', name, command: `npm run ${name}` })
+          }
+        } catch {
+          // ignore
+        }
+      }
+      return out
+    },
+    runEntry: notInBrowser<void>('runEntry'),
     killScript: () => Promise.resolve(),
     onScriptOutput: noopUnsub,
     onScriptExit: noopUnsub,

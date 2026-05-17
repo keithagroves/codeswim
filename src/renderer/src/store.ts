@@ -23,6 +23,13 @@ export interface RunningScript {
   startedAt: number
 }
 
+export interface RunEntry {
+  source: 'npm' | 'custom'
+  name: string
+  command: string
+  description?: string
+}
+
 export interface TreeNode {
   kind: 'file' | 'dir'
   name: string
@@ -62,7 +69,7 @@ export interface AppState {
   fileContents: string | null
   loading: boolean
   toasts: Toast[]
-  scripts: string[]
+  runs: RunEntry[]
   runningScript: RunningScript | null
   // The view we should return to when the user closes the output panel.
   prevView: FileView | null
@@ -100,7 +107,7 @@ export interface StoreApi {
   popTo(index: number): Promise<void>
   toast(message: string, kind?: 'info' | 'error'): void
   reload(): Promise<void>
-  runScript(name: string): Promise<void>
+  runScript(entry: RunEntry): Promise<void>
   killScript(): Promise<void>
   showOutput(): void
   hideOutput(): void
@@ -125,6 +132,9 @@ export interface StoreApi {
   newProject(): Promise<void>
   openRecent(path: string): Promise<void>
   clearRecents(): Promise<void>
+  // Audits the workspace against the MDD rules and either reports clean
+  // (toast) or hands the drift report to the agent as a chat prompt.
+  syncDiagrams(): Promise<void>
 }
 
 export const StoreContext = createContext<StoreApi | null>(null)

@@ -177,15 +177,63 @@ function startWatching(rootPath: string): void {
   watcher.on('unlinkDir', scheduleTreeChange)
 }
 
-async function readPackageScripts(rootPath: string): Promise<string[]> {
+interface RunEntry {
+  source: 'npm' | 'custom'
+  name: string
+  command: string
+  description?: string
+}
+
+async function readPackageRuns(rootPath: string): Promise<RunEntry[]> {
   try {
     const raw = await fs.readFile(join(rootPath, 'package.json'), 'utf-8')
     const parsed = JSON.parse(raw) as { scripts?: Record<string, string> }
     if (!parsed.scripts) return []
-    return Object.keys(parsed.scripts).sort()
+    return Object.keys(parsed.scripts)
+      .sort()
+      .map((name) => ({
+        source: 'npm' as const,
+        name,
+        command: `npm run ${shellEscape(name)}`
+      }))
   } catch {
     return []
   }
+}
+
+async function readCustomRuns(rootPath: string): Promise<RunEntry[]> {
+  // Agent-maintained free-form runs at .codeswim/runs.json. Format:
+  //   [{ "name": "Smoke API", "command": "tsx scripts/smoke.ts" }, ...]
+  // Optional fields: `description` (tooltip). Unknown fields are ignored.
+  try {
+    const raw = await fs.readFile(join(rootPath, '.codeswim', 'runs.json'), 'utf-8')
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    const out: RunEntry[] = []
+    for (const entry of parsed) {
+      if (!entry || typeof entry !== 'object') continue
+      const e = entry as Record<string, unknown>
+      if (typeof e.name !== 'string' || !e.name.trim()) continue
+      if (typeof e.command !== 'string' || !e.command.trim()) continue
+      out.push({
+        source: 'custom',
+        name: e.name,
+        command: e.command,
+        description: typeof e.description === 'string' ? e.description : undefined
+      })
+    }
+    return out
+  } catch {
+    return []
+  }
+}
+
+async function listRuns(rootPath: string): Promise<RunEntry[]> {
+  const [pkg, custom] = await Promise.all([
+    readPackageRuns(rootPath),
+    readCustomRuns(rootPath)
+  ])
+  return [...custom, ...pkg]
 }
 
 function killActiveRun(): void {
@@ -215,20 +263,22 @@ function emitScriptExit(name: string, code: number | null, signal: NodeJS.Signal
   mainWindow.webContents.send('script-exit', { name, code, signal })
 }
 
-async function runScript(rootPath: string, name: string): Promise<void> {
-  // Validate the requested script against the project's package.json
-  // so we never spawn a name the user didn't pick from the dropdown.
-  const scripts = await readPackageScripts(rootPath)
-  if (!scripts.includes(name)) {
-    throw new Error(`unknown script: ${name}`)
+async function runEntry(rootPath: string, source: 'npm' | 'custom', name: string): Promise<void> {
+  // Re-read the current list so the renderer can never invent a command
+  // string over IPC — we always run something the user could see in the
+  // (validated) merged list.
+  const runs = await listRuns(rootPath)
+  const entry = runs.find((r) => r.source === source && r.name === name)
+  if (!entry) {
+    throw new Error(`unknown run: ${source}/${name}`)
   }
 
   killActiveRun()
 
-  // Use shell so the user's PATH (npm, pnpm, node) resolves the way it
-  // does in their terminal. detached:true creates a new process group so
-  // we can kill the whole tree (npm spawns subcommands).
-  const child = spawn(`npm run ${shellEscape(name)}`, {
+  // Use shell so the user's PATH (npm, pnpm, node, tsx) resolves the way
+  // it does in their terminal. detached:true creates a new process group
+  // so we can kill the whole tree (npm spawns subcommands).
+  const child = spawn(entry.command, {
     cwd: rootPath,
     shell: true,
     detached: true,
@@ -485,13 +535,16 @@ app.whenReady().then(async () => {
     stopWatching()
   })
 
-  ipcMain.handle('read-package-scripts', async (_event, rootPath: string) => {
-    return readPackageScripts(rootPath)
+  ipcMain.handle('list-runs', async (_event, rootPath: string) => {
+    return listRuns(rootPath)
   })
 
-  ipcMain.handle('run-script', async (_event, rootPath: string, name: string) => {
-    await runScript(rootPath, name)
-  })
+  ipcMain.handle(
+    'run-entry',
+    async (_event, rootPath: string, source: 'npm' | 'custom', name: string) => {
+      await runEntry(rootPath, source, name)
+    }
+  )
 
   ipcMain.handle('kill-script', async () => {
     killActiveRun()

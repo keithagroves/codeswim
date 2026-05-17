@@ -7,6 +7,7 @@ import {
   type LoadedMessage,
   type ProviderAuthMap
 } from './agent'
+import { runCoverage, buildSyncPrompt } from './coverage/run'
 import {
   extname,
   joinPosix,
@@ -23,6 +24,7 @@ import {
   type ChatMessagePart,
   type ChatStatus,
   type FileView,
+  type RunEntry,
   type RunningScript,
   type SessionInfo,
   type StoreApi,
@@ -39,7 +41,7 @@ const initialState: AppState = {
   fileContents: null,
   loading: false,
   toasts: [],
-  scripts: [],
+  runs: [],
   runningScript: null,
   prevView: null,
   tree: null,
@@ -80,7 +82,7 @@ type Action =
   | { type: 'set-loading'; loading: boolean }
   | { type: 'add-toast'; toast: Toast }
   | { type: 'remove-toast'; id: number }
-  | { type: 'set-scripts'; scripts: string[] }
+  | { type: 'set-runs'; runs: RunEntry[] }
   | { type: 'script-started'; name: string; startedAt: number }
   | { type: 'script-output'; name: string; chunk: string }
   | { type: 'script-exited'; name: string; code: number | null; signal: string | null }
@@ -152,8 +154,8 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, toasts: [...state.toasts, action.toast] }
     case 'remove-toast':
       return { ...state, toasts: state.toasts.filter((t) => t.id !== action.id) }
-    case 'set-scripts':
-      return { ...state, scripts: action.scripts }
+    case 'set-runs':
+      return { ...state, runs: action.runs }
     case 'script-started': {
       const running: RunningScript = {
         name: action.name,
@@ -635,13 +637,13 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       void window.api.stopHarness().catch(() => {})
       dispatch({ type: 'set-root', rootPath: picked })
 
-      const [scripts, entry, tree, recents] = await Promise.all([
-        window.api.readPackageScripts(picked),
+      const [runs, entry, tree, recents] = await Promise.all([
+        window.api.listRuns(picked),
         findEntryFile(picked),
         window.api.listTree(picked).catch(() => [] as TreeNode[]),
         window.api.addRecent(picked).catch(() => [] as string[])
       ])
-      dispatch({ type: 'set-scripts', scripts })
+      dispatch({ type: 'set-runs', runs })
       dispatch({ type: 'set-tree', tree })
       if (recents.length > 0) dispatch({ type: 'recents-set', recents })
 
@@ -704,6 +706,34 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
     }
   }, [])
 
+  const syncDiagrams = useCallback(async () => {
+    const root = stateRef.current.rootPath
+    if (!root) {
+      toast('Open a folder first.', 'error')
+      return
+    }
+    let report
+    try {
+      report = await runCoverage(root)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      toast(`Couldn't audit diagrams: ${msg}`, 'error')
+      return
+    }
+    const issues =
+      report.brokenLinks.length +
+      report.orphanDiagrams.length +
+      report.uncoveredSources.length +
+      report.mermaidIssues.length
+    if (issues === 0) {
+      toast('Diagrams are aligned with the code — nothing to fix.', 'info')
+      return
+    }
+    // Switch to the agent panel so the user sees the conversation.
+    dispatch({ type: 'set-active-section', section: 'agent' })
+    void sendChat(buildSyncPrompt(report))
+  }, [sendChat, toast])
+
   const reload = useCallback(async () => {
     if (!state.rootPath || !state.currentFile) return
     const result = await readFileSafe(state.rootPath, state.currentFile)
@@ -722,15 +752,15 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
   }, [readFileSafe, state.rootPath, state.currentFile, state.currentRange])
 
   const runScript = useCallback(
-    async (name: string) => {
+    async (entry: RunEntry) => {
       if (!state.rootPath) return
       try {
-        dispatch({ type: 'script-started', name, startedAt: Date.now() })
-        await window.api.runScript(state.rootPath, name)
+        dispatch({ type: 'script-started', name: entry.name, startedAt: Date.now() })
+        await window.api.runEntry(state.rootPath, entry.source, entry.name)
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        toast(`Could not run ${name}: ${msg}`, 'error')
-        dispatch({ type: 'script-exited', name, code: -1, signal: null })
+        toast(`Could not run ${entry.name}: ${msg}`, 'error')
+        dispatch({ type: 'script-exited', name: entry.name, code: -1, signal: null })
       }
     },
     [state.rootPath, toast]
@@ -928,7 +958,8 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       refreshSessions,
       newProject,
       openRecent,
-      clearRecents
+      clearRecents,
+      syncDiagrams
     }),
     [
       state,
@@ -959,7 +990,8 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       refreshSessions,
       newProject,
       openRecent,
-      clearRecents
+      clearRecents,
+      syncDiagrams
     ]
   )
 
