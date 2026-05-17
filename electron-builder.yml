@@ -1,5 +1,5 @@
 appId: com.electron.app
-productName: diagram-nav
+productName: codeswim
 directories:
   buildResources: build
 files:
@@ -26,7 +26,7 @@ asarUnpack:
   # inside app.asar. Unpack so the path is real.
   - out/harness/**
 win:
-  executableName: diagram-nav
+  executableName: codeswim
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}

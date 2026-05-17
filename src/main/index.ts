@@ -424,7 +424,7 @@ function rebuildAppMenu(recents: string[]): void {
 }
 
 app.whenReady().then(async () => {
-  electronApp.setAppUserModelId('com.codeswim.diagram-nav')
+  electronApp.setAppUserModelId('com.codeswim.codeswim')
   // Build the menu with the persisted recents so "Open Recent" works on
   // first launch (rebuilds whenever the list changes via addRecent).
   const initialRecents = await readRecents()

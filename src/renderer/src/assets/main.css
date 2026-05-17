@@ -159,7 +159,8 @@ body.is-resizing {
 .search-panel-header {
   display: flex;
   align-items: center;
-  padding: 8px 12px;
+  padding: 0 12px;
+  min-height: 48px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -253,7 +254,8 @@ body.is-resizing {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: 0 12px;
+  min-height: 48px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -998,7 +1000,8 @@ button.secondary:hover {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
+  padding: 0 12px;
+  min-height: 48px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-muted);
   flex-shrink: 0;
@@ -1851,4 +1854,15 @@ button.secondary:hover {
 .cm-target-line {
   background: rgba(212, 167, 44, 0.18);
   box-shadow: -3px 0 0 #d4a72c inset;
+}
+
+/* Settings pane — slides in between the session bar and the message list
+ * when the gear is open. Stays visible regardless of message scroll. */
+.chat-settings-pane {
+  flex-shrink: 0;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-muted);
+  max-height: 60%;
+  overflow-y: auto;
 }

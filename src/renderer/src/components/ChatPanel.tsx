@@ -411,8 +411,14 @@ export function ChatPanel(): React.JSX.Element {
         </button>
       </div>
       <SessionBar />
+      {state.chatSettingsOpen ? (
+        // Render settings ABOVE the scrollable list so it stays visible
+        // regardless of how far the messages have scrolled.
+        <div className="chat-settings-pane">
+          <ProviderSetup onCancel={toggleChatSettings} />
+        </div>
+      ) : null}
       <div className="chat-list" ref={listRef}>
-        {state.chatSettingsOpen ? <ProviderSetup onCancel={toggleChatSettings} /> : null}
         {state.chatMessages.length === 0 ? (
           <div className="chat-empty">
             {state.rootPath
