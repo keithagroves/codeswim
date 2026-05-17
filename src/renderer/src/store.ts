@@ -67,11 +67,22 @@ export interface AppState {
   // The view we should return to when the user closes the output panel.
   prevView: FileView | null
   tree: TreeNode[] | null
-  sidebarOpen: boolean
+  // Side-panel layout. ActivityBar lives at the very left and stays
+  // visible; SidePanel sits to its right and shows whichever section is
+  // active. null = side panel collapsed (icons only, like VS Code).
+  activeSection: 'files' | 'agent' | 'search' | null
+  // Remembers which section was last open so toggling the panel closed
+  // and back open restores it (rather than always returning to 'files').
+  lastActiveSection: 'files' | 'agent' | 'search'
+  // Side panel width in pixels. Persisted to localStorage so it survives
+  // reloads.
+  sidePanelWidth: number
+  // User-controlled order of activity-bar sections (drag-to-reorder).
+  // Persisted to localStorage.
+  activityOrder: Array<'agent' | 'files' | 'search'>
   chatStatus: ChatStatus
   chatError: string | null
   chatMessages: ChatMessage[]
-  chatPanelOpen: boolean
   chatSettingsOpen: boolean
   sessions: SessionInfo[]
   currentSessionId: string | null
@@ -93,14 +104,18 @@ export interface StoreApi {
   killScript(): Promise<void>
   showOutput(): void
   hideOutput(): void
-  toggleSidebar(): void
   // For markdown files: switch between rendered diagram and raw source view.
   toggleSource(): void
   // Switch directly to one of the file-level views (read/diagram/code).
   setView(view: FileView): void
+  // Toggle side panel visibility (collapsed ↔ last-active-section).
+  toggleSidebar(): void
   refreshTree(): Promise<void>
   sendChat(text: string): Promise<void>
-  toggleChatPanel(): void
+  setActiveSection(section: 'files' | 'agent' | 'search' | null): void
+  toggleActiveSection(section: 'files' | 'agent' | 'search'): void
+  setSidePanelWidth(width: number): void
+  setActivityOrder(order: Array<'agent' | 'files' | 'search'>): void
   toggleChatSettings(): void
   fetchProviderMethods(): Promise<Record<string, Array<{ type: 'oauth' | 'api'; label: string }>>>
   configureProvider(provider: string, apiKey: string): Promise<void>

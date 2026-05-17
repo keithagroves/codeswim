@@ -6,7 +6,7 @@
 // All Electron-only side effects (folder pick, file watcher, harness spawn)
 // fail with a friendly error; everything that just reads state works.
 
-import type { DiagramNavApi, HarnessConnection, NewProjectResult } from '../../preload/index.d'
+import type { DiagramNavApi, HarnessConnection, NewProjectResult, TreeNode } from '../../preload/index.d'
 
 function notInBrowser<T>(name: string): () => Promise<T> {
   return () => Promise.reject(new Error(`${name} is only available inside the Electron app`))
@@ -73,7 +73,64 @@ export function installBrowserApiStub(): void {
         return []
       }
     },
-    listTree: () => Promise.resolve([]),
+    listTree: async () => {
+      const cfg = readTestConfig()
+      if (!cfg.harnessUrl || !cfg.rootPath) return []
+      try {
+        const url = new URL('/find/file', cfg.harnessUrl)
+        url.searchParams.set('directory', cfg.rootPath)
+        // opencode returns directories for an empty query; use '.' to get
+        // a comprehensive file list (matches any path containing a dot).
+        url.searchParams.set('query', '.')
+        const res = await fetch(url.toString())
+        if (!res.ok) return []
+        const paths = (await res.json()) as string[]
+        // Build a nested tree from the flat path list, skipping node_modules.
+        type DirAccumulator = {
+          [name: string]: { kind: 'file' | 'dir'; children?: DirAccumulator }
+        }
+        const root: DirAccumulator = {}
+        for (const p of paths) {
+          if (p.includes('node_modules/') || p.startsWith('node_modules/')) continue
+          const parts = p.split('/').filter(Boolean)
+          let cursor = root
+          for (let i = 0; i < parts.length; i++) {
+            const name = parts[i]!
+            const isLeaf = i === parts.length - 1
+            if (isLeaf) {
+              cursor[name] = { kind: 'file' }
+            } else {
+              if (!cursor[name]) cursor[name] = { kind: 'dir', children: {} }
+              cursor = cursor[name].children!
+            }
+          }
+        }
+        const materialize = (acc: DirAccumulator, prefix: string): TreeNode[] => {
+          const out: TreeNode[] = []
+          for (const [name, entry] of Object.entries(acc)) {
+            const path = prefix ? `${prefix}/${name}` : name
+            if (entry.kind === 'file') {
+              out.push({ kind: 'file', name, path })
+            } else {
+              out.push({
+                kind: 'dir',
+                name,
+                path,
+                children: materialize(entry.children ?? {}, path)
+              })
+            }
+          }
+          out.sort((a, b) => {
+            if (a.kind !== b.kind) return a.kind === 'dir' ? -1 : 1
+            return a.name.localeCompare(b.name)
+          })
+          return out
+        }
+        return materialize(root, '')
+      } catch {
+        return []
+      }
+    },
     watch: () => Promise.resolve(),
     unwatch: () => Promise.resolve(),
     onFileChanged: noopUnsub,

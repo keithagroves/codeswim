@@ -49,11 +49,200 @@ body {
   min-height: 0;
 }
 
-/* Sidebar / file tree */
-.sidebar {
-  width: 260px;
+/* Activity bar — narrow icon strip at the very left, like VS Code.
+ * Always visible; clicking an icon switches the active SidePanel section. */
+.activity-bar {
+  width: 48px;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
+  background: var(--bg-muted);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 16px 0 6px;
+  gap: 4px;
+}
+
+.activity-btn {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: var(--text-muted);
+  position: relative;
+  padding: 0;
+}
+
+.activity-btn:hover {
+  color: var(--text);
+}
+
+.activity-btn.is-active {
+  color: var(--text);
+}
+
+.activity-btn.is-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background: var(--accent);
+  border-radius: 0 2px 2px 0;
+}
+
+/* Indicator line at the top of the button that's about to receive a
+ * dragged sibling. */
+.activity-btn.is-drop-target::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: -2px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+}
+
+/* Side panel — the resizable column to the right of the activity bar.
+ * Houses either the file tree, agent panel, or search panel, depending
+ * on which activity icon is active. Inline `width` is set from state. */
+.side-panel {
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  position: relative;
+}
+
+/* Drag handle on the right edge of the side panel. Visually invisible
+ * (4px wide), but its hover/active state shows the accent color. */
+.side-panel-resizer {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  width: 4px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+}
+
+.side-panel-resizer:hover,
+body.is-resizing .side-panel-resizer {
+  background: var(--accent);
+  opacity: 0.4;
+}
+
+/* While dragging, freeze cursor and disable text selection across the app. */
+body.is-resizing {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
+/* Search panel */
+.search-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-muted);
+}
+
+.search-panel-header {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.search-panel-input-wrap {
+  padding: 8px 10px;
+  flex-shrink: 0;
+}
+
+.search-panel-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text);
+}
+
+.search-panel-input:focus {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.search-panel-results {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.search-panel-results ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.search-panel-empty {
+  padding: 12px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  text-align: center;
+}
+
+.search-result {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 6px 12px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.search-result:hover {
+  background: var(--bg);
+}
+
+.search-result-name {
+  font-weight: 500;
+}
+
+.search-result-dir {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family:
+    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* Sidebar / file tree (now nested inside .side-panel — no border/width
+ * of its own, just fills the rail). */
+.sidebar {
+  flex: 1;
+  min-height: 0;
   background: var(--bg-muted);
   display: flex;
   flex-direction: column;
@@ -278,6 +467,16 @@ button.secondary:hover {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+}
+
+/* Main column — vertical stack of Header + Content. Sits to the right of
+ * the activity bar and side panel; takes the rest of the row. */
+.main-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
 }
 
 /* Main content */
@@ -786,33 +985,13 @@ button.secondary:hover {
   background: var(--bg-muted);
 }
 
-/* Chat panel */
+/* Chat panel — now sits inside .side-panel; fills it. */
 .chat-panel {
-  width: 360px;
-  flex-shrink: 0;
-  border-left: 1px solid var(--border);
+  flex: 1;
+  min-height: 0;
   background: var(--bg);
   display: flex;
   flex-direction: column;
-  min-height: 0;
-}
-
-.chat-panel-collapsed {
-  width: 36px;
-  flex-shrink: 0;
-  border-left: 1px solid var(--border);
-  background: var(--bg-muted);
-  cursor: pointer;
-  border-top: 0;
-  border-right: 0;
-  border-bottom: 0;
-  font-size: 18px;
-  color: var(--text-muted);
-}
-
-.chat-panel-collapsed:hover {
-  background: var(--bg);
-  color: var(--text);
 }
 
 .chat-header {

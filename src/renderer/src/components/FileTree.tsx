@@ -124,8 +124,7 @@ export function FileTree(): React.JSX.Element | null {
     [navigateAbsolute]
   )
 
-  if (!state.sidebarOpen) return null
-
+  // Visibility is owned by the parent SidePanel; this component just renders.
   return (
     <aside className="sidebar" aria-label="File tree">
       <div className="sidebar-header">

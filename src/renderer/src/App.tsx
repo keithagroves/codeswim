@@ -1,3 +1,5 @@
+import { useCallback, useEffect, useRef } from 'react'
+import { ActivityBar } from './components/ActivityBar'
 import { Breadcrumbs } from './components/Breadcrumbs'
 import { ChatPanel } from './components/ChatPanel'
 import { CodeView } from './components/CodeView'
@@ -6,10 +8,61 @@ import { FileTree } from './components/FileTree'
 import { ReadView } from './components/ReadView'
 import { ScriptControls } from './components/ScriptControls'
 import { ScriptOutput } from './components/ScriptOutput'
+import { SearchPanel } from './components/SearchPanel'
 import { Toasts } from './components/Toasts'
 import { extname } from './path-utils'
 import { StoreProvider } from './state'
 import { useStore, type FileView } from './store'
+
+function SidePanel(): React.JSX.Element | null {
+  const { state, setSidePanelWidth } = useStore()
+  const widthRef = useRef(state.sidePanelWidth)
+
+  const onResizeStart = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      e.preventDefault()
+      const startX = e.clientX
+      const startWidth = widthRef.current
+      const onMove = (ev: MouseEvent): void => {
+        const next = Math.max(180, Math.min(700, startWidth + (ev.clientX - startX)))
+        widthRef.current = next
+        // Update directly via dispatch for live drag; the throttle is fine
+        // for occasional pixel updates in a single panel.
+        setSidePanelWidth(next)
+      }
+      const onUp = (): void => {
+        document.removeEventListener('mousemove', onMove)
+        document.removeEventListener('mouseup', onUp)
+        document.body.classList.remove('is-resizing')
+      }
+      document.addEventListener('mousemove', onMove)
+      document.addEventListener('mouseup', onUp)
+      document.body.classList.add('is-resizing')
+    },
+    [setSidePanelWidth]
+  )
+
+  // Keep the ref in sync with state so a fresh drag starts from the
+  // current width (e.g. after window resize or programmatic change).
+  useEffect(() => {
+    widthRef.current = state.sidePanelWidth
+  }, [state.sidePanelWidth])
+
+  if (state.activeSection === null) return null
+  return (
+    <div className="side-panel" style={{ width: state.sidePanelWidth }}>
+      {state.activeSection === 'files' ? <FileTree /> : null}
+      {state.activeSection === 'agent' ? <ChatPanel /> : null}
+      {state.activeSection === 'search' ? <SearchPanel /> : null}
+      <div
+        className="side-panel-resizer"
+        onMouseDown={onResizeStart}
+        title="Drag to resize"
+        aria-hidden="true"
+      />
+    </div>
+  )
+}
 
 function ViewSwitcher(): React.JSX.Element | null {
   const { state, setView } = useStore()
@@ -17,8 +70,9 @@ function ViewSwitcher(): React.JSX.Element | null {
   if (extname(state.currentFile) !== '.md') return null
   if (state.view === 'output') return null
 
+  // Read view exists in code but is hidden from the switcher for now —
+  // re-enable by re-adding `{ key: 'read', label: 'Read' }` here.
   const options: Array<{ key: FileView; label: string }> = [
-    { key: 'read', label: 'Read' },
     { key: 'diagram', label: 'Diagram' },
     { key: 'code', label: 'Source' }
   ]
@@ -40,7 +94,7 @@ function ViewSwitcher(): React.JSX.Element | null {
 }
 
 function Header(): React.JSX.Element {
-  const { state, popTo, showOutput, toggleSidebar, navigateAbsolute } = useStore()
+  const { state, popTo, showOutput, navigateAbsolute } = useStore()
   const canGoBack = state.breadcrumbs.length > 0
   const running = state.runningScript
   const chip = running !== null && state.view !== 'output' ? running : null
@@ -48,14 +102,6 @@ function Header(): React.JSX.Element {
 
   return (
     <div className="header">
-      <button
-        className="icon-btn"
-        onClick={toggleSidebar}
-        title={state.sidebarOpen ? 'Hide files' : 'Show files'}
-        aria-pressed={state.sidebarOpen}
-      >
-        ☰
-      </button>
       {canGoBack ? (
         <button
           className="icon-btn"
@@ -134,7 +180,7 @@ function StartScreen(): React.JSX.Element {
     <div className="start-screen">
       <h1>codeswim</h1>
       <p>
-        Pick a folder of markdown files with embedded mermaid diagrams. The agent in the right
+        Pick a folder of markdown files with embedded mermaid diagrams. The agent in the side
         panel edits diagrams first, then code at the leaves.
       </p>
       <div className="start-screen-actions">
@@ -187,10 +233,11 @@ function Shell(): React.JSX.Element {
     return (
       <div className="app">
         <div className="main-row">
+          <ActivityBar />
+          <SidePanel />
           <div className="content">
             <StartScreen />
           </div>
-          <ChatPanel />
         </div>
         <Toasts />
       </div>
@@ -199,13 +246,15 @@ function Shell(): React.JSX.Element {
 
   return (
     <div className="app">
-      <Header />
       <div className="main-row">
-        <FileTree />
-        <div className="content">
-          <Body />
+        <ActivityBar />
+        <SidePanel />
+        <div className="main-column">
+          <Header />
+          <div className="content">
+            <Body />
+          </div>
         </div>
-        <ChatPanel />
       </div>
       <Toasts />
     </div>

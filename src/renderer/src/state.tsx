@@ -43,11 +43,13 @@ const initialState: AppState = {
   runningScript: null,
   prevView: null,
   tree: null,
-  sidebarOpen: true,
+  activeSection: 'agent',
+  lastActiveSection: 'agent',
+  sidePanelWidth: 320,
+  activityOrder: ['agent', 'files', 'search'],
   chatStatus: 'idle',
   chatError: null,
   chatMessages: [],
-  chatPanelOpen: true,
   chatSettingsOpen: false,
   sessions: [],
   currentSessionId: null,
@@ -86,13 +88,16 @@ type Action =
   | { type: 'hide-output' }
   | { type: 'set-tree'; tree: TreeNode[] }
   | { type: 'toggle-sidebar' }
+  | { type: 'set-active-section'; section: 'files' | 'agent' | 'search' | null }
+  | { type: 'toggle-active-section'; section: 'files' | 'agent' | 'search' }
+  | { type: 'set-side-panel-width'; width: number }
+  | { type: 'set-activity-order'; order: Array<'agent' | 'files' | 'search'> }
   | { type: 'toggle-source' }
   | { type: 'set-view'; view: FileView }
   | { type: 'chat-status'; status: ChatStatus; error?: string | null }
   | { type: 'chat-add-message'; message: ChatMessage }
   | { type: 'chat-upsert-part'; messageID: string; part: ChatMessagePart & { id: string } }
   | { type: 'chat-clear' }
-  | { type: 'chat-toggle-panel' }
   | { type: 'chat-toggle-settings' }
   | { type: 'chat-set-settings'; open: boolean }
   | { type: 'sessions-set'; sessions: SessionInfo[] }
@@ -196,8 +201,47 @@ function reducer(state: AppState, action: Action): AppState {
     }
     case 'set-tree':
       return { ...state, tree: action.tree }
-    case 'toggle-sidebar':
-      return { ...state, sidebarOpen: !state.sidebarOpen }
+    case 'toggle-sidebar': {
+      // Collapse if open; restore the last section if closed.
+      if (state.activeSection !== null) return { ...state, activeSection: null }
+      return { ...state, activeSection: state.lastActiveSection }
+    }
+    case 'set-active-section':
+      return {
+        ...state,
+        activeSection: action.section,
+        lastActiveSection: action.section ?? state.lastActiveSection
+      }
+    case 'toggle-active-section': {
+      // Clicking the already-active icon collapses; clicking a different
+      // icon switches to it (and opens the panel if collapsed).
+      const next = state.activeSection === action.section ? null : action.section
+      return {
+        ...state,
+        activeSection: next,
+        // Always remember the section the user just interacted with so a
+        // later collapse+reopen returns here, not to 'files'.
+        lastActiveSection: action.section
+      }
+    }
+    case 'set-side-panel-width':
+      return { ...state, sidePanelWidth: Math.max(180, Math.min(700, action.width)) }
+    case 'set-activity-order': {
+      // Sanitize: dedupe and re-add any missing sections at the end so we
+      // never end up with a partial order if the saved one is stale.
+      const seen = new Set<string>()
+      const cleaned: Array<'agent' | 'files' | 'search'> = []
+      for (const k of action.order) {
+        if (seen.has(k)) continue
+        if (k !== 'agent' && k !== 'files' && k !== 'search') continue
+        cleaned.push(k)
+        seen.add(k)
+      }
+      for (const k of ['agent', 'files', 'search'] as const) {
+        if (!seen.has(k)) cleaned.push(k)
+      }
+      return { ...state, activityOrder: cleaned }
+    }
     case 'toggle-source': {
       // Only meaningful for markdown files. Flip rendered <-> raw source.
       if (!state.currentFile) return state
@@ -233,8 +277,6 @@ function reducer(state: AppState, action: Action): AppState {
     }
     case 'chat-clear':
       return { ...state, chatMessages: [], chatStatus: 'idle', chatError: null }
-    case 'chat-toggle-panel':
-      return { ...state, chatPanelOpen: !state.chatPanelOpen }
     case 'chat-toggle-settings':
       return { ...state, chatSettingsOpen: !state.chatSettingsOpen }
     case 'chat-set-settings':
@@ -424,7 +466,25 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
     }
   }, [])
 
-  const toggleChatPanel = useCallback(() => dispatch({ type: 'chat-toggle-panel' }), [])
+  const setActiveSection = useCallback(
+    (section: 'files' | 'agent' | 'search' | null) =>
+      dispatch({ type: 'set-active-section', section }),
+    []
+  )
+  const toggleActiveSection = useCallback(
+    (section: 'files' | 'agent' | 'search') =>
+      dispatch({ type: 'toggle-active-section', section }),
+    []
+  )
+  const setSidePanelWidth = useCallback(
+    (width: number) => dispatch({ type: 'set-side-panel-width', width }),
+    []
+  )
+  const setActivityOrder = useCallback(
+    (order: Array<'agent' | 'files' | 'search'>) =>
+      dispatch({ type: 'set-activity-order', order }),
+    []
+  )
   const toggleChatSettings = useCallback(
     () => dispatch({ type: 'chat-toggle-settings' }),
     []
@@ -792,6 +852,52 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       .catch(() => {})
   }, [])
 
+  // Restore the side panel width from localStorage on mount, then persist
+  // it whenever the user resizes.
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('codeswim:sidePanelWidth')
+      if (stored) {
+        const w = Number.parseInt(stored, 10)
+        if (Number.isFinite(w) && w >= 180 && w <= 700) {
+          dispatch({ type: 'set-side-panel-width', width: w })
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('codeswim:sidePanelWidth', String(state.sidePanelWidth))
+    } catch {
+      // ignore
+    }
+  }, [state.sidePanelWidth])
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('codeswim:activityOrder')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed)) {
+          dispatch({ type: 'set-activity-order', order: parsed })
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('codeswim:activityOrder', JSON.stringify(state.activityOrder))
+    } catch {
+      // ignore
+    }
+  }, [state.activityOrder])
+
   const api = useMemo<StoreApi>(
     () => ({
       state,
@@ -810,7 +916,10 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       setView,
       refreshTree,
       sendChat,
-      toggleChatPanel,
+      setActiveSection,
+      toggleActiveSection,
+      setSidePanelWidth,
+      setActivityOrder,
       toggleChatSettings,
       fetchProviderMethods,
       configureProvider,
@@ -838,7 +947,10 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       setView,
       refreshTree,
       sendChat,
-      toggleChatPanel,
+      setActiveSection,
+      toggleActiveSection,
+      setSidePanelWidth,
+      setActivityOrder,
       toggleChatSettings,
       fetchProviderMethods,
       configureProvider,

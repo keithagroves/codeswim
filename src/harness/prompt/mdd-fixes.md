@@ -12,7 +12,7 @@ fix — apply them by editing the diagram(s), not the code.
 4. **Frontmatter on every diagram** — `name`, `description`, `tags`.
 5. **Navigable mermaid nodes** — `click NodeId call navigate("../path/to/file.ts")`.
 6. **"Source" section per architecture diagram** — bulleted list of files with a one-line role each.
-7. **Layering** — `overview.md` → `architecture/*.md` → `flows/*.md`; ADRs in `decisions/adr-*.md`.
+7. **Layering** — `overview.md` at root is the only required file; the rest is convention. Adopt whatever folder structure the project already uses (e.g. `architecture/`, `subsystems/`, `flows/`, `arch/`, or flat). Defaults for empty projects: `overview.md` → `architecture/*.md` → `flows/*.md`; ADRs in `decisions/adr-*.md`.
 
 ## Drift table
 
@@ -37,7 +37,7 @@ that references it in the same change:
 - **Renamed/moved** — grep for the old path in `*.md` and update every link.
 - **New** — find the diagram whose subsystem owns it; add a Source entry, and add a `click ... call navigate(...)` if it's a node in the flow.
 - **Deleted** — remove all references; if it was a node in a mermaid block, remove that node and any edges into it.
-- **New subsystem** — create `architecture/<name>.md` with frontmatter, a mermaid diagram, and a Source list. Add a `click` handler from `overview.md` pointing to it.
+- **New subsystem** — create a subsystem diagram in whatever folder the project uses for them (defaulting to `architecture/<name>.md` if there's no precedent) with frontmatter, a mermaid diagram, and a Source list. Add a `click` handler from `overview.md` pointing to it.
 
 If you can't tell which diagram owns a file, ask before guessing —
 putting a file under the wrong diagram is worse than leaving it

@@ -369,7 +369,7 @@ function SessionBar(): React.JSX.Element | null {
 }
 
 export function ChatPanel(): React.JSX.Element {
-  const { state, sendChat, toggleChatPanel, toggleChatSettings } = useStore()
+  const { state, sendChat, toggleChatSettings } = useStore()
   const [input, setInput] = useState('')
   const listRef = useRef<HTMLDivElement | null>(null)
   const sending = state.chatStatus === 'thinking' || state.chatStatus === 'connecting'
@@ -379,19 +379,6 @@ export function ChatPanel(): React.JSX.Element {
     if (!el) return
     el.scrollTop = el.scrollHeight
   }, [state.chatMessages.length, state.chatStatus])
-
-  if (!state.chatPanelOpen) {
-    return (
-      <button
-        className="chat-panel-collapsed"
-        onClick={toggleChatPanel}
-        title="Show chat"
-        aria-label="Show chat"
-      >
-        💬
-      </button>
-    )
-  }
 
   const send = (): void => {
     const text = input.trim()
@@ -421,14 +408,6 @@ export function ChatPanel(): React.JSX.Element {
           disabled={!state.rootPath}
         >
           ⚙
-        </button>
-        <button
-          className="icon-btn"
-          onClick={toggleChatPanel}
-          title="Hide chat"
-          aria-label="Hide chat"
-        >
-          ✕
         </button>
       </div>
       <SessionBar />

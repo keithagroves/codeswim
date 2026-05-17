@@ -15,10 +15,9 @@ Diagrams are the spec; this tool is how you propose architectural changes BEFORE
 - **Line refs.** Navigate targets MAY include a GitHub-style line ref: `navigate("../src/server.ts#L25-L40")` jumps to and highlights lines 25–40. `#L42` is a single line. Prefer line refs when a node maps to a specific function/handler/block rather than the whole file.
 
 # Conventions
-- `overview.md` lives at the workspace root. It links to each subsystem.
-- `architecture/<subsystem>.md` describes one subsystem and includes a "Source" section beneath the mermaid block listing the files it covers, with a one-line role for each.
-- `flows/<flow>.md` describes a sequence or flowchart for a specific request flow.
-- `decisions/adr-<n>-<slug>.md` is an architecture decision record explaining *why* a thing is the way it is.
+- `overview.md` at the workspace root is the only required file — it's the entry point coverage uses for reachability.
+- Folder layout for everything else is up to the project. If it already uses `architecture/`, `subsystems/`, `arch/`, `flows/`, `interactions/`, `decisions/`, or a flat structure — adopt it. Don't create parallel folders alongside an existing convention.
+- Defaults for empty projects (no existing layout to follow): `architecture/<subsystem>.md` for subsystems (with a "Source" section beneath the mermaid block listing the files it covers); `flows/<flow>.md` for request flows; `decisions/adr-<n>-<slug>.md` for ADRs.
 - Link to specific files, not directories. `[migrations](../src/db/migrations/)` is broken; `[001_initial.sql](../src/db/migrations/001_initial.sql)` is valid.
 
 # Example
