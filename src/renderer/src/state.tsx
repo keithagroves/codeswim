@@ -339,6 +339,14 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
         const agent = await connectAgent(conn.url, rootPath)
         agentRef.current = agent
 
+        // Stream incremental parts (text deltas, tool starts, reasoning) into
+        // the active session as they arrive, so the user sees the agent
+        // working instead of a static "thinking…" placeholder.
+        agent.subscribeParts(({ sessionID, messageID, part }) => {
+          if (sessionID !== stateRef.current.currentSessionId) return
+          dispatch({ type: 'chat-upsert-part', messageID, part })
+        })
+
         // Populate the session list and load the most recent session (or
         // create one if there's no history for this workspace yet).
         const sessions = await agent.listSessions()

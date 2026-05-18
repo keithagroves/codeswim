@@ -9,11 +9,17 @@ import { createOpencodeClient } from '@opencode-ai/sdk/client'
 
 export interface AssistantPart {
   id: string
-  kind: 'text' | 'tool' | 'unknown'
+  kind: 'text' | 'tool' | 'reasoning' | 'unknown'
   text?: string
   tool?: string
   status?: 'running' | 'completed' | 'error'
   metadata?: unknown
+}
+
+export interface PartUpdate {
+  sessionID: string
+  messageID: string
+  part: AssistantPart
 }
 
 export interface SessionInfo {
@@ -39,6 +45,7 @@ export interface AgentClient {
   createSession(): Promise<SessionInfo>
   loadMessages(sessionId: string): Promise<LoadedMessage[]>
   send(sessionId: string, text: string): Promise<AgentSendResult>
+  subscribeParts(handler: (update: PartUpdate) => void): () => void
   close(): Promise<void>
 }
 
@@ -51,6 +58,13 @@ interface RawPart {
   tool?: string
   state?: { status?: string; metadata?: unknown }
   metadata?: unknown
+  synthetic?: boolean
+  ignored?: boolean
+}
+
+interface RawEvent {
+  type: string
+  properties?: { part?: RawPart; delta?: string }
 }
 
 interface RawSession {
@@ -114,6 +128,41 @@ export async function connectAgent(url: string, directory: string): Promise<Agen
 
   const abort = new AbortController()
 
+  // Lazy SSE subscription to opencode's event stream. We start it on the
+  // first subscribeParts() call and forward `message.part.updated` events to
+  // any registered handler. This is how the chat panel surfaces incremental
+  // progress (text deltas, tool starts/finishes, reasoning) instead of just
+  // showing "thinking…" until the final response arrives.
+  const handlers = new Set<(update: PartUpdate) => void>()
+  let streamStarted = false
+  const startStream = (): void => {
+    if (streamStarted) return
+    streamStarted = true
+    void (async () => {
+      try {
+        const { stream } = await client.event.subscribe({
+          query: { directory },
+          signal: abort.signal
+        })
+        for await (const evt of stream) {
+          if (abort.signal.aborted) break
+          const e = evt as RawEvent
+          if (e.type !== 'message.part.updated') continue
+          const raw = e.properties?.part
+          if (!raw) continue
+          const converted = toAssistantPart(raw)
+          if (!converted) continue
+          for (const h of handlers) {
+            h({ sessionID: raw.sessionID, messageID: raw.messageID, part: converted })
+          }
+        }
+      } catch {
+        // Stream ends when the agent is closed or the connection drops. The
+        // next workspace open spins up a fresh agent + stream.
+      }
+    })()
+  }
+
   return {
     async listSessions(): Promise<SessionInfo[]> {
       const result = await client.session.list({
@@ -170,8 +219,17 @@ export async function connectAgent(url: string, directory: string): Promise<Agen
       }
     },
 
+    subscribeParts(handler: (update: PartUpdate) => void): () => void {
+      handlers.add(handler)
+      startStream()
+      return () => {
+        handlers.delete(handler)
+      }
+    },
+
     async close(): Promise<void> {
       abort.abort()
+      handlers.clear()
     }
   }
 }
@@ -188,8 +246,12 @@ function toSessionInfo(s: RawSession): SessionInfo {
 }
 
 function toAssistantPart(p: RawPart): AssistantPart | null {
+  if (p.synthetic || p.ignored) return null
   if (p.type === 'text') {
     return { id: p.id, kind: 'text', text: p.text ?? '' }
+  }
+  if (p.type === 'reasoning') {
+    return { id: p.id, kind: 'reasoning', text: p.text ?? '' }
   }
   if (p.type === 'tool') {
     return {
@@ -200,6 +262,6 @@ function toAssistantPart(p: RawPart): AssistantPart | null {
       metadata: p.state?.metadata
     }
   }
-  // step-start, step-finish, snapshot, reasoning, etc. — ignored for now.
+  // step-start, step-finish, snapshot, etc. — not user-facing.
   return null
 }

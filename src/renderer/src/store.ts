@@ -48,7 +48,7 @@ export interface SessionInfo {
 
 export interface ChatMessagePart {
   id?: string
-  kind: 'text' | 'tool' | 'unknown'
+  kind: 'text' | 'tool' | 'reasoning' | 'unknown'
   text?: string
   tool?: string
   status?: 'running' | 'completed' | 'error'

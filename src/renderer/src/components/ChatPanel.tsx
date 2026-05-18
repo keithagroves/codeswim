@@ -62,6 +62,14 @@ function PartView({
     }
     return <div className="chat-text">{part.text}</div>
   }
+  if (part.kind === 'reasoning') {
+    return (
+      <div className="chat-reasoning">
+        <div className="chat-reasoning-label">Thinking</div>
+        <div className="chat-reasoning-body">{part.text}</div>
+      </div>
+    )
+  }
   if (part.kind === 'tool' && part.tool === 'diagram_edit') {
     const meta = isDiagramEditMetadata(part.metadata) ? part.metadata : null
     return (
@@ -373,6 +381,9 @@ export function ChatPanel(): React.JSX.Element {
   const [input, setInput] = useState('')
   const listRef = useRef<HTMLDivElement | null>(null)
   const sending = state.chatStatus === 'thinking' || state.chatStatus === 'connecting'
+  const lastMessage = state.chatMessages[state.chatMessages.length - 1]
+  const hasStreamingAssistant =
+    sending && lastMessage?.role === 'assistant' && lastMessage.parts.length > 0
 
   useEffect(() => {
     const el = listRef.current
@@ -388,10 +399,12 @@ export function ChatPanel(): React.JSX.Element {
   }
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault()
-      send()
-    }
+    if (e.key !== 'Enter') return
+    // Shift+Enter inserts a newline; Enter alone sends. Ignore IME composition
+    // so people typing CJK don't accidentally send mid-character.
+    if (e.shiftKey || e.nativeEvent.isComposing) return
+    e.preventDefault()
+    send()
   }
 
   return (
@@ -428,7 +441,7 @@ export function ChatPanel(): React.JSX.Element {
         ) : (
           state.chatMessages.map((m) => <MessageView key={m.id} message={m} />)
         )}
-        {sending ? (
+        {sending && !hasStreamingAssistant ? (
           <div className="chat-message chat-message-assistant chat-message-pending">
             <div className="chat-message-role">Agent</div>
             <div className="chat-message-body chat-text-muted">
@@ -451,7 +464,9 @@ export function ChatPanel(): React.JSX.Element {
         <textarea
           className="chat-input"
           placeholder={
-            state.rootPath ? 'Ask the agent…  (⌘+Enter to send)' : 'Open a folder first'
+            state.rootPath
+              ? 'Ask the agent…  (Enter to send, Shift+Enter for newline)'
+              : 'Open a folder first'
           }
           value={input}
           onChange={(e) => setInput(e.target.value)}

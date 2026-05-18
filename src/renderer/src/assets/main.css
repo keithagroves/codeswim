@@ -841,6 +841,16 @@ button.secondary:hover {
   background: #ffd7d4;
 }
 
+.script-btn.script-add {
+  border-left: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+}
+
+.script-btn.script-add:hover {
+  color: var(--text);
+}
+
 /* Header chip: shown when a script is running but the output view isn't visible */
 .run-chip {
   display: inline-flex;
@@ -1120,6 +1130,26 @@ button.secondary:hover {
   font-family:
     ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
   font-size: 12px;
+}
+
+.chat-reasoning {
+  border-left: 2px solid var(--border);
+  padding: 4px 0 4px 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.chat-reasoning-label {
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.chat-reasoning-body {
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .chat-tool-row {
