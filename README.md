@@ -7,6 +7,10 @@
   The diagrams are the spec; the code is what implements them.
 </p>
 
+<p align="center">
+  <img src="media/codeswim-demo.gif" alt="codeswim demo" width="800">
+</p>
+
 ---
 
 ## What it is
