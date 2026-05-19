@@ -8,6 +8,11 @@
 </p>
 
 <p align="center">
+  <em>“You can outsource your thinking, but you can't outsource your understanding.”</em><br>
+  — Andrej Karpathy
+</p>
+
+<p align="center">
   <img src="media/codeswim-demo.gif" alt="codeswim demo" width="800">
 </p>
 
