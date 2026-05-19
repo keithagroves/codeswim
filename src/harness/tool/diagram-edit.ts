@@ -130,6 +130,7 @@ export function validateMermaid(source: string): string | null {
   // mid-bracket. Quoted labels (`["...{...}..."]`) are fine.
   if (!NON_FLOWCHART_TYPES.has(type)) {
     const labelRe = /\[([^\]\n]*)\]/g
+    const navigateRe = /\bnavigate\(\s*"([^"\n]+)"\s*\)/g
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]!
       labelRe.lastIndex = 0
@@ -147,9 +148,44 @@ export function validateMermaid(source: string): string | null {
           )
         }
       }
+
+      navigateRe.lastIndex = 0
+      let nm: RegExpExecArray | null
+      while ((nm = navigateRe.exec(line)) !== null) {
+        const problem = checkLineRef(nm[1]!)
+        if (problem) return `line ${i + 1}: ${problem}`
+      }
     }
   }
 
+  return null
+}
+
+// In a navigate(...) target, the fragment (anything after #) is by
+// convention a GitHub-style line ref. Returns a one-line problem string,
+// or null if the fragment is missing or well-formed. Mirrored in the VS
+// Code extension's src/mermaid-lint.ts — keep the two in sync.
+export function checkLineRef(target: string): string | null {
+  const hashIdx = target.indexOf('#')
+  if (hashIdx < 0) return null
+  const frag = target.slice(hashIdx + 1).split('?')[0]!
+  if (!frag) return null
+  const m = frag.match(/^L(\d+)(?:-L?(\d+))?$/i)
+  if (!m) {
+    return (
+      `navigate target has invalid line ref \`#${frag}\` — expected \`#L10\`, \`#L10-L22\`, or \`#L10-22\`.`
+    )
+  }
+  const start = Number.parseInt(m[1]!, 10)
+  if (start < 1) {
+    return `navigate target \`#${frag}\` uses line ${start} — line numbers are 1-indexed.`
+  }
+  if (m[2] !== undefined) {
+    const end = Number.parseInt(m[2], 10)
+    if (end < start) {
+      return `navigate target \`#${frag}\` has a reversed range (end ${end} < start ${start}).`
+    }
+  }
   return null
 }
 
