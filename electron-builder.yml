@@ -1,4 +1,4 @@
-appId: com.electron.app
+appId: com.keithagroves.codeswim
 productName: codeswim
 directories:
   buildResources: build
@@ -53,5 +53,6 @@ appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
 publish:
-  provider: generic
-  url: https://example.com/auto-updates
+  provider: github
+  owner: keithagroves
+  repo: codeswim

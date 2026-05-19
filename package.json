@@ -1,10 +1,14 @@
 {
-  "name": "diagram-nav",
-  "version": "1.0.0",
-  "description": "An Electron application with React and TypeScript",
+  "name": "codeswim",
+  "version": "0.1.0",
+  "description": "Diagram-first code navigator: browse a codebase as a hierarchy of mermaid diagrams.",
   "main": "./out/main/index.js",
-  "author": "example.com",
-  "homepage": "https://electron-vite.org",
+  "author": "Keith Groves",
+  "homepage": "https://github.com/keithagroves/codeswim",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/keithagroves/codeswim.git"
+  },
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
