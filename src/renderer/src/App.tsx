@@ -13,6 +13,7 @@ import { Toasts } from './components/Toasts'
 import { extname } from './path-utils'
 import { StoreProvider } from './state'
 import { useStore, type FileView } from './store'
+import logoUrl from './assets/codeswim.svg'
 
 function SidePanel(): React.JSX.Element | null {
   const { state, setSidePanelWidth } = useStore()
@@ -185,7 +186,7 @@ function StartScreen(): React.JSX.Element {
 
   return (
     <div className="start-screen">
-      <h1>codeswim</h1>
+      <img className="start-screen-logo" src={logoUrl} alt="codeswim" />
       <p>
         Pick a folder of markdown files with embedded mermaid diagrams. The agent in the side
         panel edits diagrams first, then code at the leaves.

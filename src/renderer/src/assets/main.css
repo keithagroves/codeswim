@@ -366,15 +366,18 @@ body.is-resizing {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   height: 100%;
+  padding-top: 12vh;
   gap: 16px;
 }
 
-.start-screen h1 {
-  font-size: 28px;
-  font-weight: 600;
-  margin: 0;
+.start-screen-logo {
+  width: 220px;
+  height: auto;
+  margin-bottom: 12px;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .start-screen p {
