@@ -11,7 +11,7 @@ function ensureMermaidInitialized(): void {
   mermaid.initialize({
     startOnLoad: false,
     securityLevel: 'loose',
-    theme: 'default',
+    theme: 'neutral',
     fontFamily: 'inherit'
   })
   mermaidInitialized = true
