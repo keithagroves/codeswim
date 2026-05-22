@@ -22,7 +22,9 @@
 
 codeswim is a desktop app (Electron) that opens a folder and renders the markdown files inside it as a navigable diagram tree. Click a node in a diagram to drill into a child diagram or open the source file it represents. An AI agent panel keeps the diagrams aligned with the code as you change either side.
 
-The thesis: as AI generates more code, humans should navigate architecture through intentional diagrams, not by reading generated implementation.
+## Try it
+
+Point codeswim at [codeswim-example](https://github.com/keithagroves/codeswim-example) — a small runnable demo codebase with an `overview.md` at the root and a full diagram tree underneath. That's the fastest way to see what the format looks like in practice.
 
 ## The format
 
@@ -31,31 +33,26 @@ Every diagram lives in a markdown file with three parts: YAML frontmatter, a sho
 ````markdown
 ---
 name: API surface
-description: HTTP routes exposed by the server and what they delegate to
-tags: [api, http]
+description: HTTP routes exposed by the server
 ---
 
-The server registers routes lazily on first request. Validation lives in
-`validate.ts`; persistence lives in `db.ts`.
+The server registers routes lazily. Validation lives in `validate.ts`;
+persistence lives in `db.ts`.
 
 ```mermaid
 flowchart TD
     Server[server.ts] --> Validate[validate.ts]
     Validate --> DB[db.ts]
-    Validate --> Bad["400 + err.message"]
-    DB --> Created["201 + id"]
 
     click Server call navigate("../src/server.ts")
-    click Validate call navigate("../src/validate.ts#L42-L78")
+    click Validate call navigate("../src/validate.ts")
     click DB call navigate("../src/db.ts")
-    click Bad call navigate("./errors.md")
-    click Created call navigate("./errors.md")
 ```
 
 ## Source
 
 - `../src/server.ts` — HTTP entry point, route table
-- `../src/validate.ts` — request validation, returns typed errors
+- `../src/validate.ts` — request validation
 - `../src/db.ts` — Postgres queries
 ````
 
@@ -64,7 +61,7 @@ flowchart TD
 | | |
 |---|---|
 | **One mermaid block per file** | The renderer only shows the first one. Extra blocks are ignored. |
-| **Frontmatter is required** | `name`, `description`, `tags`. The description shows up in tooltips and tree views — make it specific. |
+| **Frontmatter is required** | `name` and `description`. The description shows up in tooltips and tree views — make it specific. |
 | **Every flowchart node needs a click handler** | `click NodeId call navigate("…")`. If a node has no obvious target, point at the parent diagram or `overview.md`. |
 | **`click` is flowchart-only** | Sequence/class/state/ER diagrams don't support it. For those, put the links in the prose below as bullets. |
 | **Line refs are encouraged** | `navigate("../src/server.ts#L25-L40")` jumps to and highlights those lines. `#L42` for a single line. 1-indexed, inclusive. |

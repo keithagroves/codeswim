@@ -46,6 +46,40 @@ export interface RunEntry {
   description?: string
 }
 
+export type SkillScope = 'global' | 'workspace' | 'builtin'
+
+export interface SkillFileNode {
+  kind: 'file' | 'dir'
+  name: string
+  path: string
+  children?: SkillFileNode[]
+}
+
+export interface SkillFileContent {
+  binary: boolean
+  content: string
+  size: number
+}
+
+export interface SkillSummary {
+  scope: SkillScope
+  name: string
+  description: string
+  readOnly: boolean
+  linkTarget?: string
+}
+
+export interface SkillListResult {
+  builtin: SkillSummary[]
+  global: SkillSummary[]
+  workspace: SkillSummary[]
+}
+
+export interface LinkFolderResult {
+  linked: string[]
+  skipped: Array<{ name: string; reason: string }>
+}
+
 export interface DiagramNavApi {
   pickFolder(): Promise<string | null>
   readFile(absPath: string): Promise<string>
@@ -72,6 +106,45 @@ export interface DiagramNavApi {
   onMenuNewProject(cb: () => void): () => void
   onMenuOpenRecent(cb: (path: string) => void): () => void
   onMenuRecentsCleared(cb: () => void): () => void
+  listSkills(rootPath: string | null): Promise<SkillListResult>
+  readSkill(scope: SkillScope, name: string, rootPath: string | null): Promise<string>
+  writeSkill(
+    scope: SkillScope,
+    name: string,
+    content: string,
+    rootPath: string | null
+  ): Promise<void>
+  deleteSkill(scope: SkillScope, name: string, rootPath: string | null): Promise<void>
+  pickSkillLinkSource(): Promise<string | null>
+  linkSkillFolder(
+    scope: 'global' | 'workspace',
+    sourcePath: string,
+    rootPath: string | null
+  ): Promise<LinkFolderResult>
+  openSkillInEditor(
+    scope: SkillScope,
+    name: string,
+    rootPath: string | null,
+    relPath?: string
+  ): Promise<void>
+  listSkillFiles(
+    scope: SkillScope,
+    name: string,
+    rootPath: string | null
+  ): Promise<SkillFileNode[]>
+  readSkillFile(
+    scope: SkillScope,
+    name: string,
+    relPath: string,
+    rootPath: string | null
+  ): Promise<SkillFileContent>
+  writeSkillFile(
+    scope: SkillScope,
+    name: string,
+    relPath: string,
+    content: string,
+    rootPath: string | null
+  ): Promise<void>
 }
 
 declare global {

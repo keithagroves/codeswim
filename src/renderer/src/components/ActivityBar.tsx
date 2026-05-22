@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../store'
 
-type Section = 'agent' | 'files' | 'search'
+type Section = 'agent' | 'files' | 'search' | 'skills'
 
 interface Item {
   key: Section
@@ -55,10 +55,43 @@ function SearchIcon(): React.JSX.Element {
   )
 }
 
+function SkillsIcon(): React.JSX.Element {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M6 4h10a3 3 0 0 1 3 3v13l-3-2-3 2-3-2-3 2V6a2 2 0 0 1-1.5-1.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      <line
+        x1="9"
+        y1="9"
+        x2="15"
+        y2="9"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <line
+        x1="9"
+        y1="12.5"
+        x2="13"
+        y2="12.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
 const ITEM_BY_KEY: Record<Section, Item> = {
   agent: { key: 'agent', label: 'Agent', icon: <ChatIcon /> },
   files: { key: 'files', label: 'Files', icon: <FolderIcon /> },
-  search: { key: 'search', label: 'Search', icon: <SearchIcon /> }
+  search: { key: 'search', label: 'Search', icon: <SearchIcon /> },
+  skills: { key: 'skills', label: 'Skills', icon: <SkillsIcon /> }
 }
 
 export function ActivityBar(): React.JSX.Element {

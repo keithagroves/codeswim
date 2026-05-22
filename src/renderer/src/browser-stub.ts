@@ -214,7 +214,17 @@ export function installBrowserApiStub(): void {
     addRecent: () => Promise.resolve([]),
     onMenuNewProject: noopUnsub,
     onMenuOpenRecent: noopUnsub,
-    onMenuRecentsCleared: noopUnsub
+    onMenuRecentsCleared: noopUnsub,
+    listSkills: async () => ({ builtin: [], global: [], workspace: [] }),
+    readSkill: notInBrowser<string>('readSkill'),
+    writeSkill: notInBrowser<void>('writeSkill'),
+    deleteSkill: notInBrowser<void>('deleteSkill'),
+    pickSkillLinkSource: async () => null,
+    linkSkillFolder: async () => ({ linked: [], skipped: [] }),
+    openSkillInEditor: notInBrowser<void>('openSkillInEditor'),
+    listSkillFiles: async () => [],
+    readSkillFile: async () => ({ binary: false, content: '', size: 0 }),
+    writeSkillFile: notInBrowser<void>('writeSkillFile')
   }
 
   ;(window as unknown as { api: DiagramNavApi }).api = stub

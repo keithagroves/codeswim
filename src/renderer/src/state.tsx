@@ -48,7 +48,8 @@ const initialState: AppState = {
   activeSection: 'agent',
   lastActiveSection: 'agent',
   sidePanelWidth: 320,
-  activityOrder: ['agent', 'files', 'search'],
+  activityOrder: ['agent', 'files', 'search', 'skills'],
+  currentSkill: null,
   chatStatus: 'idle',
   chatError: null,
   chatMessages: [],
@@ -90,10 +91,21 @@ type Action =
   | { type: 'hide-output' }
   | { type: 'set-tree'; tree: TreeNode[] }
   | { type: 'toggle-sidebar' }
-  | { type: 'set-active-section'; section: 'files' | 'agent' | 'search' | null }
-  | { type: 'toggle-active-section'; section: 'files' | 'agent' | 'search' }
+  | { type: 'set-active-section'; section: 'files' | 'agent' | 'search' | 'skills' | null }
+  | { type: 'toggle-active-section'; section: 'files' | 'agent' | 'search' | 'skills' }
   | { type: 'set-side-panel-width'; width: number }
-  | { type: 'set-activity-order'; order: Array<'agent' | 'files' | 'search'> }
+  | { type: 'set-activity-order'; order: Array<'agent' | 'files' | 'search' | 'skills'> }
+  | {
+      type: 'set-current-skill'
+      skill:
+        | {
+            scope: 'global' | 'workspace' | 'builtin'
+            name: string
+            linkTarget?: string
+            file?: string
+          }
+        | null
+    }
   | { type: 'toggle-source' }
   | { type: 'set-view'; view: FileView }
   | { type: 'chat-status'; status: ChatStatus; error?: string | null }
@@ -232,18 +244,20 @@ function reducer(state: AppState, action: Action): AppState {
       // Sanitize: dedupe and re-add any missing sections at the end so we
       // never end up with a partial order if the saved one is stale.
       const seen = new Set<string>()
-      const cleaned: Array<'agent' | 'files' | 'search'> = []
+      const cleaned: Array<'agent' | 'files' | 'search' | 'skills'> = []
       for (const k of action.order) {
         if (seen.has(k)) continue
-        if (k !== 'agent' && k !== 'files' && k !== 'search') continue
+        if (k !== 'agent' && k !== 'files' && k !== 'search' && k !== 'skills') continue
         cleaned.push(k)
         seen.add(k)
       }
-      for (const k of ['agent', 'files', 'search'] as const) {
+      for (const k of ['agent', 'files', 'search', 'skills'] as const) {
         if (!seen.has(k)) cleaned.push(k)
       }
       return { ...state, activityOrder: cleaned }
     }
+    case 'set-current-skill':
+      return { ...state, currentSkill: action.skill }
     case 'toggle-source': {
       // Only meaningful for markdown files. Flip rendered <-> raw source.
       if (!state.currentFile) return state
@@ -477,12 +491,12 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
   }, [])
 
   const setActiveSection = useCallback(
-    (section: 'files' | 'agent' | 'search' | null) =>
+    (section: 'files' | 'agent' | 'search' | 'skills' | null) =>
       dispatch({ type: 'set-active-section', section }),
     []
   )
   const toggleActiveSection = useCallback(
-    (section: 'files' | 'agent' | 'search') =>
+    (section: 'files' | 'agent' | 'search' | 'skills') =>
       dispatch({ type: 'toggle-active-section', section }),
     []
   )
@@ -491,8 +505,21 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
     []
   )
   const setActivityOrder = useCallback(
-    (order: Array<'agent' | 'files' | 'search'>) =>
+    (order: Array<'agent' | 'files' | 'search' | 'skills'>) =>
       dispatch({ type: 'set-activity-order', order }),
+    []
+  )
+  const setCurrentSkill = useCallback(
+    (
+      skill:
+        | {
+            scope: 'global' | 'workspace' | 'builtin'
+            name: string
+            linkTarget?: string
+            file?: string
+          }
+        | null
+    ) => dispatch({ type: 'set-current-skill', skill }),
     []
   )
   const toggleChatSettings = useCallback(
@@ -984,7 +1011,8 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       newProject,
       openRecent,
       clearRecents,
-      syncDiagrams
+      syncDiagrams,
+      setCurrentSkill
     }),
     [
       state,
@@ -1016,7 +1044,8 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       newProject,
       openRecent,
       clearRecents,
-      syncDiagrams
+      syncDiagrams,
+      setCurrentSkill
     ]
   )
 

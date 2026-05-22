@@ -6,6 +6,18 @@ import chokidar, { FSWatcher } from 'chokidar'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { startSidecar, type SidecarHandle } from './sidecar'
+import {
+  deleteSkill,
+  linkFolder,
+  listSkillFiles,
+  listSkills,
+  readSkill,
+  readSkillFile,
+  resolveSkillFilePath,
+  writeSkill,
+  writeSkillFile,
+  type SkillScope
+} from './skills'
 
 let mainWindow: BrowserWindow | null = null
 let watcher: FSWatcher | null = null
@@ -594,6 +606,101 @@ app.whenReady().then(async () => {
     sidecar = null
     sidecarRoot = null
   })
+
+  ipcMain.handle('skills:list', async (_event, rootPath: string | null) => {
+    return listSkills(rootPath)
+  })
+
+  ipcMain.handle(
+    'skills:read',
+    async (_event, scope: SkillScope, name: string, rootPath: string | null) => {
+      return readSkill(scope, name, rootPath)
+    }
+  )
+
+  ipcMain.handle(
+    'skills:write',
+    async (_event, scope: SkillScope, name: string, content: string, rootPath: string | null) => {
+      await writeSkill(scope, name, content, rootPath)
+    }
+  )
+
+  ipcMain.handle(
+    'skills:delete',
+    async (_event, scope: SkillScope, name: string, rootPath: string | null) => {
+      await deleteSkill(scope, name, rootPath)
+    }
+  )
+
+  ipcMain.handle('skills:pick-link-source', async () => {
+    if (!mainWindow) return null
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Pick a folder of skills',
+      buttonLabel: 'Link skills from here',
+      properties: ['openDirectory']
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
+  })
+
+  ipcMain.handle(
+    'skills:link-folder',
+    async (_event, scope: 'global' | 'workspace', sourcePath: string, rootPath: string | null) => {
+      return linkFolder(scope, sourcePath, rootPath)
+    }
+  )
+
+  ipcMain.handle(
+    'skills:open-in-editor',
+    async (
+      _event,
+      scope: SkillScope,
+      name: string,
+      rootPath: string | null,
+      relPath?: string
+    ) => {
+      const filePath = resolveSkillFilePath(scope, name, rootPath, relPath)
+      // shell.openPath returns "" on success, or a stringified error message
+      // on failure (e.g. no app registered for .md). Surface failures so the
+      // renderer can toast them.
+      const err = await shell.openPath(filePath)
+      if (err) throw new Error(err)
+    }
+  )
+
+  ipcMain.handle(
+    'skills:list-files',
+    async (_event, scope: SkillScope, name: string, rootPath: string | null) => {
+      return listSkillFiles(scope, name, rootPath)
+    }
+  )
+
+  ipcMain.handle(
+    'skills:read-file',
+    async (
+      _event,
+      scope: SkillScope,
+      name: string,
+      relPath: string,
+      rootPath: string | null
+    ) => {
+      return readSkillFile(scope, name, relPath, rootPath)
+    }
+  )
+
+  ipcMain.handle(
+    'skills:write-file',
+    async (
+      _event,
+      scope: SkillScope,
+      name: string,
+      relPath: string,
+      content: string,
+      rootPath: string | null
+    ) => {
+      await writeSkillFile(scope, name, relPath, content, rootPath)
+    }
+  )
 
   createWindow()
 

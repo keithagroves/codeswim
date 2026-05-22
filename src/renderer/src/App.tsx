@@ -9,6 +9,8 @@ import { ReadView } from './components/ReadView'
 import { ScriptControls } from './components/ScriptControls'
 import { ScriptOutput } from './components/ScriptOutput'
 import { SearchPanel } from './components/SearchPanel'
+import { SkillsPanel } from './components/SkillsPanel'
+import { SkillsView } from './components/SkillsView'
 import { Toasts } from './components/Toasts'
 import { extname } from './path-utils'
 import { StoreProvider } from './state'
@@ -55,6 +57,7 @@ function SidePanel(): React.JSX.Element | null {
       {state.activeSection === 'files' ? <FileTree /> : null}
       {state.activeSection === 'agent' ? <ChatPanel /> : null}
       {state.activeSection === 'search' ? <SearchPanel /> : null}
+      {state.activeSection === 'skills' ? <SkillsPanel /> : null}
       <div
         className="side-panel-resizer"
         onMouseDown={onResizeStart}
@@ -151,6 +154,9 @@ function Header(): React.JSX.Element {
 function Body(): React.JSX.Element {
   const { state } = useStore()
 
+  if (state.activeSection === 'skills') {
+    return <SkillsView />
+  }
   if (state.view === 'output') {
     return <ScriptOutput />
   }
@@ -238,13 +244,31 @@ function Shell(): React.JSX.Element {
   const { state } = useStore()
 
   if (!state.rootPath) {
+    // Skills view works without a workspace open — global + built-in skills
+    // are still readable. Fall through to the regular layout in that case.
+    if (state.activeSection !== 'skills') {
+      return (
+        <div className="app">
+          <div className="main-row">
+            <ActivityBar />
+            <SidePanel />
+            <div className="content">
+              <StartScreen />
+            </div>
+          </div>
+          <Toasts />
+        </div>
+      )
+    }
     return (
       <div className="app">
         <div className="main-row">
           <ActivityBar />
           <SidePanel />
-          <div className="content">
-            <StartScreen />
+          <div className="main-column">
+            <div className="content">
+              <Body />
+            </div>
           </div>
         </div>
         <Toasts />
@@ -258,7 +282,7 @@ function Shell(): React.JSX.Element {
         <ActivityBar />
         <SidePanel />
         <div className="main-column">
-          <Header />
+          {state.activeSection === 'skills' ? null : <Header />}
           <div className="content">
             <Body />
           </div>

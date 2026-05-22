@@ -47,6 +47,40 @@ export interface RunEntry {
   description?: string
 }
 
+export type SkillScope = 'global' | 'workspace' | 'builtin'
+
+export interface SkillFileNode {
+  kind: 'file' | 'dir'
+  name: string
+  path: string
+  children?: SkillFileNode[]
+}
+
+export interface SkillFileContent {
+  binary: boolean
+  content: string
+  size: number
+}
+
+export interface SkillSummary {
+  scope: SkillScope
+  name: string
+  description: string
+  readOnly: boolean
+  linkTarget?: string
+}
+
+export interface SkillListResult {
+  builtin: SkillSummary[]
+  global: SkillSummary[]
+  workspace: SkillSummary[]
+}
+
+export interface LinkFolderResult {
+  linked: string[]
+  skipped: Array<{ name: string; reason: string }>
+}
+
 const api = {
   pickFolder: (): Promise<string | null> => ipcRenderer.invoke('pick-folder'),
   readFile: (absPath: string): Promise<string> => ipcRenderer.invoke('read-file', absPath),
@@ -123,7 +157,55 @@ const api = {
     const listener = (): void => cb()
     ipcRenderer.on('menu:recents-cleared', listener)
     return () => ipcRenderer.removeListener('menu:recents-cleared', listener)
-  }
+  },
+  listSkills: (rootPath: string | null): Promise<SkillListResult> =>
+    ipcRenderer.invoke('skills:list', rootPath),
+  readSkill: (scope: SkillScope, name: string, rootPath: string | null): Promise<string> =>
+    ipcRenderer.invoke('skills:read', scope, name, rootPath),
+  writeSkill: (
+    scope: SkillScope,
+    name: string,
+    content: string,
+    rootPath: string | null
+  ): Promise<void> => ipcRenderer.invoke('skills:write', scope, name, content, rootPath),
+  deleteSkill: (scope: SkillScope, name: string, rootPath: string | null): Promise<void> =>
+    ipcRenderer.invoke('skills:delete', scope, name, rootPath),
+  pickSkillLinkSource: (): Promise<string | null> =>
+    ipcRenderer.invoke('skills:pick-link-source'),
+  linkSkillFolder: (
+    scope: 'global' | 'workspace',
+    sourcePath: string,
+    rootPath: string | null
+  ): Promise<LinkFolderResult> =>
+    ipcRenderer.invoke('skills:link-folder', scope, sourcePath, rootPath),
+  openSkillInEditor: (
+    scope: SkillScope,
+    name: string,
+    rootPath: string | null,
+    relPath?: string
+  ): Promise<void> =>
+    ipcRenderer.invoke('skills:open-in-editor', scope, name, rootPath, relPath),
+  listSkillFiles: (
+    scope: SkillScope,
+    name: string,
+    rootPath: string | null
+  ): Promise<SkillFileNode[]> =>
+    ipcRenderer.invoke('skills:list-files', scope, name, rootPath),
+  readSkillFile: (
+    scope: SkillScope,
+    name: string,
+    relPath: string,
+    rootPath: string | null
+  ): Promise<SkillFileContent> =>
+    ipcRenderer.invoke('skills:read-file', scope, name, relPath, rootPath),
+  writeSkillFile: (
+    scope: SkillScope,
+    name: string,
+    relPath: string,
+    content: string,
+    rootPath: string | null
+  ): Promise<void> =>
+    ipcRenderer.invoke('skills:write-file', scope, name, relPath, content, rootPath)
 }
 
 if (process.contextIsolated) {

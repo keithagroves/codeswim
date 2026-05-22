@@ -77,16 +77,29 @@ export interface AppState {
   // Side-panel layout. ActivityBar lives at the very left and stays
   // visible; SidePanel sits to its right and shows whichever section is
   // active. null = side panel collapsed (icons only, like VS Code).
-  activeSection: 'files' | 'agent' | 'search' | null
+  activeSection: 'files' | 'agent' | 'search' | 'skills' | null
   // Remembers which section was last open so toggling the panel closed
   // and back open restores it (rather than always returning to 'files').
-  lastActiveSection: 'files' | 'agent' | 'search'
+  lastActiveSection: 'files' | 'agent' | 'search' | 'skills'
   // Side panel width in pixels. Persisted to localStorage so it survives
   // reloads.
   sidePanelWidth: number
   // User-controlled order of activity-bar sections (drag-to-reorder).
   // Persisted to localStorage.
-  activityOrder: Array<'agent' | 'files' | 'search'>
+  activityOrder: Array<'agent' | 'files' | 'search' | 'skills'>
+  // Selected skill in the Skills view (null = nothing picked yet).
+  // linkTarget is set when the skill directory is a symlink, so the view
+  // can show where it came from and adjust delete messaging. `file` is the
+  // POSIX-relative path of the file currently being viewed inside the
+  // skill — defaults to SKILL.md when omitted.
+  currentSkill:
+    | {
+        scope: 'global' | 'workspace' | 'builtin'
+        name: string
+        linkTarget?: string
+        file?: string
+      }
+    | null
   chatStatus: ChatStatus
   chatError: string | null
   chatMessages: ChatMessage[]
@@ -119,10 +132,20 @@ export interface StoreApi {
   toggleSidebar(): void
   refreshTree(): Promise<void>
   sendChat(text: string): Promise<void>
-  setActiveSection(section: 'files' | 'agent' | 'search' | null): void
-  toggleActiveSection(section: 'files' | 'agent' | 'search'): void
+  setActiveSection(section: 'files' | 'agent' | 'search' | 'skills' | null): void
+  toggleActiveSection(section: 'files' | 'agent' | 'search' | 'skills'): void
   setSidePanelWidth(width: number): void
-  setActivityOrder(order: Array<'agent' | 'files' | 'search'>): void
+  setActivityOrder(order: Array<'agent' | 'files' | 'search' | 'skills'>): void
+  setCurrentSkill(
+    skill:
+      | {
+          scope: 'global' | 'workspace' | 'builtin'
+          name: string
+          linkTarget?: string
+          file?: string
+        }
+      | null
+  ): void
   toggleChatSettings(): void
   fetchProviderMethods(): Promise<Record<string, Array<{ type: 'oauth' | 'api'; label: string }>>>
   configureProvider(provider: string, apiKey: string): Promise<void>

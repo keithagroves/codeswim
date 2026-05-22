@@ -67,6 +67,12 @@ interface RawEvent {
   properties?: { part?: RawPart; delta?: string }
 }
 
+// /global/event wraps each Event in an envelope. We unwrap once on receipt.
+interface GlobalEventEnvelope {
+  directory: string
+  payload: RawEvent
+}
+
 interface RawSession {
   id: string
   title?: string
@@ -128,37 +134,54 @@ export async function connectAgent(url: string, directory: string): Promise<Agen
 
   const abort = new AbortController()
 
-  // Lazy SSE subscription to opencode's event stream. We start it on the
-  // first subscribeParts() call and forward `message.part.updated` events to
-  // any registered handler. This is how the chat panel surfaces incremental
-  // progress (text deltas, tool starts/finishes, reasoning) instead of just
-  // showing "thinking…" until the final response arrives.
+  // Lazy SSE subscription to opencode's /global/event stream. Each entry is a
+  // GlobalEventEnvelope { directory, payload } — we forward only assistant
+  // parts so the chat shows incremental progress (text, tool calls, reasoning)
+  // without duplicating the user's own prompt back to them. opencode emits a
+  // `message.part.updated` for the user's text part too (it's the prompt body)
+  // and without role-filtering our reducer would render it as a second
+  // assistant bubble.
   const handlers = new Set<(update: PartUpdate) => void>()
+  // messageID → role, learned from `message.updated` events that always
+  // precede the corresponding `message.part.updated` events.
+  const messageRole = new Map<string, 'user' | 'assistant'>()
   let streamStarted = false
   const startStream = (): void => {
     if (streamStarted) return
     streamStarted = true
     void (async () => {
       try {
-        const { stream } = await client.event.subscribe({
-          query: { directory },
-          signal: abort.signal
-        })
-        for await (const evt of stream) {
+        const { stream } = await client.global.event({ signal: abort.signal })
+        for await (const envelope of stream) {
           if (abort.signal.aborted) break
-          const e = evt as RawEvent
+          const wrapped = envelope as GlobalEventEnvelope | RawEvent
+          const e: RawEvent =
+            (wrapped as GlobalEventEnvelope).payload ?? (wrapped as RawEvent)
+          if (e.type === 'message.updated') {
+            const info = (e.properties as { info?: { id?: string; role?: string } } | undefined)
+              ?.info
+            if (info?.id && (info.role === 'user' || info.role === 'assistant')) {
+              messageRole.set(info.id, info.role)
+            }
+            continue
+          }
           if (e.type !== 'message.part.updated') continue
           const raw = e.properties?.part
           if (!raw) continue
+          // Drop parts belonging to the user's prompt message — those are
+          // the user's text echoed back, not the agent's reply.
+          if (messageRole.get(raw.messageID) === 'user') continue
           const converted = toAssistantPart(raw)
           if (!converted) continue
           for (const h of handlers) {
             h({ sessionID: raw.sessionID, messageID: raw.messageID, part: converted })
           }
         }
-      } catch {
-        // Stream ends when the agent is closed or the connection drops. The
-        // next workspace open spins up a fresh agent + stream.
+      } catch (err) {
+        if (!abort.signal.aborted) {
+          // eslint-disable-next-line no-console
+          console.error('[codeswim] SSE event stream failed:', err)
+        }
       }
     })()
   }
