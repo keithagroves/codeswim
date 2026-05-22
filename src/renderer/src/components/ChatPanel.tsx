@@ -376,11 +376,149 @@ function SessionBar(): React.JSX.Element | null {
   )
 }
 
+interface QuestionAnswerDraft {
+  selected: string[]
+  custom: string
+}
+
+function QuestionPrompt(): React.JSX.Element | null {
+  const { state, answerQuestion, rejectQuestion } = useStore()
+  const pending = state.pendingQuestion
+  const requestID = pending?.id
+  const questions = pending?.questions ?? []
+  const [drafts, setDrafts] = useState<QuestionAnswerDraft[]>([])
+  const [submitting, setSubmitting] = useState(false)
+
+  // Reset drafts whenever a new question request comes in.
+  useEffect(() => {
+    setDrafts(questions.map(() => ({ selected: [], custom: '' })))
+    setSubmitting(false)
+    // questions array identity changes per-request via pending.id
+  }, [requestID, questions.length])
+
+  if (!pending) return null
+
+  const updateDraft = (i: number, next: Partial<QuestionAnswerDraft>): void => {
+    setDrafts((prev) => {
+      const out = prev.slice()
+      out[i] = { ...out[i], ...next }
+      return out
+    })
+  }
+
+  const toggleSelected = (i: number, label: string, multiple: boolean): void => {
+    const current = drafts[i]?.selected ?? []
+    if (multiple) {
+      const next = current.includes(label)
+        ? current.filter((l) => l !== label)
+        : [...current, label]
+      updateDraft(i, { selected: next })
+    } else {
+      updateDraft(i, { selected: [label] })
+    }
+  }
+
+  // Whether the textarea is shown: explicit `custom: true`, or implicitly
+  // when the question has no clickable options to choose from.
+  const allowsCustom = (q: typeof questions[number]): boolean =>
+    !!q.custom || q.options.length === 0
+
+  const isReady = drafts.every((d, i) => {
+    const q = questions[i]
+    if (!q) return false
+    if (allowsCustom(q) && d.custom.trim().length > 0) return true
+    return d.selected.length > 0
+  })
+
+  const onSubmit = async (): Promise<void> => {
+    if (!isReady || submitting) return
+    setSubmitting(true)
+    // opencode expects an answer array per question. We prefer the custom
+    // text field when filled; otherwise we hand back the chosen option
+    // labels.
+    const answers: string[][] = drafts.map((d) => {
+      const trimmed = d.custom.trim()
+      if (trimmed.length > 0) return [trimmed]
+      return d.selected
+    })
+    await answerQuestion(pending.id, answers)
+    setSubmitting(false)
+  }
+
+  const onCancel = (): void => {
+    if (submitting) return
+    void rejectQuestion(pending.id)
+  }
+
+  return (
+    <div className="chat-question">
+      <div className="chat-question-header">
+        <span className="chat-question-label">Agent is asking</span>
+        <button className="link-btn" onClick={onCancel} disabled={submitting} title="Cancel this question">
+          Cancel
+        </button>
+      </div>
+      {questions.map((q, i) => {
+        const draft = drafts[i] ?? { selected: [], custom: '' }
+        return (
+          <div key={i} className="chat-question-block">
+            {q.header ? <div className="chat-question-tag">{q.header}</div> : null}
+            <div className="chat-question-text">{q.question}</div>
+            {q.options.length > 0 ? (
+              <div className="chat-question-options">
+                {q.options.map((opt) => {
+                  const checked = draft.selected.includes(opt.label)
+                  return (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      className={`chat-question-option ${checked ? 'is-selected' : ''}`}
+                      onClick={() => toggleSelected(i, opt.label, !!q.multiple)}
+                      disabled={submitting}
+                    >
+                      <span className="chat-question-option-label">{opt.label}</span>
+                      {opt.description ? (
+                        <span className="chat-question-option-desc">{opt.description}</span>
+                      ) : null}
+                    </button>
+                  )
+                })}
+              </div>
+            ) : null}
+            {allowsCustom(q) ? (
+              <textarea
+                className="chat-question-custom"
+                placeholder={
+                  q.options.length > 0 ? 'Or type a custom answer…' : 'Type your answer…'
+                }
+                value={draft.custom}
+                onChange={(e) => updateDraft(i, { custom: e.target.value })}
+                disabled={submitting}
+                rows={2}
+              />
+            ) : null}
+          </div>
+        )
+      })}
+      <div className="chat-question-actions">
+        <button
+          className="primary"
+          onClick={() => void onSubmit()}
+          disabled={!isReady || submitting}
+        >
+          {submitting ? 'Sending…' : 'Send answer'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function ChatPanel(): React.JSX.Element {
   const { state, sendChat, toggleChatSettings } = useStore()
   const [input, setInput] = useState('')
   const listRef = useRef<HTMLDivElement | null>(null)
   const sending = state.chatStatus === 'thinking' || state.chatStatus === 'connecting'
+  const hasPendingQuestion = !!state.pendingQuestion
   const lastMessage = state.chatMessages[state.chatMessages.length - 1]
   const hasStreamingAssistant =
     sending && lastMessage?.role === 'assistant' && lastMessage.parts.length > 0
@@ -460,24 +598,27 @@ export function ChatPanel(): React.JSX.Element {
           )
         ) : null}
       </div>
+      <QuestionPrompt />
       <div className="chat-input-row">
         <textarea
           className="chat-input"
           placeholder={
-            state.rootPath
-              ? 'Ask the agent…  (Enter to send, Shift+Enter for newline)'
-              : 'Open a folder first'
+            hasPendingQuestion
+              ? 'Answer the agent above to continue'
+              : state.rootPath
+                ? 'Ask the agent…  (Enter to send, Shift+Enter for newline)'
+                : 'Open a folder first'
           }
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKeyDown}
-          disabled={!state.rootPath || sending}
+          disabled={!state.rootPath || sending || hasPendingQuestion}
           rows={3}
         />
         <button
           className="primary chat-send-btn"
           onClick={send}
-          disabled={!state.rootPath || sending || !input.trim()}
+          disabled={!state.rootPath || sending || hasPendingQuestion || !input.trim()}
         >
           Send
         </button>

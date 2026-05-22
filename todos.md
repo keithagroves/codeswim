@@ -1,12 +1,10 @@
 
+- When you click on refresh is just says loading on the files forever until you click them to refesh.
 
-- There should be a button to create a run script that tells the ai to add it to the json.
 
-- pressing enter should send the chat.
+- the skill load and link button don't work on the workspace level.
 
-- When the agent is thinking we don't really see what is going on.
 
-- Add codeswim logo to the landing page.
 
 
 FUTURE FEATURES:

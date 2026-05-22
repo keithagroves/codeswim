@@ -1212,6 +1212,116 @@ button.secondary:hover {
   flex-shrink: 0;
 }
 
+.chat-question {
+  padding: 12px;
+  margin: 0;
+  border-top: 1px solid var(--border);
+  background: rgba(31, 111, 235, 0.06);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 45vh;
+  overflow: auto;
+}
+
+.chat-question-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chat-question-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #1f6feb;
+  font-weight: 600;
+}
+
+.chat-question-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-question-tag {
+  display: inline-block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  padding: 1px 8px;
+  align-self: flex-start;
+}
+
+.chat-question-text {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.chat-question-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chat-question-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text);
+}
+
+.chat-question-option:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.chat-question-option.is-selected {
+  border-color: var(--accent);
+  background: rgba(9, 105, 218, 0.08);
+}
+
+.chat-question-option-label {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.chat-question-option-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.chat-question-custom {
+  width: 100%;
+  resize: vertical;
+  min-height: 48px;
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.chat-question-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .chat-input {
   width: 100%;
   resize: vertical;
@@ -2216,6 +2326,97 @@ body.is-panning .diagram-canvas-wrap {
   padding: 24px 16px;
   color: var(--text-muted);
   font-size: 13px;
+}
+
+.skills-rendered {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px 32px 40px;
+  color: var(--text);
+  background: var(--bg);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.skills-rendered .diagram-prose {
+  /* Reuse the existing prose styles but at natural sizes — SkillsView is a
+   * full panel, not a compact meta block. */
+  font-size: 14px;
+}
+
+.skills-rendered .diagram-prose h1,
+.skills-rendered .diagram-prose h2,
+.skills-rendered .diagram-prose h3 {
+  margin: 1.4em 0 0.4em;
+  line-height: 1.25;
+}
+
+.skills-rendered .diagram-prose h1 {
+  font-size: 22px;
+}
+
+.skills-rendered .diagram-prose h2 {
+  font-size: 18px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+}
+
+.skills-rendered .diagram-prose h3 {
+  font-size: 15px;
+}
+
+.skills-rendered .diagram-prose p {
+  margin: 0.6em 0;
+}
+
+.skills-rendered .diagram-prose ul,
+.skills-rendered .diagram-prose ol {
+  margin: 0.4em 0 0.6em 1.4em;
+}
+
+.skills-rendered .diagram-prose pre {
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  overflow: auto;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.skills-rendered .diagram-prose code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.skills-rendered .diagram-prose pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.skills-rendered-meta {
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+}
+
+.skills-rendered-meta h1 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.skills-rendered-meta p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .skills-editor {

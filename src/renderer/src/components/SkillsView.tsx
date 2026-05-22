@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
+import { isMarkdownPath, parseFrontmatter, splitFrontmatter } from '../skill-frontmatter'
+import { MarkdownProse } from './MarkdownProse'
 
 const SKILL_FILENAME = 'SKILL.md'
 
@@ -14,11 +16,15 @@ export function SkillsView(): React.JSX.Element {
   const [fileSize, setFileSize] = useState(0)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  // 'rendered' shows MarkdownProse; 'raw' shows the textarea. Defaults to
+  // rendered for any markdown-ish file and resets on every file load.
+  const [viewMode, setViewMode] = useState<'rendered' | 'raw'>('rendered')
   const loadId = useRef(0)
 
   const isReadOnly = current?.scope === 'builtin'
   const isLinked = !!current?.linkTarget
   const dirty = content !== original
+  const renderable = isMarkdownPath(selectedPath) && !binary
 
   useEffect(() => {
     const id = ++loadId.current
@@ -46,6 +52,9 @@ export function SkillsView(): React.JSX.Element {
         setFileSize(result.size)
         setContent(result.binary ? '' : result.content)
         setOriginal(result.binary ? '' : result.content)
+        // Always start in rendered mode so we don't carry an Edit toggle
+        // across file switches.
+        setViewMode('rendered')
       } catch (err) {
         if (loadId.current !== id) return
         const msg = err instanceof Error ? err.message : String(err)
@@ -177,6 +186,17 @@ export function SkillsView(): React.JSX.Element {
           ) : null}
         </div>
         <div className="skills-view-actions">
+          {renderable ? (
+            <button
+              className="secondary"
+              onClick={() =>
+                setViewMode((prev) => (prev === 'rendered' ? 'raw' : 'rendered'))
+              }
+              title={viewMode === 'rendered' ? 'Edit raw markdown' : 'Show rendered view'}
+            >
+              {viewMode === 'rendered' ? (isReadOnly ? 'View raw' : 'Edit') : 'Done'}
+            </button>
+          ) : null}
           <button
             className="secondary"
             onClick={() => void onOpenInEditor()}
@@ -215,6 +235,8 @@ export function SkillsView(): React.JSX.Element {
         <div className="skills-binary-state">
           Binary file ({formatBytes(fileSize)}) — open in editor to inspect.
         </div>
+      ) : renderable && viewMode === 'rendered' ? (
+        <RenderedMarkdown source={content} />
       ) : (
         <textarea
           className="skills-editor"
@@ -224,6 +246,36 @@ export function SkillsView(): React.JSX.Element {
           spellCheck={false}
         />
       )}
+    </div>
+  )
+}
+
+function RenderedMarkdown({ source }: { source: string }): React.JSX.Element {
+  const { frontmatter, body } = splitFrontmatter(source)
+  const meta = parseFrontmatter(frontmatter)
+  // Intercept link clicks: route http(s) through window.open so Electron's
+  // setWindowOpenHandler can punt them to the OS browser instead of
+  // navigating the renderer away. Other schemes / relative paths do
+  // nothing for now (we don't yet resolve sibling skill files).
+  const onClick = (e: React.MouseEvent<HTMLDivElement>): void => {
+    const target = e.target as HTMLElement
+    const anchor = target.closest('a')
+    if (!anchor) return
+    const href = anchor.getAttribute('href') ?? ''
+    e.preventDefault()
+    if (/^https?:/i.test(href)) {
+      window.open(href, '_blank')
+    }
+  }
+  return (
+    <div className="skills-rendered" onClick={onClick}>
+      {meta.name || meta.description ? (
+        <header className="skills-rendered-meta">
+          {meta.name ? <h1>{meta.name}</h1> : null}
+          {meta.description ? <p>{meta.description}</p> : null}
+        </header>
+      ) : null}
+      <MarkdownProse source={body} headingOffset={0} onNavigate={() => {}} />
     </div>
   )
 }

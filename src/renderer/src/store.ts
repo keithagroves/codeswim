@@ -1,7 +1,9 @@
 import { createContext, useContext } from 'react'
+import type { PendingQuestion } from './agent'
 import type { LineRange } from './path-utils'
 
 export type { LineRange } from './path-utils'
+export type { PendingQuestion } from './agent'
 
 export type View = 'diagram' | 'code' | 'read' | 'output'
 export type FileView = 'diagram' | 'code' | 'read'
@@ -110,6 +112,9 @@ export interface AppState {
   // Highlight range when navigating to a source file with a #L10-L22 ref;
   // null otherwise. Reset on workspace change.
   currentRange: LineRange | null
+  // Most recent unanswered question opencode raised for the current
+  // session. Cleared on reply/reject or when switching sessions.
+  pendingQuestion: PendingQuestion | null
 }
 
 export interface StoreApi {
@@ -146,6 +151,8 @@ export interface StoreApi {
         }
       | null
   ): void
+  answerQuestion(requestID: string, answers: string[][]): Promise<void>
+  rejectQuestion(requestID: string): Promise<void>
   toggleChatSettings(): void
   fetchProviderMethods(): Promise<Record<string, Array<{ type: 'oauth' | 'api'; label: string }>>>
   configureProvider(provider: string, apiKey: string): Promise<void>

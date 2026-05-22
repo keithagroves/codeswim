@@ -5,6 +5,7 @@ import {
   setApiKey,
   type AgentClient,
   type LoadedMessage,
+  type PendingQuestion,
   type ProviderAuthMap
 } from './agent'
 import { runCoverage, buildSyncPrompt } from './coverage/run'
@@ -57,7 +58,8 @@ const initialState: AppState = {
   sessions: [],
   currentSessionId: null,
   recents: [],
-  currentRange: null
+  currentRange: null,
+  pendingQuestion: null
 }
 
 type Action =
@@ -106,6 +108,7 @@ type Action =
           }
         | null
     }
+  | { type: 'set-pending-question'; question: PendingQuestion | null }
   | { type: 'toggle-source' }
   | { type: 'set-view'; view: FileView }
   | { type: 'chat-status'; status: ChatStatus; error?: string | null }
@@ -258,6 +261,8 @@ function reducer(state: AppState, action: Action): AppState {
     }
     case 'set-current-skill':
       return { ...state, currentSkill: action.skill }
+    case 'set-pending-question':
+      return { ...state, pendingQuestion: action.question }
     case 'toggle-source': {
       // Only meaningful for markdown files. Flip rendered <-> raw source.
       if (!state.currentFile) return state
@@ -303,7 +308,10 @@ function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         currentSessionId: action.sessionId,
-        chatMessages: action.messages
+        chatMessages: action.messages,
+        // Drop any prompt from the previous session — the new session has
+        // its own pending-question state which we'll refetch on connect.
+        pendingQuestion: null
       }
     case 'recents-set':
       return { ...state, recents: action.recents }
@@ -361,15 +369,32 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
           dispatch({ type: 'chat-upsert-part', messageID, part })
         })
 
+        // Forward question events for the current session. We only ever
+        // render one prompt at a time — opencode shouldn't fire concurrent
+        // questions for a single session in practice.
+        agent.subscribeQuestions((event) => {
+          if (event.kind === 'asked') {
+            if (event.question.sessionID !== stateRef.current.currentSessionId) return
+            dispatch({ type: 'set-pending-question', question: event.question })
+          } else {
+            const pending = stateRef.current.pendingQuestion
+            if (pending && pending.id === event.requestID) {
+              dispatch({ type: 'set-pending-question', question: null })
+            }
+          }
+        })
+
         // Populate the session list and load the most recent session (or
         // create one if there's no history for this workspace yet).
         const sessions = await agent.listSessions()
         dispatch({ type: 'sessions-set', sessions })
 
+        let activeSessionId: string
         if (sessions.length === 0) {
           const created = await agent.createSession()
           dispatch({ type: 'sessions-set', sessions: [created] })
           dispatch({ type: 'session-set-current', sessionId: created.id, messages: [] })
+          activeSessionId = created.id
         } else {
           const latest = sessions[0]
           const messages = await agent.loadMessages(latest.id)
@@ -378,7 +403,22 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
             sessionId: latest.id,
             messages: toChatMessages(messages)
           })
+          activeSessionId = latest.id
         }
+
+        // Pick up any question opencode raised before we connected (e.g.
+        // the agent asked a question last session and the user closed the
+        // app without answering).
+        void agent
+          .listPendingQuestions(activeSessionId)
+          .then((pending) => {
+            if (pending.length > 0) {
+              dispatch({ type: 'set-pending-question', question: pending[0] })
+            }
+          })
+          .catch(() => {
+            // best-effort; missing pending questions are non-fatal
+          })
 
         dispatch({ type: 'chat-status', status: 'ready' })
         return agent
@@ -467,6 +507,15 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
           sessionId,
           messages: toChatMessages(messages)
         })
+        // Re-hydrate any unanswered question for this session.
+        void agent
+          .listPendingQuestions(sessionId)
+          .then((pending) => {
+            if (pending.length > 0) {
+              dispatch({ type: 'set-pending-question', question: pending[0] })
+            }
+          })
+          .catch(() => {})
         dispatch({ type: 'chat-status', status: 'ready' })
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -475,6 +524,42 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       }
     },
     [ensureAgent, toast]
+  )
+
+  const answerQuestion = useCallback(
+    async (requestID: string, answers: string[][]): Promise<void> => {
+      const agent = agentRef.current
+      if (!agent) {
+        toast('Agent is not connected.', 'error')
+        return
+      }
+      try {
+        await agent.replyToQuestion(requestID, answers)
+        // The server will emit `question.replied` which clears state via
+        // our subscriber — but clear locally too so the UI doesn't sit on
+        // the prompt waiting for the round-trip.
+        dispatch({ type: 'set-pending-question', question: null })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        toast(`Couldn't answer: ${msg}`, 'error')
+      }
+    },
+    [toast]
+  )
+
+  const rejectQuestion = useCallback(
+    async (requestID: string): Promise<void> => {
+      const agent = agentRef.current
+      if (!agent) return
+      try {
+        await agent.rejectQuestion(requestID)
+        dispatch({ type: 'set-pending-question', question: null })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        toast(`Couldn't cancel question: ${msg}`, 'error')
+      }
+    },
+    [toast]
   )
 
   const refreshSessions = useCallback(async () => {
@@ -1012,7 +1097,9 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       openRecent,
       clearRecents,
       syncDiagrams,
-      setCurrentSkill
+      setCurrentSkill,
+      answerQuestion,
+      rejectQuestion
     }),
     [
       state,
@@ -1045,7 +1132,9 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       openRecent,
       clearRecents,
       syncDiagrams,
-      setCurrentSkill
+      setCurrentSkill,
+      answerQuestion,
+      rejectQuestion
     ]
   )
 

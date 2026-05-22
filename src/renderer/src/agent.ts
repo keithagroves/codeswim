@@ -40,12 +40,43 @@ export interface AgentSendResult {
   parts: AssistantPart[]
 }
 
+export interface QuestionOption {
+  label: string
+  description: string
+}
+
+export interface QuestionInfo {
+  question: string
+  header: string
+  options: QuestionOption[]
+  multiple?: boolean
+  custom?: boolean
+}
+
+export interface PendingQuestion {
+  id: string
+  sessionID: string
+  questions: QuestionInfo[]
+  // Lets us correlate the question with a tool part in the chat so future
+  // versions can render the prompt inline next to the agent's "thinking".
+  toolCallID?: string
+  toolMessageID?: string
+}
+
+export type QuestionEvent =
+  | { kind: 'asked'; question: PendingQuestion }
+  | { kind: 'closed'; sessionID: string; requestID: string }
+
 export interface AgentClient {
   listSessions(): Promise<SessionInfo[]>
   createSession(): Promise<SessionInfo>
   loadMessages(sessionId: string): Promise<LoadedMessage[]>
   send(sessionId: string, text: string): Promise<AgentSendResult>
   subscribeParts(handler: (update: PartUpdate) => void): () => void
+  subscribeQuestions(handler: (event: QuestionEvent) => void): () => void
+  listPendingQuestions(sessionId?: string): Promise<PendingQuestion[]>
+  replyToQuestion(requestID: string, answers: string[][]): Promise<void>
+  rejectQuestion(requestID: string): Promise<void>
   close(): Promise<void>
 }
 
@@ -82,6 +113,47 @@ interface RawSession {
 interface RawMessage {
   info: { id: string; role: 'user' | 'assistant' }
   parts: RawPart[]
+}
+
+interface RawQuestionOption {
+  label?: string
+  description?: string
+}
+
+interface RawQuestionInfo {
+  question?: string
+  header?: string
+  options?: RawQuestionOption[]
+  multiple?: boolean
+  custom?: boolean
+}
+
+interface RawQuestionRequest {
+  id?: string
+  sessionID?: string
+  questions?: RawQuestionInfo[]
+  tool?: { messageID?: string; callID?: string }
+}
+
+function toPendingQuestion(raw: RawQuestionRequest | undefined): PendingQuestion | null {
+  if (!raw?.id || !raw.sessionID || !Array.isArray(raw.questions)) return null
+  const questions: QuestionInfo[] = raw.questions.map((q) => ({
+    question: q.question ?? '',
+    header: q.header ?? '',
+    options: (q.options ?? []).map((o) => ({
+      label: o.label ?? '',
+      description: o.description ?? ''
+    })),
+    multiple: q.multiple ?? false,
+    custom: q.custom ?? false
+  }))
+  return {
+    id: raw.id,
+    sessionID: raw.sessionID,
+    questions,
+    toolCallID: raw.tool?.callID,
+    toolMessageID: raw.tool?.messageID
+  }
 }
 
 export class NoProviderError extends Error {
@@ -142,6 +214,7 @@ export async function connectAgent(url: string, directory: string): Promise<Agen
   // and without role-filtering our reducer would render it as a second
   // assistant bubble.
   const handlers = new Set<(update: PartUpdate) => void>()
+  const questionHandlers = new Set<(event: QuestionEvent) => void>()
   // messageID → role, learned from `message.updated` events that always
   // precede the corresponding `message.part.updated` events.
   const messageRole = new Map<string, 'user' | 'assistant'>()
@@ -162,6 +235,22 @@ export async function connectAgent(url: string, directory: string): Promise<Agen
               ?.info
             if (info?.id && (info.role === 'user' || info.role === 'assistant')) {
               messageRole.set(info.id, info.role)
+            }
+            continue
+          }
+          if (e.type === 'question.asked') {
+            const q = toPendingQuestion(e.properties as RawQuestionRequest | undefined)
+            if (q) for (const h of questionHandlers) h({ kind: 'asked', question: q })
+            continue
+          }
+          if (e.type === 'question.replied' || e.type === 'question.rejected') {
+            const props = e.properties as
+              | { sessionID?: string; requestID?: string }
+              | undefined
+            if (props?.sessionID && props?.requestID) {
+              for (const h of questionHandlers) {
+                h({ kind: 'closed', sessionID: props.sessionID, requestID: props.requestID })
+              }
             }
             continue
           }
@@ -250,9 +339,57 @@ export async function connectAgent(url: string, directory: string): Promise<Agen
       }
     },
 
+    subscribeQuestions(handler: (event: QuestionEvent) => void): () => void {
+      questionHandlers.add(handler)
+      startStream()
+      return () => {
+        questionHandlers.delete(handler)
+      }
+    },
+
+    async listPendingQuestions(sessionId?: string): Promise<PendingQuestion[]> {
+      // v1 SDK doesn't surface /question as a named method — hit it raw.
+      const params = new URLSearchParams({ directory })
+      const res = await fetch(`${url}/question?${params}`, { signal: abort.signal })
+      if (!res.ok) {
+        throw new Error(`GET /question → ${res.status} ${res.statusText}`)
+      }
+      const data = (await res.json()) as RawQuestionRequest[]
+      return data
+        .map(toPendingQuestion)
+        .filter((q): q is PendingQuestion => q !== null)
+        .filter((q) => !sessionId || q.sessionID === sessionId)
+    },
+
+    async replyToQuestion(requestID: string, answers: string[][]): Promise<void> {
+      const params = new URLSearchParams({ directory })
+      const res = await fetch(`${url}/question/${encodeURIComponent(requestID)}/reply?${params}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answers }),
+        signal: abort.signal
+      })
+      if (!res.ok) {
+        const detail = await res.text().catch(() => '')
+        throw new Error(`POST /question/${requestID}/reply → ${res.status} ${res.statusText} ${detail}`)
+      }
+    },
+
+    async rejectQuestion(requestID: string): Promise<void> {
+      const params = new URLSearchParams({ directory })
+      const res = await fetch(
+        `${url}/question/${encodeURIComponent(requestID)}/reject?${params}`,
+        { method: 'POST', signal: abort.signal }
+      )
+      if (!res.ok) {
+        throw new Error(`POST /question/${requestID}/reject → ${res.status} ${res.statusText}`)
+      }
+    },
+
     async close(): Promise<void> {
       abort.abort()
       handlers.clear()
+      questionHandlers.clear()
     }
   }
 }
