@@ -1,6 +1,6 @@
 {
   "name": "codeswim",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Diagram-first code navigator: browse a codebase as a hierarchy of mermaid diagrams.",
   "main": "./out/main/index.js",
   "author": "Keith Groves",
@@ -25,8 +25,8 @@
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run build && electron-builder --win",
-    "build:mac": "electron-vite build && electron-builder --mac",
-    "build:linux": "electron-vite build && electron-builder --linux"
+    "build:mac": "npm run build && electron-builder --mac",
+    "build:linux": "npm run build && electron-builder --linux"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.3",

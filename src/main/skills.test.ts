@@ -40,7 +40,7 @@ afterEach(async () => {
 
 async function writeSkillMd(
   root: string,
-  scope: 'workspace',
+  _scope: 'workspace',
   name: string,
   content: string
 ): Promise<string> {
