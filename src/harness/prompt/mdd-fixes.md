@@ -8,7 +8,7 @@ fix — apply them by editing the diagram(s), not the code.
 
 1. **Coverage** — every source file is referenced by at least one diagram.
 2. **Reachability** — every diagram is reachable from `overview.md`.
-3. **File links, not directory links** — `[a.ts](../src/a.ts)` is valid; `[src/](../src/)` is broken.
+3. **File links, not directory links** — point to specific files (e.g. `../src/a.ts`), not directories (e.g. `../src/`).
 4. **Frontmatter on every diagram** — `name`, `description`, `tags`.
 5. **Navigable mermaid nodes** — `click NodeId call navigate("../path/to/file.ts")`.
 6. **"Source" section per architecture diagram** — bulleted list of files with a one-line role each.

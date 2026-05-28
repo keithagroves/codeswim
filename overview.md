@@ -40,12 +40,12 @@ flowchart TD
 
 These files cut across subsystems and aren't owned by any one architecture doc:
 
-- [src/renderer/index.html](src/renderer/index.html) — renderer entry HTML; sets the CSP that mermaid loose-mode needs.
+- `src/renderer/index.html` — renderer entry HTML; sets the CSP that mermaid loose-mode needs.
 - [src/renderer/src/main.tsx](src/renderer/src/main.tsx) — React mount point.
 - [src/renderer/src/env.d.ts](src/renderer/src/env.d.ts) — Vite client + `window.api` type augmentation for the renderer.
 - [src/renderer/src/browser-stub.ts](src/renderer/src/browser-stub.ts) — no-op `window.api` for running the renderer outside Electron (Playwright, UI review).
-- [src/renderer/src/assets/main.css](src/renderer/src/assets/main.css) — global styles.
-- [src/renderer/src/assets/codeswim.svg](src/renderer/src/assets/codeswim.svg) — app logo.
+- `src/renderer/src/assets/main.css` — global styles.
+- `src/renderer/src/assets/codeswim.svg` — app logo.
 
 ## Testing
 

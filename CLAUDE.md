@@ -36,7 +36,7 @@ Standard Electron three-process app:
   [index.d.ts](src/preload/index.d.ts)) — minimal `contextBridge`
   surface. Keeps `contextIsolation: true`, `nodeIntegration: false`.
 
-- **Renderer** ([src/renderer/src/](src/renderer/src/)) — React app.
+- **Renderer** ([src/renderer/src/App.tsx](src/renderer/src/App.tsx)) — React app.
   Owns all UI state via reducer + context. Components consume `useStore()`.
 
 The IPC contract lives entirely in [src/preload/index.d.ts](src/preload/index.d.ts).
@@ -64,7 +64,7 @@ mermaid with `securityLevel: 'loose'` (required for `click ... call
 navigate(...)` to invoke `window.navigate`). Mermaid is rendered
 imperatively via `mermaid.render()`; `startOnLoad` is off.
 
-The webview-style CSP in [index.html](src/renderer/index.html) needs
+The webview-style CSP in `src/renderer/index.html` needs
 `'unsafe-eval'` in `script-src` for mermaid loose mode and inline styles
 allowed for the SVG output. If you tighten CSP, verify mermaid still
 renders before shipping — there are *two* prior bugs of this exact shape.
@@ -108,7 +108,7 @@ parsed scripts before spawning, then shell-quoted defensively.
 
 ## Test fixture
 
-[examples/sample-architecture/](examples/sample-architecture/) is a
+[examples/sample-architecture/overview.md](examples/sample-architecture/overview.md) is a
 hand-authored fictional project ("Triage" billing app, unrelated to this
 repo's architecture) used to develop against. It's a real codeswim-style
 hierarchy: `overview.md` → architecture/ → flows/ → src/. Use it as the

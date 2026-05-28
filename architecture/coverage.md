@@ -37,7 +37,7 @@ flowchart TD
 - Coverage runs in the renderer, not as a standalone CLI — it leans on the existing `listTree` and `readFile` IPC instead of duplicating filesystem code in a Node script.
 - `coverage.ts` is pure: it takes `FileInfo[]` (path + content) and returns a report. That makes it trivially testable and reusable from anywhere.
 - Non-markdown files are passed in with empty content; only diagrams need their text read.
-- `buildSyncPrompt` deliberately doesn't prescribe fixes — the [system prompt](../src/harness/prompt/system.txt) and [mdd-fixes.md](../src/harness/prompt/mdd-fixes.md) already encode the MDD rules, so the prompt just enumerates the drift and lets the agent pick the right fix per item.
+- `buildSyncPrompt` deliberately doesn't prescribe fixes — the system prompt at `src/harness/prompt/system.txt` and [mdd-fixes.md](../src/harness/prompt/mdd-fixes.md) already encode the MDD rules, so the prompt just enumerates the drift and lets the agent pick the right fix per item.
 
 ## Source
 

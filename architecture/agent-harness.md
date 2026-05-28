@@ -35,8 +35,6 @@ flowchart LR
     click Plugin call navigate("../src/harness/plugin.ts")
     click Gate call navigate("../src/harness/session-gate.ts")
     click ToolImpl call navigate("../src/harness/tool/diagram-edit.ts")
-    click ToolDesc call navigate("../src/harness/tool/diagram-edit.txt")
-    click System call navigate("../src/harness/prompt/system.txt")
     click Fixes call navigate("../src/harness/prompt/mdd-fixes.md")
 ```
 
@@ -53,8 +51,8 @@ flowchart LR
 - [src/harness/plugin.ts](../src/harness/plugin.ts) — opencode plugin entry; registers `diagram_edit` and the tool-call gate hook.
 - [src/harness/session-gate.ts](../src/harness/session-gate.ts) — per-session "has a diagram been edited yet?" state used by the gate.
 - [src/harness/tool/diagram-edit.ts](../src/harness/tool/diagram-edit.ts) — pure implementation of the `diagram_edit` tool (frontmatter check, mermaid block check, file write).
-- [src/harness/tool/diagram-edit.txt](../src/harness/tool/diagram-edit.txt) — tool description shown to the model.
-- [src/harness/prompt/system.txt](../src/harness/prompt/system.txt) — system prompt that teaches the diagrams-first loop.
+- `src/harness/tool/diagram-edit.txt` — tool description shown to the model.
+- `src/harness/prompt/system.txt` — system prompt that teaches the diagrams-first loop.
 - [src/harness/prompt/mdd-fixes.md](../src/harness/prompt/mdd-fixes.md) — additional MDD repair guidance the agent loads when fixing drift.
 - [src/renderer/src/agent.ts](../src/renderer/src/agent.ts) — renderer-side session-aware SDK wrapper.
 - [src/renderer/src/components/ChatPanel.tsx](../src/renderer/src/components/ChatPanel.tsx) — the chat UI itself.
