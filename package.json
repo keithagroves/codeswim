@@ -4,6 +4,7 @@
   "description": "Diagram-first code navigator: browse a codebase as a hierarchy of mermaid diagrams.",
   "main": "./out/main/index.js",
   "author": "Keith Groves",
+  "license": "MIT",
   "homepage": "https://github.com/keithagroves/codeswim",
   "repository": {
     "type": "git",

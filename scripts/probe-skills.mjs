@@ -6,12 +6,12 @@
 //         ~/.agents/skills/symlink-test-skill
 
 import { spawn } from 'node:child_process'
-import { resolve } from 'node:path'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { createOpencodeClient } from '@opencode-ai/sdk/client'
 
-const OPENCODE_BIN = resolve(
-  '/Users/keithgroves/projects/codeswim/node_modules/.bin/opencode'
-)
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const OPENCODE_BIN = resolve(__dirname, '..', 'node_modules', '.bin', 'opencode')
 const workspace = '/tmp/codeswim-skill-link-test'
 
 const child = spawn(OPENCODE_BIN, ['serve', '--port', '0'], {

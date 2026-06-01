@@ -6,6 +6,9 @@ import { spawn } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const SOURCE = '/tmp/codeswim-link-smoke/external'
 const TARGET = path.join(os.homedir(), '.agents', 'skills')
@@ -68,9 +71,7 @@ console.log('linked:', result.linked)
 console.log('skipped:', result.skipped)
 
 // Now ask opencode to list skills and confirm our linked entries are there.
-const OPENCODE_BIN = path.resolve(
-  '/Users/keithgroves/projects/codeswim/node_modules/.bin/opencode'
-)
+const OPENCODE_BIN = path.resolve(__dirname, '..', 'node_modules', '.bin', 'opencode')
 const workspace = '/tmp/codeswim-link-smoke'
 await fs.mkdir(workspace, { recursive: true })
 
