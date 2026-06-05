@@ -81,6 +81,25 @@ export interface LinkFolderResult {
   skipped: Array<{ name: string; reason: string }>
 }
 
+export interface GitFileChange {
+  path: string
+  index: string
+  worktree: string
+}
+
+export interface GitStatus {
+  isRepo: boolean
+  branch: string | null
+  staged: GitFileChange[]
+  unstaged: GitFileChange[]
+  untracked: string[]
+  clean: boolean
+}
+
+export interface GitInitResult {
+  createdGitignore: boolean
+}
+
 const api = {
   pickFolder: (): Promise<string | null> => ipcRenderer.invoke('pick-folder'),
   readFile: (absPath: string): Promise<string> => ipcRenderer.invoke('read-file', absPath),
@@ -99,13 +118,9 @@ const api = {
     ipcRenderer.on('tree-changed', listener)
     return () => ipcRenderer.removeListener('tree-changed', listener)
   },
-  listRuns: (rootPath: string): Promise<RunEntry[]> =>
-    ipcRenderer.invoke('list-runs', rootPath),
-  runEntry: (
-    rootPath: string,
-    source: 'npm' | 'custom',
-    name: string
-  ): Promise<void> => ipcRenderer.invoke('run-entry', rootPath, source, name),
+  listRuns: (rootPath: string): Promise<RunEntry[]> => ipcRenderer.invoke('list-runs', rootPath),
+  runEntry: (rootPath: string, source: 'npm' | 'custom', name: string): Promise<void> =>
+    ipcRenderer.invoke('run-entry', rootPath, source, name),
   killScript: (): Promise<void> => ipcRenderer.invoke('kill-script'),
   onScriptOutput: (cb: (payload: ScriptOutputPayload) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: ScriptOutputPayload): void =>
@@ -170,8 +185,7 @@ const api = {
   ): Promise<void> => ipcRenderer.invoke('skills:write', scope, name, content, rootPath),
   deleteSkill: (scope: SkillScope, name: string, rootPath: string | null): Promise<void> =>
     ipcRenderer.invoke('skills:delete', scope, name, rootPath),
-  pickSkillLinkSource: (): Promise<string | null> =>
-    ipcRenderer.invoke('skills:pick-link-source'),
+  pickSkillLinkSource: (): Promise<string | null> => ipcRenderer.invoke('skills:pick-link-source'),
   linkSkillFolder: (
     scope: 'global' | 'workspace',
     sourcePath: string,
@@ -183,14 +197,12 @@ const api = {
     name: string,
     rootPath: string | null,
     relPath?: string
-  ): Promise<void> =>
-    ipcRenderer.invoke('skills:open-in-editor', scope, name, rootPath, relPath),
+  ): Promise<void> => ipcRenderer.invoke('skills:open-in-editor', scope, name, rootPath, relPath),
   listSkillFiles: (
     scope: SkillScope,
     name: string,
     rootPath: string | null
-  ): Promise<SkillFileNode[]> =>
-    ipcRenderer.invoke('skills:list-files', scope, name, rootPath),
+  ): Promise<SkillFileNode[]> => ipcRenderer.invoke('skills:list-files', scope, name, rootPath),
   readSkillFile: (
     scope: SkillScope,
     name: string,
@@ -205,7 +217,14 @@ const api = {
     content: string,
     rootPath: string | null
   ): Promise<void> =>
-    ipcRenderer.invoke('skills:write-file', scope, name, relPath, content, rootPath)
+    ipcRenderer.invoke('skills:write-file', scope, name, relPath, content, rootPath),
+  gitStatus: (rootPath: string): Promise<GitStatus> => ipcRenderer.invoke('git:status', rootPath),
+  gitStagedDiff: (rootPath: string): Promise<string> =>
+    ipcRenderer.invoke('git:staged-diff', rootPath),
+  gitCommit: (rootPath: string, subject: string, body: string): Promise<string> =>
+    ipcRenderer.invoke('git:commit', rootPath, subject, body),
+  gitInit: (rootPath: string): Promise<GitInitResult> => ipcRenderer.invoke('git:init', rootPath),
+  gitStageAll: (rootPath: string): Promise<void> => ipcRenderer.invoke('git:stage-all', rootPath)
 }
 
 if (process.contextIsolated) {

@@ -19,6 +19,8 @@ flowchart TD
     Main --> FS[(Workspace files)]
     Main --> Sidecar[Agent Harness<br/>opencode sidecar]
     Renderer --> Coverage[Coverage<br/>checker]
+    Renderer --> Commit[Prompt Commits<br/>synthesized messages]
+    Commit --> Main
     Sidecar -.->|edits| FS
 
     click Renderer call navigate("./architecture/renderer.md")
@@ -26,6 +28,7 @@ flowchart TD
     click Main call navigate("./architecture/main-process.md")
     click Sidecar call navigate("./architecture/agent-harness.md")
     click Coverage call navigate("./architecture/coverage.md")
+    click Commit call navigate("./architecture/prompt-commits.md")
 ```
 
 ## Subsystems
@@ -35,6 +38,7 @@ flowchart TD
 - [Renderer](./architecture/renderer.md) — the React UI: state, views, panels, mermaid rendering, markdown parsing.
 - [Agent harness](./architecture/agent-harness.md) — the `opencode` sidecar plus its diagram-first plugin and chat UI.
 - [Coverage](./architecture/coverage.md) — the diagram/source drift checker that this very file is meant to satisfy.
+- [Prompt Commits](./architecture/prompt-commits.md) — the Commit side-panel that synthesizes the prompt-that-regenerates-the-diff as the commit message, gated on coverage.
 
 ## Conventions
 
@@ -52,9 +56,12 @@ These files cut across subsystems and aren't owned by any one architecture doc:
 Vitest tests live next to the modules they cover:
 
 - [src/main/skills.test.ts](src/main/skills.test.ts) — covers the main-process skills indexer.
+- [src/main/git.test.ts](src/main/git.test.ts) — covers the git status/branch porcelain parsers.
 - [src/renderer/src/parse.test.ts](src/renderer/src/parse.test.ts) — covers the markdown/mermaid parser.
 - [src/renderer/src/path-utils.test.ts](src/renderer/src/path-utils.test.ts) — covers relative path resolution.
 - [src/renderer/src/skill-frontmatter.test.ts](src/renderer/src/skill-frontmatter.test.ts) — covers the skill frontmatter helpers.
+- [src/renderer/src/ansi.test.ts](src/renderer/src/ansi.test.ts) — covers the ANSI/SGR terminal-output parser.
+- [src/renderer/src/commit/synthesize.test.ts](src/renderer/src/commit/synthesize.test.ts) — covers the commit-message synthesis prompt builder, parser, and trailers.
 
 ## Build & tooling
 

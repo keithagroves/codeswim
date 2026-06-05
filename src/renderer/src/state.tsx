@@ -10,6 +10,11 @@ import {
 } from './agent'
 import { runCoverage, buildSyncPrompt } from './coverage/run'
 import {
+  buildCommitSynthesisPrompt,
+  parseCommitMessage,
+  type CommitMessage
+} from './commit/synthesize'
+import {
   extname,
   joinPosix,
   parseTarget,
@@ -49,7 +54,7 @@ const initialState: AppState = {
   activeSection: 'agent',
   lastActiveSection: 'agent',
   sidePanelWidth: 320,
-  activityOrder: ['agent', 'files', 'search', 'skills'],
+  activityOrder: ['agent', 'files', 'search', 'skills', 'git'],
   currentSkill: null,
   chatStatus: 'idle',
   chatError: null,
@@ -93,10 +98,10 @@ type Action =
   | { type: 'hide-output' }
   | { type: 'set-tree'; tree: TreeNode[] }
   | { type: 'toggle-sidebar' }
-  | { type: 'set-active-section'; section: 'files' | 'agent' | 'search' | 'skills' | null }
-  | { type: 'toggle-active-section'; section: 'files' | 'agent' | 'search' | 'skills' }
+  | { type: 'set-active-section'; section: 'files' | 'agent' | 'search' | 'skills' | 'git' | null }
+  | { type: 'toggle-active-section'; section: 'files' | 'agent' | 'search' | 'skills' | 'git' }
   | { type: 'set-side-panel-width'; width: number }
-  | { type: 'set-activity-order'; order: Array<'agent' | 'files' | 'search' | 'skills'> }
+  | { type: 'set-activity-order'; order: Array<'agent' | 'files' | 'search' | 'skills' | 'git'> }
   | {
       type: 'set-current-skill'
       skill:
@@ -247,14 +252,15 @@ function reducer(state: AppState, action: Action): AppState {
       // Sanitize: dedupe and re-add any missing sections at the end so we
       // never end up with a partial order if the saved one is stale.
       const seen = new Set<string>()
-      const cleaned: Array<'agent' | 'files' | 'search' | 'skills'> = []
+      const cleaned: Array<'agent' | 'files' | 'search' | 'skills' | 'git'> = []
       for (const k of action.order) {
         if (seen.has(k)) continue
-        if (k !== 'agent' && k !== 'files' && k !== 'search' && k !== 'skills') continue
+        if (k !== 'agent' && k !== 'files' && k !== 'search' && k !== 'skills' && k !== 'git')
+          continue
         cleaned.push(k)
         seen.add(k)
       }
-      for (const k of ['agent', 'files', 'search', 'skills'] as const) {
+      for (const k of ['agent', 'files', 'search', 'skills', 'git'] as const) {
         if (!seen.has(k)) cleaned.push(k)
       }
       return { ...state, activityOrder: cleaned }
@@ -576,12 +582,12 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
   }, [])
 
   const setActiveSection = useCallback(
-    (section: 'files' | 'agent' | 'search' | 'skills' | null) =>
+    (section: 'files' | 'agent' | 'search' | 'skills' | 'git' | null) =>
       dispatch({ type: 'set-active-section', section }),
     []
   )
   const toggleActiveSection = useCallback(
-    (section: 'files' | 'agent' | 'search' | 'skills') =>
+    (section: 'files' | 'agent' | 'search' | 'skills' | 'git') =>
       dispatch({ type: 'toggle-active-section', section }),
     []
   )
@@ -590,7 +596,7 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
     []
   )
   const setActivityOrder = useCallback(
-    (order: Array<'agent' | 'files' | 'search' | 'skills'>) =>
+    (order: Array<'agent' | 'files' | 'search' | 'skills' | 'git'>) =>
       dispatch({ type: 'set-activity-order', order }),
     []
   )
@@ -865,6 +871,29 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
     void sendChat(buildSyncPrompt(report))
   }, [sendChat, toast])
 
+  const synthesizeCommitMessage = useCallback(
+    async (diff: string): Promise<CommitMessage> => {
+      const root = stateRef.current.rootPath
+      if (!root) throw new Error('Open a folder first.')
+      const agent = await ensureAgent(root)
+      if (!agent) throw new Error('Agent is not connected — configure a provider first.')
+      // Ephemeral session so synthesis never pollutes the chat the user
+      // sees. `send` is blocking and returns the completed parts, and the
+      // streamed parts are dropped because this session id is never the
+      // current one.
+      const session = await agent.createSession()
+      const reply = await agent.send(session.id, buildCommitSynthesisPrompt(diff))
+      const text = reply.parts
+        .filter((p) => p.kind === 'text' && p.text)
+        .map((p) => p.text as string)
+        .join('')
+        .trim()
+      if (!text) throw new Error('The agent returned an empty response.')
+      return parseCommitMessage(text)
+    },
+    [ensureAgent]
+  )
+
   const reload = useCallback(async () => {
     if (!state.rootPath || !state.currentFile) return
     const result = await readFileSafe(state.rootPath, state.currentFile)
@@ -1097,6 +1126,7 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       openRecent,
       clearRecents,
       syncDiagrams,
+      synthesizeCommitMessage,
       setCurrentSkill,
       answerQuestion,
       rejectQuestion
@@ -1132,6 +1162,7 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       openRecent,
       clearRecents,
       syncDiagrams,
+      synthesizeCommitMessage,
       setCurrentSkill,
       answerQuestion,
       rejectQuestion

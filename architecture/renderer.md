@@ -78,6 +78,7 @@ flowchart TD
 - [src/renderer/src/parse.ts](../src/renderer/src/parse.ts) — frontmatter + mermaid block extractor.
 - [src/renderer/src/path-utils.ts](../src/renderer/src/path-utils.ts) — POSIX path normalization and resolution.
 - [src/renderer/src/skill-frontmatter.ts](../src/renderer/src/skill-frontmatter.ts) — tiny helpers for parsing the `name`/`description` fields the Skills view shows.
+- [src/renderer/src/ansi.ts](../src/renderer/src/ansi.ts) — ANSI/SGR parser that turns raw script output into styled segments for the [ScriptOutput](../src/renderer/src/components/ScriptOutput.tsx) terminal.
 
 ### Components
 

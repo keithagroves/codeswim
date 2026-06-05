@@ -80,6 +80,25 @@ export interface LinkFolderResult {
   skipped: Array<{ name: string; reason: string }>
 }
 
+export interface GitFileChange {
+  path: string
+  index: string
+  worktree: string
+}
+
+export interface GitStatus {
+  isRepo: boolean
+  branch: string | null
+  staged: GitFileChange[]
+  unstaged: GitFileChange[]
+  untracked: string[]
+  clean: boolean
+}
+
+export interface GitInitResult {
+  createdGitignore: boolean
+}
+
 export interface DiagramNavApi {
   pickFolder(): Promise<string | null>
   readFile(absPath: string): Promise<string>
@@ -127,11 +146,7 @@ export interface DiagramNavApi {
     rootPath: string | null,
     relPath?: string
   ): Promise<void>
-  listSkillFiles(
-    scope: SkillScope,
-    name: string,
-    rootPath: string | null
-  ): Promise<SkillFileNode[]>
+  listSkillFiles(scope: SkillScope, name: string, rootPath: string | null): Promise<SkillFileNode[]>
   readSkillFile(
     scope: SkillScope,
     name: string,
@@ -145,6 +160,11 @@ export interface DiagramNavApi {
     content: string,
     rootPath: string | null
   ): Promise<void>
+  gitStatus(rootPath: string): Promise<GitStatus>
+  gitStagedDiff(rootPath: string): Promise<string>
+  gitCommit(rootPath: string, subject: string, body: string): Promise<string>
+  gitInit(rootPath: string): Promise<GitInitResult>
+  gitStageAll(rootPath: string): Promise<void>
 }
 
 declare global {

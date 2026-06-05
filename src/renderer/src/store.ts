@@ -1,9 +1,11 @@
 import { createContext, useContext } from 'react'
 import type { PendingQuestion } from './agent'
 import type { LineRange } from './path-utils'
+import type { CommitMessage } from './commit/synthesize'
 
 export type { LineRange } from './path-utils'
 export type { PendingQuestion } from './agent'
+export type { CommitMessage } from './commit/synthesize'
 
 export type View = 'diagram' | 'code' | 'read' | 'output'
 export type FileView = 'diagram' | 'code' | 'read'
@@ -79,16 +81,16 @@ export interface AppState {
   // Side-panel layout. ActivityBar lives at the very left and stays
   // visible; SidePanel sits to its right and shows whichever section is
   // active. null = side panel collapsed (icons only, like VS Code).
-  activeSection: 'files' | 'agent' | 'search' | 'skills' | null
+  activeSection: 'files' | 'agent' | 'search' | 'skills' | 'git' | null
   // Remembers which section was last open so toggling the panel closed
   // and back open restores it (rather than always returning to 'files').
-  lastActiveSection: 'files' | 'agent' | 'search' | 'skills'
+  lastActiveSection: 'files' | 'agent' | 'search' | 'skills' | 'git'
   // Side panel width in pixels. Persisted to localStorage so it survives
   // reloads.
   sidePanelWidth: number
   // User-controlled order of activity-bar sections (drag-to-reorder).
   // Persisted to localStorage.
-  activityOrder: Array<'agent' | 'files' | 'search' | 'skills'>
+  activityOrder: Array<'agent' | 'files' | 'search' | 'skills' | 'git'>
   // Selected skill in the Skills view (null = nothing picked yet).
   // linkTarget is set when the skill directory is a symlink, so the view
   // can show where it came from and adjust delete messaging. `file` is the
@@ -137,10 +139,10 @@ export interface StoreApi {
   toggleSidebar(): void
   refreshTree(): Promise<void>
   sendChat(text: string): Promise<void>
-  setActiveSection(section: 'files' | 'agent' | 'search' | 'skills' | null): void
-  toggleActiveSection(section: 'files' | 'agent' | 'search' | 'skills'): void
+  setActiveSection(section: 'files' | 'agent' | 'search' | 'skills' | 'git' | null): void
+  toggleActiveSection(section: 'files' | 'agent' | 'search' | 'skills' | 'git'): void
   setSidePanelWidth(width: number): void
-  setActivityOrder(order: Array<'agent' | 'files' | 'search' | 'skills'>): void
+  setActivityOrder(order: Array<'agent' | 'files' | 'search' | 'skills' | 'git'>): void
   setCurrentSkill(
     skill:
       | {
@@ -165,6 +167,9 @@ export interface StoreApi {
   // Audits the workspace against the MDD rules and either reports clean
   // (toast) or hands the drift report to the agent as a chat prompt.
   syncDiagrams(): Promise<void>
+  // Asks the agent to reconstruct the prompt that would regenerate the
+  // staged diff, for use as the commit message (subject + body spec).
+  synthesizeCommitMessage(diff: string): Promise<CommitMessage>
 }
 
 export const StoreContext = createContext<StoreApi | null>(null)

@@ -224,7 +224,19 @@ export function installBrowserApiStub(): void {
     openSkillInEditor: notInBrowser<void>('openSkillInEditor'),
     listSkillFiles: async () => [],
     readSkillFile: async () => ({ binary: false, content: '', size: 0 }),
-    writeSkillFile: notInBrowser<void>('writeSkillFile')
+    writeSkillFile: notInBrowser<void>('writeSkillFile'),
+    gitStatus: async () => ({
+      isRepo: true,
+      branch: null,
+      staged: [],
+      unstaged: [],
+      untracked: [],
+      clean: true
+    }),
+    gitStagedDiff: async () => '',
+    gitCommit: notInBrowser<string>('gitCommit'),
+    gitInit: notInBrowser<{ createdGitignore: boolean }>('gitInit'),
+    gitStageAll: notInBrowser<void>('gitStageAll')
   }
 
   ;(window as unknown as { api: DiagramNavApi }).api = stub

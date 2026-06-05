@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../store'
 
-type Section = 'agent' | 'files' | 'search' | 'skills'
+type Section = 'agent' | 'files' | 'search' | 'skills' | 'git'
 
 interface Item {
   key: Section
@@ -87,11 +87,29 @@ function SkillsIcon(): React.JSX.Element {
   )
 }
 
+function GitIcon(): React.JSX.Element {
+  // Commit-graph glyph: two nodes on a line with a branch tap.
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="6" cy="6" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="6" cy="18" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="17" cy="12" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M6 8.5v7M6 12h8.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
 const ITEM_BY_KEY: Record<Section, Item> = {
   agent: { key: 'agent', label: 'Agent', icon: <ChatIcon /> },
   files: { key: 'files', label: 'Files', icon: <FolderIcon /> },
   search: { key: 'search', label: 'Search', icon: <SearchIcon /> },
-  skills: { key: 'skills', label: 'Skills', icon: <SkillsIcon /> }
+  skills: { key: 'skills', label: 'Skills', icon: <SkillsIcon /> },
+  git: { key: 'git', label: 'Commit', icon: <GitIcon /> }
 }
 
 export function ActivityBar(): React.JSX.Element {

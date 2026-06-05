@@ -1,5 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
+import { parseAnsi, type AnsiSegment } from '../ansi'
+
+function segStyle(s: AnsiSegment): React.CSSProperties {
+  const st: React.CSSProperties = {}
+  if (s.fg) st.color = s.fg
+  if (s.bg) st.backgroundColor = s.bg
+  if (s.bold) st.fontWeight = 700
+  if (s.italic) st.fontStyle = 'italic'
+  if (s.underline) st.textDecoration = 'underline'
+  if (s.dim) st.opacity = 0.7
+  return st
+}
 
 export function ScriptOutput(): React.JSX.Element {
   const { state, runScript, killScript, hideOutput } = useStore()
@@ -9,6 +21,9 @@ export function ScriptOutput(): React.JSX.Element {
   // `now` is state (not a render-time Date.now() call) so elapsed time is
   // a pure derivation and React's purity rules are satisfied.
   const [now, setNow] = useState(() => Date.now())
+
+  // Parse the raw stream into styled lines once per output change.
+  const lines = useMemo(() => parseAnsi(running?.output ?? ''), [running?.output])
 
   // Tick once a second while running so elapsed time updates even when
   // the process is silent.
@@ -86,7 +101,20 @@ export function ScriptOutput(): React.JSX.Element {
         </div>
       </div>
       <pre className="script-output-body" ref={preRef}>
-        {running.output || (isRunning ? 'Waiting for output…' : '(no output)')}
+        {running.output
+          ? lines.map((segs, i) => (
+              <Fragment key={i}>
+                {i > 0 ? '\n' : null}
+                {segs.map((s, j) => (
+                  <span key={j} style={segStyle(s)}>
+                    {s.text}
+                  </span>
+                ))}
+              </Fragment>
+            ))
+          : isRunning
+            ? 'Waiting for output…'
+            : '(no output)'}
       </pre>
     </div>
   )

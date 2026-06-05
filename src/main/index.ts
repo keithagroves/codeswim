@@ -18,6 +18,7 @@ import {
   writeSkillFile,
   type SkillScope
 } from './skills'
+import { gitStatus, gitStagedDiff, gitCommit, gitInit, gitStageAll } from './git'
 
 let mainWindow: BrowserWindow | null = null
 let watcher: FSWatcher | null = null
@@ -301,7 +302,11 @@ async function runEntry(rootPath: string, source: 'npm' | 'custom', name: string
     shell: true,
     detached: true,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, FORCE_COLOR: '0' }
+    // FORCE_COLOR=1 makes tools that gate colour on a TTY (vite, npm, tsx…)
+    // emit ANSI even though we pipe stdout; the output panel parses those
+    // codes into styled spans. COLUMNS keeps wrap-aware tools from assuming
+    // an 80-col terminal and hard-wrapping into the narrow panel.
+    env: { ...process.env, FORCE_COLOR: '1', COLUMNS: '120' }
   })
 
   const run: ScriptRun = { name, child, startedAt: Date.now() }
@@ -701,6 +706,29 @@ app.whenReady().then(async () => {
       await writeSkillFile(scope, name, relPath, content, rootPath)
     }
   )
+
+  ipcMain.handle('git:status', async (_event, rootPath: string) => {
+    return gitStatus(rootPath)
+  })
+
+  ipcMain.handle('git:staged-diff', async (_event, rootPath: string) => {
+    return gitStagedDiff(rootPath)
+  })
+
+  ipcMain.handle(
+    'git:commit',
+    async (_event, rootPath: string, subject: string, body: string) => {
+      return gitCommit(rootPath, subject, body)
+    }
+  )
+
+  ipcMain.handle('git:init', async (_event, rootPath: string) => {
+    return gitInit(rootPath)
+  })
+
+  ipcMain.handle('git:stage-all', async (_event, rootPath: string) => {
+    await gitStageAll(rootPath)
+  })
 
   createWindow()
 

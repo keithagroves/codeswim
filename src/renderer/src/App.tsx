@@ -5,6 +5,7 @@ import { ChatPanel } from './components/ChatPanel'
 import { CodeView } from './components/CodeView'
 import { DiagramView } from './components/DiagramView'
 import { FileTree } from './components/FileTree'
+import { GitPanel } from './components/GitPanel'
 import { ReadView } from './components/ReadView'
 import { ScriptControls } from './components/ScriptControls'
 import { ScriptOutput } from './components/ScriptOutput'
@@ -58,6 +59,7 @@ function SidePanel(): React.JSX.Element | null {
       {state.activeSection === 'agent' ? <ChatPanel /> : null}
       {state.activeSection === 'search' ? <SearchPanel /> : null}
       {state.activeSection === 'skills' ? <SkillsPanel /> : null}
+      {state.activeSection === 'git' ? <GitPanel /> : null}
       <div
         className="side-panel-resizer"
         onMouseDown={onResizeStart}
