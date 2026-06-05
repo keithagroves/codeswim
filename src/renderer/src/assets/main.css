@@ -2573,6 +2573,134 @@ body.is-panning .diagram-canvas-wrap {
   line-height: 1.5;
 }
 
+.git-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 6px 10px 0;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.git-tab {
+  appearance: none;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 6px 10px 8px;
+}
+
+.git-tab:hover {
+  color: var(--text);
+}
+
+.git-tab.is-active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.git-history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.git-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.git-commit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.git-commit {
+  border-bottom: 1px solid var(--border);
+  padding: 6px 0;
+}
+
+.git-commit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+}
+
+.git-commit-caret {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 10px;
+  transition: transform 0.1s ease;
+}
+
+.git-commit-caret.is-open {
+  transform: rotate(90deg);
+}
+
+.git-commit-subject {
+  flex: 1;
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-commit-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  padding: 0 4px;
+  line-height: 1.4;
+}
+
+.git-commit-meta {
+  display: flex;
+  gap: 8px;
+  padding-left: 16px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.git-commit-sha {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.git-commit-body {
+  margin: 6px 0 2px;
+  margin-left: 16px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 320px;
+  overflow: auto;
+}
+
 .git-file-list {
   list-style: none;
   margin: 0;

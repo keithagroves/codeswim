@@ -1,9 +1,28 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useStore } from '../store'
-import type { GitStatus } from '../../../preload/index.d'
+import type { GitStatus, GitCommitEntry } from '../../../preload/index.d'
 import { runCoverage } from '../coverage/run'
 import type { CoverageReport } from '../coverage/coverage'
 import { composeCommitBody, buildTrailers } from '../commit/synthesize'
+
+type Tab = 'changes' | 'history'
+
+// Compact relative time for the history list ("3h ago"); full ISO on hover.
+function relTime(iso: string): string {
+  const t = Date.parse(iso)
+  if (Number.isNaN(t)) return ''
+  const s = Math.floor((Date.now() - t) / 1000)
+  if (s < 60) return 'just now'
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  const d = Math.floor(h / 24)
+  if (d < 30) return `${d}d ago`
+  const mo = Math.floor(d / 30)
+  if (mo < 12) return `${mo}mo ago`
+  return `${Math.floor(mo / 12)}y ago`
+}
 
 type Phase =
   | { kind: 'idle' }
@@ -45,6 +64,11 @@ export function GitPanel(): React.JSX.Element {
   const [git, setGit] = useState<GitStatus | null>(null)
   const [statusError, setStatusError] = useState<string | null>(null)
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
+  const [tab, setTab] = useState<Tab>('changes')
+  const [commits, setCommits] = useState<GitCommitEntry[] | null>(null)
+  const [historyError, setHistoryError] = useState<string | null>(null)
+  // Bumped after a successful commit so the History tab reloads next time.
+  const [historyNonce, setHistoryNonce] = useState(0)
 
   const refreshStatus = useCallback(async () => {
     // When there's no workspace the panel renders its empty state and never
@@ -85,6 +109,31 @@ export function GitPanel(): React.JSX.Element {
       cancelled = true
     }
   }, [root, state.tree])
+
+  // Load commit history when the History tab is active (and after each new
+  // commit, via historyNonce). Inlined for the same setState-after-await
+  // reason as the status effect.
+  useEffect(() => {
+    if (tab !== 'history' || !root) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const log = await window.api.gitLog(root, 200)
+        if (!cancelled) {
+          setCommits(log)
+          setHistoryError(null)
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setHistoryError(err instanceof Error ? err.message : String(err))
+          setCommits([])
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [tab, root, historyNonce])
 
   const onCompose = useCallback(async () => {
     if (!root) return
@@ -140,6 +189,7 @@ export function GitPanel(): React.JSX.Element {
         const sha = await window.api.gitCommit(root, trimmed, fullBody)
         toast(`Committed ${sha.slice(0, 7)}`, 'info')
         setPhase({ kind: 'idle' })
+        setHistoryNonce((n) => n + 1)
         void refreshStatus()
       } catch (err) {
         setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
@@ -238,11 +288,38 @@ export function GitPanel(): React.JSX.Element {
         </button>
       </div>
 
-      <div className="git-panel-body">
-        {statusError ? <div className="git-error">{statusError}</div> : null}
+      <div className="git-tabs" role="tablist">
+        <button
+          className={`git-tab ${tab === 'changes' ? 'is-active' : ''}`}
+          role="tab"
+          aria-selected={tab === 'changes'}
+          onClick={() => setTab('changes')}
+        >
+          Changes
+        </button>
+        <button
+          className={`git-tab ${tab === 'history' ? 'is-active' : ''}`}
+          role="tab"
+          aria-selected={tab === 'history'}
+          onClick={() => setTab('history')}
+        >
+          History
+        </button>
+      </div>
 
-        <section className="git-section">
-          <div className="git-section-title">Staged ({stagedCount})</div>
+      <div className="git-panel-body">
+        {tab === 'history' ? (
+          <HistoryView
+            commits={commits}
+            error={historyError}
+            onRefresh={() => setHistoryNonce((n) => n + 1)}
+          />
+        ) : (
+          <>
+            {statusError ? <div className="git-error">{statusError}</div> : null}
+
+            <section className="git-section">
+              <div className="git-section-title">Staged ({stagedCount})</div>
           {stagedCount === 0 ? (
             <div className="sidebar-empty">
               Stage changes in your editor or terminal, then compose a commit.
@@ -331,8 +408,78 @@ export function GitPanel(): React.JSX.Element {
             </button>
           </div>
         ) : null}
+          </>
+        )}
       </div>
     </aside>
+  )
+}
+
+function HistoryView({
+  commits,
+  error,
+  onRefresh
+}: {
+  commits: GitCommitEntry[] | null
+  error: string | null
+  onRefresh: () => void
+}): React.JSX.Element {
+  return (
+    <div className="git-history">
+      <div className="git-history-header">
+        <span className="git-section-title">Prompt history</span>
+        <button
+          className="git-stage-all"
+          onClick={onRefresh}
+          title="Reload history"
+          aria-label="Reload history"
+        >
+          Refresh
+        </button>
+      </div>
+      {error ? <div className="git-error">{error}</div> : null}
+      {commits === null ? (
+        <div className="git-working">Loading history…</div>
+      ) : commits.length === 0 ? (
+        <div className="sidebar-empty">No commits yet.</div>
+      ) : (
+        <ul className="git-commit-list">
+          {commits.map((c) => (
+            <CommitRow key={c.hash} commit={c} />
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function CommitRow({ commit }: { commit: GitCommitEntry }): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const hasBody = commit.body.trim().length > 0
+  return (
+    <li className="git-commit">
+      <button
+        className="git-commit-row"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        title={hasBody ? 'Show the prompt that produced this commit' : commit.subject}
+      >
+        <span className={`git-commit-caret ${open ? 'is-open' : ''}`}>▸</span>
+        <span className="git-commit-subject">{commit.subject}</span>
+        {commit.synthesized ? (
+          <span className="git-commit-badge" title="Commit message synthesized by codeswim">
+            prompt
+          </span>
+        ) : null}
+      </button>
+      <div className="git-commit-meta">
+        <span className="git-commit-sha">{commit.shortHash}</span>
+        <span className="git-commit-time" title={commit.date}>
+          {relTime(commit.date)}
+        </span>
+      </div>
+      {open && hasBody ? <pre className="git-commit-body">{commit.body}</pre> : null}
+    </li>
   )
 }
 

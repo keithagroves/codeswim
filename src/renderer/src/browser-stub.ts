@@ -236,7 +236,8 @@ export function installBrowserApiStub(): void {
     gitStagedDiff: async () => '',
     gitCommit: notInBrowser<string>('gitCommit'),
     gitInit: notInBrowser<{ createdGitignore: boolean }>('gitInit'),
-    gitStageAll: notInBrowser<void>('gitStageAll')
+    gitStageAll: notInBrowser<void>('gitStageAll'),
+    gitLog: async () => []
   }
 
   ;(window as unknown as { api: DiagramNavApi }).api = stub

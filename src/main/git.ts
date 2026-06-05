@@ -215,3 +215,65 @@ export async function gitCommit(rootPath: string, subject: string, body: string)
   const sha = await git(rootPath, ['rev-parse', 'HEAD'])
   return sha.trim()
 }
+
+export interface GitCommitEntry {
+  hash: string
+  shortHash: string
+  author: string
+  date: string // ISO 8601
+  subject: string
+  body: string // full body, including any trailers
+  // Whether the body carries our Codeswim-Synthesized: true trailer.
+  synthesized: boolean
+}
+
+// Field/record separators: control chars that won't appear in real commit
+// metadata, so we can split unambiguously even when bodies contain newlines.
+const LOG_FIELD = '\u001f'
+const LOG_RECORD = '\u001e'
+
+// Pure parser for the custom `git log` format below. Exported for testing.
+export function parseGitLog(raw: string): GitCommitEntry[] {
+  return raw
+    .split(LOG_RECORD)
+    // git joins records with a newline; strip the leading one off each.
+    .map((r) => r.replace(/^\n+/, ''))
+    .filter((r) => r.trim().length > 0)
+    .map((rec) => {
+      const parts = rec.split(LOG_FIELD)
+      const hash = (parts[0] ?? '').trim()
+      const body = (parts[4] ?? '').trim()
+      return {
+        hash,
+        shortHash: hash.slice(0, 7),
+        author: parts[1] ?? '',
+        date: parts[2] ?? '',
+        subject: parts[3] ?? '',
+        body,
+        synthesized: /^Codeswim-Synthesized:\s*true\s*$/m.test(body)
+      }
+    })
+    .filter((c) => c.hash.length > 0)
+}
+
+export async function gitLog(rootPath: string, limit = 100): Promise<GitCommitEntry[]> {
+  const fmt =
+    ['%H', '%an', '%aI', '%s', '%b'].join(LOG_FIELD) + LOG_RECORD
+  let out: string
+  try {
+    out = await git(rootPath, [
+      'log',
+      '-n',
+      String(Math.max(1, Math.min(limit, 1000))),
+      '--pretty=format:' + fmt
+    ])
+  } catch (err) {
+    // Fresh repo with no commits yet, or not a repo — both mean "no history".
+    const msg = err instanceof Error ? err.message : String(err)
+    if (/does not have any commits|not a git repository|bad default revision/i.test(msg)) {
+      return []
+    }
+    throw err
+  }
+  return parseGitLog(out)
+}

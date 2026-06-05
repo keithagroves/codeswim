@@ -115,6 +115,17 @@ Two consequences worth stating:
   `## No commits yet on main`; `parseBranchLine` handles that case so the
   branch label is right before the first commit exists.
 
+## Browsing history — the payoff
+
+The panel has two tabs: **Changes** (the compose flow above) and
+**History**. History calls `git:log` and lists recent commits; rows carry a
+`prompt` badge when the body has the `Codeswim-Synthesized: true` trailer,
+and expand to reveal the full message — i.e. the prompt that produced the
+change. This is the "specification record" made browsable: the log reads as
+a sequence of intents, not a pile of diffs. `parseGitLog` does the parsing
+(custom `\x1f`/`\x1e`-delimited `--pretty=format`) and is unit-tested;
+`gitLog` returns `[]` for both a non-repo and a repo with no commits yet.
+
 ## Where it sits in the architecture
 
 ```mermaid
@@ -152,9 +163,9 @@ preload bridge, renderer caller).
 | `git:status` | porcelain status | staged/unstaged/untracked split; `isRepo: false` when not a repo |
 | `git:staged-diff` | unified diff string | input to synthesis |
 | `git:commit` | new commit sha | `subject`, `body` args; trailers appended by caller |
-| `git:init` | void | `git init`; offered when `isRepo` is false |
+| `git:init` | `{ createdGitignore }` | `git init` + seed `.gitignore`; offered when `isRepo` is false |
 | `git:stage-all` | void | `git add -A`; assembles the working tree (incl. first commit) |
-| `git:log` *(phase 2)* | recent commits | for a history view in the panel |
+| `git:log` | recent commits | powers the **History** tab; each entry carries `synthesized` |
 
 ## Side panel integration
 
@@ -196,7 +207,9 @@ versioning or migration code needed.
   reconstruction matches what was actually asked.
 - A regex secret-scrub pre-pass over transcript evidence before it reaches
   the synthesizer (defense in depth alongside the prompt instruction).
-- `git:log` history view in the panel.
+
+The `git:log` **History** tab originally slated for phase 2 shipped early —
+see "Browsing history" above.
 
 ## Risks & how we handle them
 

@@ -100,6 +100,16 @@ export interface GitInitResult {
   createdGitignore: boolean
 }
 
+export interface GitCommitEntry {
+  hash: string
+  shortHash: string
+  author: string
+  date: string
+  subject: string
+  body: string
+  synthesized: boolean
+}
+
 const api = {
   pickFolder: (): Promise<string | null> => ipcRenderer.invoke('pick-folder'),
   readFile: (absPath: string): Promise<string> => ipcRenderer.invoke('read-file', absPath),
@@ -224,7 +234,9 @@ const api = {
   gitCommit: (rootPath: string, subject: string, body: string): Promise<string> =>
     ipcRenderer.invoke('git:commit', rootPath, subject, body),
   gitInit: (rootPath: string): Promise<GitInitResult> => ipcRenderer.invoke('git:init', rootPath),
-  gitStageAll: (rootPath: string): Promise<void> => ipcRenderer.invoke('git:stage-all', rootPath)
+  gitStageAll: (rootPath: string): Promise<void> => ipcRenderer.invoke('git:stage-all', rootPath),
+  gitLog: (rootPath: string, limit?: number): Promise<GitCommitEntry[]> =>
+    ipcRenderer.invoke('git:log', rootPath, limit)
 }
 
 if (process.contextIsolated) {

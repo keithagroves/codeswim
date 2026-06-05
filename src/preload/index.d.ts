@@ -99,6 +99,16 @@ export interface GitInitResult {
   createdGitignore: boolean
 }
 
+export interface GitCommitEntry {
+  hash: string
+  shortHash: string
+  author: string
+  date: string
+  subject: string
+  body: string
+  synthesized: boolean
+}
+
 export interface DiagramNavApi {
   pickFolder(): Promise<string | null>
   readFile(absPath: string): Promise<string>
@@ -165,6 +175,7 @@ export interface DiagramNavApi {
   gitCommit(rootPath: string, subject: string, body: string): Promise<string>
   gitInit(rootPath: string): Promise<GitInitResult>
   gitStageAll(rootPath: string): Promise<void>
+  gitLog(rootPath: string, limit?: number): Promise<GitCommitEntry[]>
 }
 
 declare global {

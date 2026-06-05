@@ -2,7 +2,10 @@ import { afterEach, describe, it, expect } from 'vitest'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { parseBranchLine, parseStatusLine, ensureGitignore } from './git'
+import { parseBranchLine, parseStatusLine, ensureGitignore, parseGitLog } from './git'
+
+const F = '\u001f' // field separator, matches git.ts LOG_FIELD
+const R = '\u001e' // record separator, matches git.ts LOG_RECORD
 
 describe('parseBranchLine', () => {
   it('reads a tracking branch header', () => {
@@ -90,5 +93,53 @@ describe('ensureGitignore', () => {
     const dir = await tmp()
     expect(await ensureGitignore(dir)).toBe(true)
     expect(await ensureGitignore(dir)).toBe(false)
+  })
+})
+
+describe('parseGitLog', () => {
+  const record = (
+    hash: string,
+    author: string,
+    date: string,
+    subject: string,
+    body: string
+  ): string => [hash, author, date, subject, body].join(F) + R
+
+  it('parses a single record into fields', () => {
+    const raw = record('abc1234def', 'Ada', '2026-06-01T10:00:00Z', 'Add thing', 'Body line.')
+    expect(parseGitLog(raw)).toEqual([
+      {
+        hash: 'abc1234def',
+        shortHash: 'abc1234',
+        author: 'Ada',
+        date: '2026-06-01T10:00:00Z',
+        subject: 'Add thing',
+        body: 'Body line.',
+        synthesized: false
+      }
+    ])
+  })
+
+  it('separates records joined by a newline', () => {
+    const raw =
+      record('h1aaaaaa', 'A', 'd1', 's1', 'b1') + '\n' + record('h2bbbbbb', 'B', 'd2', 's2', 'b2')
+    const out = parseGitLog(raw)
+    expect(out.map((c) => c.subject)).toEqual(['s1', 's2'])
+    expect(out[1].shortHash).toBe('h2bbbbb')
+  })
+
+  it('detects the synthesized trailer', () => {
+    const body = 'Reconstructed intent.\n\nCodeswim-Synthesized: true\nCodeswim-Coverage: pass'
+    const out = parseGitLog(record('hhhhhhhh', 'A', 'd', 'subj', body))
+    expect(out[0].synthesized).toBe(true)
+  })
+
+  it('keeps multi-line bodies intact', () => {
+    const body = 'Line one.\nLine two.\nLine three.'
+    expect(parseGitLog(record('hhhhhhhh', 'A', 'd', 'subj', body))[0].body).toBe(body)
+  })
+
+  it('returns an empty array for empty input', () => {
+    expect(parseGitLog('')).toEqual([])
   })
 })
