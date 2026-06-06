@@ -266,16 +266,30 @@ async function listRuns(rootPath: string): Promise<RunEntry[]> {
 function killActiveRun(): void {
   if (!activeRun) return
   const { child } = activeRun
-  if (!child.killed && child.pid !== undefined) {
+  if (child.killed || child.pid === undefined) return
+  if (process.platform === 'win32') {
+    // Windows has no POSIX process groups, so a negative-pid signal can't
+    // reach the tree. taskkill /T kills the whole tree (the cmd shell, npm,
+    // and the vite/tsx grandchildren it spawned); /F forces it.
     try {
-      // Negative pid signals the entire process group spawned with detached: true.
-      process.kill(-child.pid, 'SIGTERM')
+      spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true })
     } catch {
       try {
-        child.kill('SIGTERM')
+        child.kill()
       } catch {
         // child already gone
       }
+    }
+    return
+  }
+  try {
+    // Negative pid signals the entire process group spawned with detached: true.
+    process.kill(-child.pid, 'SIGTERM')
+  } catch {
+    try {
+      child.kill('SIGTERM')
+    } catch {
+      // child already gone
     }
   }
 }
@@ -310,6 +324,8 @@ async function runEntry(rootPath: string, source: 'npm' | 'custom', name: string
     shell: true,
     detached: true,
     stdio: ['ignore', 'pipe', 'pipe'],
+    // Stops a console window flashing up on Windows (no-op elsewhere).
+    windowsHide: true,
     // FORCE_COLOR=1 makes tools that gate colour on a TTY (vite, npm, tsx…)
     // emit ANSI even though we pipe stdout; the output panel parses those
     // codes into styled spans. COLUMNS keeps wrap-aware tools from assuming

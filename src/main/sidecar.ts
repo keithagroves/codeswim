@@ -29,9 +29,22 @@ function resolveUnpacked(...segments: string[]): string {
 }
 
 function resolveOpencodeBinary(): string {
-  // node_modules/.bin/opencode is a Node shim that finds the platform binary
-  // by walking up node_modules and looking for opencode-{platform}-{arch}.
-  return resolveUnpacked('node_modules', '.bin', 'opencode')
+  // Spawn the real platform binary directly rather than node_modules/.bin/
+  // opencode. That .bin entry is a shell shim — on Windows it's a .cmd/.ps1
+  // (or an extensionless sh script) that Node's spawn can't exec without a
+  // shell, so the sidecar would never start there. The platform package lays
+  // the binary out as opencode-{platform}-{arch}/bin/opencode[.exe] (see
+  // opencode-ai's postinstall.mjs); those packages are asarUnpack'd, so the
+  // path is real on disk in packaged builds too.
+  const platform =
+    process.platform === 'win32'
+      ? 'windows'
+      : process.platform === 'darwin'
+        ? 'darwin'
+        : 'linux'
+  const arch = process.arch === 'arm64' ? 'arm64' : 'x64'
+  const binaryName = platform === 'windows' ? 'opencode.exe' : 'opencode'
+  return resolveUnpacked('node_modules', `opencode-${platform}-${arch}`, 'bin', binaryName)
 }
 
 function resolveHarness(): { plugin: string; instructions: string[] } {
@@ -92,7 +105,9 @@ export async function startSidecar(opts: StartOptions): Promise<SidecarHandle> {
   const child = spawn(binary, ['serve', '--port', '0', '--hostname', '127.0.0.1'], {
     cwd: opts.workspaceRoot,
     env,
-    stdio: ['ignore', 'pipe', 'pipe']
+    stdio: ['ignore', 'pipe', 'pipe'],
+    // No-op off Windows; on Windows it stops a console window flashing up.
+    windowsHide: true
   })
 
   // One exit listener; carries stderr tail so the renderer can show *why*.
