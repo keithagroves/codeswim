@@ -200,6 +200,23 @@ export async function gitStageAll(rootPath: string): Promise<void> {
   await git(rootPath, ['add', '-A'])
 }
 
+// Unstage everything, leaving the working tree untouched. `git reset` needs a
+// HEAD to reset the index against; a repo with no commits yet has none, so we
+// clear the index directly in that case (still keeps the files on disk).
+export async function gitUnstageAll(rootPath: string): Promise<void> {
+  let hasHead = true
+  try {
+    await git(rootPath, ['rev-parse', '--verify', 'HEAD'])
+  } catch {
+    hasHead = false
+  }
+  if (hasHead) {
+    await git(rootPath, ['reset', '--quiet'])
+  } else {
+    await git(rootPath, ['rm', '-r', '--cached', '--quiet', '.'])
+  }
+}
+
 export async function gitStagedDiff(rootPath: string): Promise<string> {
   // --staged shows what `git commit` would record. No color, full context.
   return git(rootPath, ['diff', '--staged', '--no-color'])

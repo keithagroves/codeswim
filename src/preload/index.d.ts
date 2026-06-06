@@ -175,6 +175,7 @@ export interface DiagramNavApi {
   gitCommit(rootPath: string, subject: string, body: string): Promise<string>
   gitInit(rootPath: string): Promise<GitInitResult>
   gitStageAll(rootPath: string): Promise<void>
+  gitUnstageAll(rootPath: string): Promise<void>
   gitLog(rootPath: string, limit?: number): Promise<GitCommitEntry[]>
 }
 

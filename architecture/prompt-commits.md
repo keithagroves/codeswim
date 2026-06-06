@@ -165,6 +165,7 @@ preload bridge, renderer caller).
 | `git:commit` | new commit sha | `subject`, `body` args; trailers appended by caller |
 | `git:init` | `{ createdGitignore }` | `git init` + seed `.gitignore`; offered when `isRepo` is false |
 | `git:stage-all` | void | `git add -A`; assembles the working tree (incl. first commit) |
+| `git:unstage-all` | void | unstage everything (keeps the work tree); clears the index directly on an unborn branch |
 | `git:log` | recent commits | powers the **History** tab; each entry carries `synthesized` |
 
 ## Side panel integration

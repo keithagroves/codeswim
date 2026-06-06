@@ -18,7 +18,15 @@ import {
   writeSkillFile,
   type SkillScope
 } from './skills'
-import { gitStatus, gitStagedDiff, gitCommit, gitInit, gitStageAll, gitLog } from './git'
+import {
+  gitStatus,
+  gitStagedDiff,
+  gitCommit,
+  gitInit,
+  gitStageAll,
+  gitUnstageAll,
+  gitLog
+} from './git'
 
 let mainWindow: BrowserWindow | null = null
 let watcher: FSWatcher | null = null
@@ -728,6 +736,10 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('git:stage-all', async (_event, rootPath: string) => {
     await gitStageAll(rootPath)
+  })
+
+  ipcMain.handle('git:unstage-all', async (_event, rootPath: string) => {
+    await gitUnstageAll(rootPath)
   })
 
   ipcMain.handle('git:log', async (_event, rootPath: string, limit?: number) => {

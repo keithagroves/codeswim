@@ -235,6 +235,8 @@ const api = {
     ipcRenderer.invoke('git:commit', rootPath, subject, body),
   gitInit: (rootPath: string): Promise<GitInitResult> => ipcRenderer.invoke('git:init', rootPath),
   gitStageAll: (rootPath: string): Promise<void> => ipcRenderer.invoke('git:stage-all', rootPath),
+  gitUnstageAll: (rootPath: string): Promise<void> =>
+    ipcRenderer.invoke('git:unstage-all', rootPath),
   gitLog: (rootPath: string, limit?: number): Promise<GitCommitEntry[]> =>
     ipcRenderer.invoke('git:log', rootPath, limit)
 }

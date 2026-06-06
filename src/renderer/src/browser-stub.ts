@@ -237,6 +237,7 @@ export function installBrowserApiStub(): void {
     gitCommit: notInBrowser<string>('gitCommit'),
     gitInit: notInBrowser<{ createdGitignore: boolean }>('gitInit'),
     gitStageAll: notInBrowser<void>('gitStageAll'),
+    gitUnstageAll: notInBrowser<void>('gitUnstageAll'),
     gitLog: async () => []
   }
 

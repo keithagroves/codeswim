@@ -226,6 +226,16 @@ export function GitPanel(): React.JSX.Element {
     }
   }, [root, refreshStatus, toast])
 
+  const onUnstageAll = useCallback(async () => {
+    if (!root) return
+    try {
+      await window.api.gitUnstageAll(root)
+      await refreshStatus()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : String(err), 'error')
+    }
+  }, [root, refreshStatus, toast])
+
   if (!root) {
     return (
       <aside className="git-panel" aria-label="Commit">
@@ -319,7 +329,14 @@ export function GitPanel(): React.JSX.Element {
             {statusError ? <div className="git-error">{statusError}</div> : null}
 
             <section className="git-section">
-              <div className="git-section-title">Staged ({stagedCount})</div>
+              <div className="git-section-title">
+                <span>Staged ({stagedCount})</span>
+                {stagedCount > 0 ? (
+                  <button className="git-stage-all" onClick={() => void onUnstageAll()}>
+                    Unstage all
+                  </button>
+                ) : null}
+              </div>
           {stagedCount === 0 ? (
             <div className="sidebar-empty">
               Stage changes in your editor or terminal, then compose a commit.
