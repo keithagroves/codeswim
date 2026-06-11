@@ -54,7 +54,7 @@ const initialState: AppState = {
   activeSection: 'agent',
   lastActiveSection: 'agent',
   sidePanelWidth: 320,
-  activityOrder: ['agent', 'files', 'search', 'skills', 'git'],
+  activityOrder: ['agent', 'files', 'search', 'skills', 'git', 'terminal'],
   currentSkill: null,
   chatStatus: 'idle',
   chatError: null,

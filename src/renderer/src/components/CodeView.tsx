@@ -9,7 +9,8 @@ import {
   highlightActiveLine
 } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
-import { bracketMatching, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
+import { bracketMatching, syntaxHighlighting, HighlightStyle } from '@codemirror/language'
+import { tags } from '@lezer/highlight'
 import { javascript } from '@codemirror/lang-javascript'
 import { python } from '@codemirror/lang-python'
 import { html } from '@codemirror/lang-html'
@@ -45,6 +46,46 @@ function languageFor(path: string): Extension | null {
       return null
   }
 }
+
+// Dark syntax palette tuned to the app's monochrome theme — muted hues,
+// no saturated rainbow.
+const darkHighlightStyle = HighlightStyle.define([
+  { tag: [tags.keyword, tags.modifier, tags.operatorKeyword], color: '#c792ea' },
+  { tag: [tags.string, tags.special(tags.string)], color: '#9ece8c' },
+  { tag: [tags.number, tags.bool, tags.null, tags.atom], color: '#e5b567' },
+  { tag: [tags.comment, tags.meta], color: '#6b6b76', fontStyle: 'italic' },
+  { tag: [tags.function(tags.variableName), tags.function(tags.propertyName)], color: '#82aaff' },
+  { tag: [tags.typeName, tags.className, tags.namespace], color: '#7fd6c2' },
+  { tag: [tags.propertyName, tags.attributeName], color: '#a6b8e8' },
+  { tag: [tags.definition(tags.variableName), tags.variableName], color: '#ececf1' },
+  { tag: [tags.tagName], color: '#f47067' },
+  { tag: [tags.heading], color: '#ececf1', fontWeight: 'bold' },
+  { tag: [tags.link, tags.url], color: '#6e9bff' },
+  { tag: [tags.punctuation, tags.bracket], color: '#94949f' }
+])
+
+const darkEditorTheme = EditorView.theme(
+  {
+    '&': { backgroundColor: '#0e0e11', color: '#ececf1' },
+    '.cm-gutters': {
+      backgroundColor: '#0e0e11',
+      color: '#5a5a64',
+      border: 'none',
+      borderRight: '1px solid #26262c'
+    },
+    '.cm-activeLine': { backgroundColor: 'rgba(255, 255, 255, 0.035)' },
+    '.cm-activeLineGutter': { backgroundColor: 'rgba(255, 255, 255, 0.035)', color: '#94949f' },
+    '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
+      backgroundColor: 'rgba(110, 155, 255, 0.2)'
+    },
+    '.cm-cursor': { borderLeftColor: '#ececf1' },
+    '.cm-matchingBracket': {
+      backgroundColor: 'rgba(110, 155, 255, 0.25)',
+      outline: 'none'
+    }
+  },
+  { dark: true }
+)
 
 // StateEffect carries a desired highlight range. StateField rebuilds a
 // DecorationSet of `.cm-target-line` lines whenever it sees the effect.
@@ -97,7 +138,8 @@ export function CodeView({
       highlightActiveLine(),
       history(),
       bracketMatching(),
-      syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+      syntaxHighlighting(darkHighlightStyle, { fallback: true }),
+      darkEditorTheme,
       keymap.of([...defaultKeymap, ...historyKeymap]),
       EditorView.editable.of(false),
       highlightField,

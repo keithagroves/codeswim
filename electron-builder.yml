@@ -22,6 +22,7 @@ files:
   - node_modules/opencode-linux-arm64/**
   - node_modules/opencode-linux-x64/**
   - node_modules/opencode-windows-x64/**
+  - node_modules/node-pty/**
 asarUnpack:
   - resources/**
   # opencode is a spawned binary — must live on disk, not inside app.asar.
@@ -30,6 +31,8 @@ asarUnpack:
   # Our plugin is loaded by opencode via a file:// URL, which can't read
   # inside app.asar. Unpack so the path is real.
   - out/harness/**
+  # node-pty ships a native .node binary that cannot be loaded from inside asar.
+  - node_modules/node-pty/**
 win:
   executableName: codeswim
 nsis:
@@ -38,6 +41,9 @@ nsis:
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
 mac:
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.

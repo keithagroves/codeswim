@@ -238,7 +238,13 @@ export function installBrowserApiStub(): void {
     gitInit: notInBrowser<{ createdGitignore: boolean }>('gitInit'),
     gitStageAll: notInBrowser<void>('gitStageAll'),
     gitUnstageAll: notInBrowser<void>('gitUnstageAll'),
-    gitLog: async () => []
+    gitLog: async () => [],
+    terminalCreate: notInBrowser<string>('terminalCreate'),
+    terminalWrite: () => {},
+    terminalResize: () => {},
+    terminalDestroy: () => {},
+    onTerminalData: () => () => {},
+    onTerminalExit: () => () => {}
   }
 
   ;(window as unknown as { api: DiagramNavApi }).api = stub

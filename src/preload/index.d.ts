@@ -177,6 +177,12 @@ export interface DiagramNavApi {
   gitStageAll(rootPath: string): Promise<void>
   gitUnstageAll(rootPath: string): Promise<void>
   gitLog(rootPath: string, limit?: number): Promise<GitCommitEntry[]>
+  terminalCreate(cwd?: string): Promise<string>
+  terminalWrite(id: string, data: string): void
+  terminalResize(id: string, cols: number, rows: number): void
+  terminalDestroy(id: string): void
+  onTerminalData(cb: (id: string, data: string) => void): () => void
+  onTerminalExit(cb: (id: string) => void): () => void
 }
 
 declare global {

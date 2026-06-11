@@ -3,6 +3,7 @@ import { join, basename, dirname } from 'path'
 import { promises as fs } from 'fs'
 import { spawn, ChildProcess } from 'child_process'
 import chokidar, { FSWatcher } from 'chokidar'
+import * as pty from 'node-pty'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { startSidecar, type SidecarHandle } from './sidecar'
@@ -43,13 +44,18 @@ let sidecar: SidecarHandle | null = null
 let sidecarRoot: string | null = null
 let sidecarStarting: Promise<SidecarHandle> | null = null
 
+const terminals = new Map<string, pty.IPty>()
+let terminalIdCounter = 0
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     show: false,
     autoHideMenuBar: true,
+    backgroundColor: '#0e0e11',
     ...(process.platform === 'linux' ? { icon } : {}),
+    ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset' } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -760,6 +766,43 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('git:log', async (_event, rootPath: string, limit?: number) => {
     return gitLog(rootPath, limit)
+  })
+
+  ipcMain.handle('terminal:create', (_event, cwd?: string) => {
+    const id = String(++terminalIdCounter)
+    const shell = process.env.SHELL || '/bin/zsh'
+    const ptyProcess = pty.spawn(shell, [], {
+      name: 'xterm-256color',
+      cols: 80,
+      rows: 24,
+      cwd: cwd || process.env.HOME || '/',
+      env: process.env as Record<string, string>
+    })
+    ptyProcess.onData((data) => {
+      mainWindow?.webContents.send('terminal:data', id, data)
+    })
+    ptyProcess.onExit(() => {
+      terminals.delete(id)
+      mainWindow?.webContents.send('terminal:exit', id)
+    })
+    terminals.set(id, ptyProcess)
+    return id
+  })
+
+  ipcMain.on('terminal:write', (_event, id: string, data: string) => {
+    terminals.get(id)?.write(data)
+  })
+
+  ipcMain.on('terminal:resize', (_event, id: string, cols: number, rows: number) => {
+    terminals.get(id)?.resize(cols, rows)
+  })
+
+  ipcMain.on('terminal:destroy', (_event, id: string) => {
+    const ptyProcess = terminals.get(id)
+    if (ptyProcess) {
+      try { ptyProcess.kill() } catch { /* already exited */ }
+      terminals.delete(id)
+    }
   })
 
   createWindow()

@@ -238,7 +238,23 @@ const api = {
   gitUnstageAll: (rootPath: string): Promise<void> =>
     ipcRenderer.invoke('git:unstage-all', rootPath),
   gitLog: (rootPath: string, limit?: number): Promise<GitCommitEntry[]> =>
-    ipcRenderer.invoke('git:log', rootPath, limit)
+    ipcRenderer.invoke('git:log', rootPath, limit),
+  terminalCreate: (cwd?: string): Promise<string> => ipcRenderer.invoke('terminal:create', cwd),
+  terminalWrite: (id: string, data: string): void => ipcRenderer.send('terminal:write', id, data),
+  terminalResize: (id: string, cols: number, rows: number): void =>
+    ipcRenderer.send('terminal:resize', id, cols, rows),
+  terminalDestroy: (id: string): void => ipcRenderer.send('terminal:destroy', id),
+  onTerminalData: (cb: (id: string, data: string) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, id: string, data: string): void =>
+      cb(id, data)
+    ipcRenderer.on('terminal:data', listener)
+    return () => ipcRenderer.removeListener('terminal:data', listener)
+  },
+  onTerminalExit: (cb: (id: string) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, id: string): void => cb(id)
+    ipcRenderer.on('terminal:exit', listener)
+    return () => ipcRenderer.removeListener('terminal:exit', listener)
+  }
 }
 
 if (process.contextIsolated) {

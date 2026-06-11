@@ -1,16 +1,20 @@
 :root {
-  --bg: #ffffff;
-  --bg-muted: #f5f6f8;
-  --border: #e3e5e8;
-  --text: #1f2328;
-  --text-muted: #656d76;
-  --accent: #0969da;
-  --accent-hover: #0550ae;
-  --warning-bg: #fff8c5;
-  --warning-border: #d4a72c;
-  --error-bg: #ffebe9;
-  --error-border: #cf222e;
-  --error-text: #82071e;
+  --bg: #0e0e11;
+  --bg-muted: #16161a;
+  --bg-raised: #1d1d22;
+  --border: #26262c;
+  --text: #ececf1;
+  --text-muted: #94949f;
+  --accent: #6e9bff;
+  --accent-hover: #8db0ff;
+  --accent-tint: rgba(110, 155, 255, 0.12);
+  --success: #3ecf8e;
+  --warning: #d9a73e;
+  --warning-bg: rgba(217, 167, 62, 0.1);
+  --warning-border: rgba(217, 167, 62, 0.45);
+  --error-bg: rgba(244, 112, 103, 0.1);
+  --error-border: rgba(244, 112, 103, 0.5);
+  --error-text: #f47067;
 }
 
 * {
@@ -34,6 +38,30 @@ body {
   color: var(--text);
   background: var(--bg);
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Slim, low-contrast scrollbars to match the dark chrome. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+  background-clip: content-box;
+  border: 2px solid transparent;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 .app {
@@ -59,8 +87,9 @@ body {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  padding: 16px 0 6px;
+  padding: 40px 0 6px;
   gap: 4px;
+  -webkit-app-region: drag;
 }
 
 .activity-btn {
@@ -75,6 +104,7 @@ body {
   color: var(--text-muted);
   position: relative;
   padding: 0;
+  -webkit-app-region: no-drag;
 }
 
 .activity-btn:hover {
@@ -121,6 +151,7 @@ body {
   overflow: hidden;
   min-width: 0;
   position: relative;
+  padding-top: 28px;
 }
 
 /* Drag handle on the right edge of the side panel. Visually invisible
@@ -313,11 +344,11 @@ body.is-resizing {
 }
 
 .tree-row:hover {
-  background: rgba(9, 105, 218, 0.06);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .tree-row.current {
-  background: rgba(9, 105, 218, 0.14);
+  background: var(--accent-tint);
   color: var(--accent);
   font-weight: 500;
 }
@@ -352,12 +383,12 @@ body.is-resizing {
 }
 
 .icon-btn:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(255, 255, 255, 0.06);
   border-color: var(--border);
 }
 
 .icon-btn[aria-pressed='true'] {
-  background: rgba(9, 105, 218, 0.1);
+  background: var(--accent-tint);
   color: var(--accent);
 }
 
@@ -378,6 +409,9 @@ body.is-resizing {
   margin-bottom: 12px;
   user-select: none;
   -webkit-user-drag: none;
+  /* The mark is solid black; invert it for the dark theme. */
+  filter: invert(1);
+  opacity: 0.95;
 }
 
 .start-screen p {
@@ -388,18 +422,18 @@ body.is-resizing {
 }
 
 button.primary {
-  background: var(--accent);
-  color: white;
+  background: var(--text);
+  color: #131316;
   border: none;
   padding: 8px 16px;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
 }
 
 button.primary:hover {
-  background: var(--accent-hover);
+  background: #ffffff;
 }
 
 button.secondary {
@@ -450,7 +484,7 @@ button.secondary:hover {
 }
 
 .breadcrumb:hover {
-  background: rgba(9, 105, 218, 0.1);
+  background: var(--accent-tint);
 }
 
 .breadcrumb.current {
@@ -653,7 +687,7 @@ button.secondary:hover {
 
 .diagram-canvas .clickable:hover,
 .diagram-canvas .has-navigation-target:hover {
-  filter: drop-shadow(0 4px 10px rgb(0 0 0 / 18%));
+  filter: drop-shadow(0 4px 12px rgb(0 0 0 / 50%));
 }
 
 .diagram-canvas .clickable:hover > rect,
@@ -721,11 +755,12 @@ button.secondary:hover {
 }
 
 .toast {
-  background: #1f2328;
-  color: white;
+  background: var(--bg-raised);
+  color: var(--text);
+  border: 1px solid var(--border);
   padding: 10px 16px;
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   font-size: 13px;
   max-width: 360px;
   pointer-events: auto;
@@ -733,7 +768,8 @@ button.secondary:hover {
 }
 
 .toast.error {
-  background: var(--error-text);
+  background: #3c1f1e;
+  border-color: var(--error-border);
 }
 
 @keyframes toast-in {
@@ -781,42 +817,159 @@ button.secondary:hover {
   gap: 8px;
 }
 
-/* Script controls in the header */
-.script-controls {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 4px;
-}
-
-.script-select {
-  font-family: inherit;
-  font-size: 13px;
-  background: var(--bg);
-  color: var(--text);
+/* Run control — split button in the header: the main segment runs (or
+ * stops) the selected entry, the caret opens a custom popover menu of all
+ * runs. Replaces the old native <select> + attached buttons. */
+.run-control {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
   border: 1px solid var(--border);
-  border-radius: 6px 0 0 6px;
-  padding: 5px 8px;
+  border-radius: 8px;
+  background: var(--bg-raised);
+}
+
+.run-control-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 7px 0 0 7px;
   cursor: pointer;
-  max-width: 160px;
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.script-select:disabled {
-  background: var(--bg-muted);
+.run-control-main:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.run-control-main:disabled {
   color: var(--text-muted);
-  cursor: not-allowed;
+  cursor: default;
 }
 
+.run-glyph {
+  font-size: 9px;
+  color: var(--success);
+}
+
+.run-control-main.is-stop .run-glyph {
+  color: var(--error-text);
+}
+
+.run-control-add {
+  border-radius: 7px;
+  color: var(--text-muted);
+}
+
+.run-control-add:hover {
+  color: var(--text);
+}
+
+.run-control-caret {
+  border: 0;
+  border-left: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 10px;
+  padding: 0 9px;
+  cursor: pointer;
+  border-radius: 0 7px 7px 0;
+}
+
+.run-control-caret:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+
+.run-control-caret:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.run-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 240px;
+  max-width: 340px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  padding: 4px;
+  z-index: 60;
+}
+
+.run-menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+}
+
+.run-menu-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.run-menu-item.is-selected .run-menu-name {
+  color: var(--accent);
+}
+
+.run-menu-name {
+  font-weight: 500;
+}
+
+.run-menu-cmd {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family:
+    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-menu-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 6px;
+}
+
+.run-menu-add {
+  color: var(--accent);
+}
+
+/* Small action buttons (git panel and friends). */
 .script-btn {
   font-family: inherit;
   font-size: 13px;
   border: 1px solid var(--border);
-  border-left: none;
   background: var(--bg);
   color: var(--text);
   padding: 5px 10px;
   cursor: pointer;
-  border-radius: 0 6px 6px 0;
+  border-radius: 6px;
 }
 
 .script-btn:hover {
@@ -824,14 +977,14 @@ button.secondary:hover {
 }
 
 .script-btn.script-run {
-  background: #1f883d;
-  color: white;
-  border-color: #1f883d;
+  background: rgba(62, 207, 142, 0.14);
+  color: var(--success);
+  border-color: rgba(62, 207, 142, 0.4);
 }
 
 .script-btn.script-run:hover {
-  background: #1a7f37;
-  border-color: #1a7f37;
+  background: rgba(62, 207, 142, 0.24);
+  border-color: rgba(62, 207, 142, 0.55);
 }
 
 .script-btn.script-stop {
@@ -841,17 +994,7 @@ button.secondary:hover {
 }
 
 .script-btn.script-stop:hover {
-  background: #ffd7d4;
-}
-
-.script-btn.script-add {
-  border-left: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-muted);
-}
-
-.script-btn.script-add:hover {
-  color: var(--text);
+  background: rgba(244, 112, 103, 0.22);
 }
 
 /* Header chip: shown when a script is running but the output view isn't visible */
@@ -878,12 +1021,12 @@ button.secondary:hover {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #999;
+  background: #5a5a64;
 }
 
 .status-dot.running {
-  background: #1f883d;
-  box-shadow: 0 0 0 0 rgba(31, 136, 61, 0.5);
+  background: var(--success);
+  box-shadow: 0 0 0 0 rgba(62, 207, 142, 0.5);
   animation: pulse 1.4s ease-out infinite;
 }
 
@@ -893,13 +1036,13 @@ button.secondary:hover {
 
 @keyframes pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(31, 136, 61, 0.5);
+    box-shadow: 0 0 0 0 rgba(62, 207, 142, 0.5);
   }
   70% {
-    box-shadow: 0 0 0 6px rgba(31, 136, 61, 0);
+    box-shadow: 0 0 0 6px rgba(62, 207, 142, 0);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(31, 136, 61, 0);
+    box-shadow: 0 0 0 0 rgba(62, 207, 142, 0);
   }
 }
 
@@ -949,8 +1092,8 @@ button.secondary:hover {
   flex: 1;
   margin: 0;
   padding: 12px 16px;
-  background: #0d1117;
-  color: #e6edf3;
+  background: #0a0a0c;
+  color: #e6e6eb;
   font-family:
     ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
   font-size: 12.5px;
@@ -977,7 +1120,7 @@ button.secondary:hover {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   min-width: 180px;
   padding: 4px;
   z-index: 50;
@@ -1012,6 +1155,7 @@ button.secondary:hover {
 .chat-header {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 10px;
   padding: 0 12px;
   min-height: 48px;
@@ -1043,7 +1187,7 @@ button.secondary:hover {
 }
 
 .chat-status-ready .chat-status-dot {
-  background: #1f883d;
+  background: var(--success);
 }
 
 .chat-status-thinking .chat-status-dot,
@@ -1103,7 +1247,7 @@ button.secondary:hover {
 }
 
 .chat-message-user .chat-message-body {
-  background: #ddf4ff;
+  background: var(--accent-tint);
 }
 
 .chat-message-error .chat-message-body {
@@ -1174,7 +1318,7 @@ button.secondary:hover {
 }
 
 .chat-tool-status-completed {
-  color: #1f883d;
+  color: var(--success);
 }
 
 .chat-tool-status-error {
@@ -1198,8 +1342,8 @@ button.secondary:hover {
 }
 
 .chat-tool-diagram {
-  border-color: #d4a72c;
-  background: #fffbe5;
+  border-color: var(--warning-border);
+  background: var(--warning-bg);
 }
 
 .chat-input-row {
@@ -1216,7 +1360,7 @@ button.secondary:hover {
   padding: 12px;
   margin: 0;
   border-top: 1px solid var(--border);
-  background: rgba(31, 111, 235, 0.06);
+  background: rgba(110, 155, 255, 0.07);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -1235,7 +1379,7 @@ button.secondary:hover {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #1f6feb;
+  color: var(--accent);
   font-weight: 600;
 }
 
@@ -1290,7 +1434,7 @@ button.secondary:hover {
 
 .chat-question-option.is-selected {
   border-color: var(--accent);
-  background: rgba(9, 105, 218, 0.08);
+  background: var(--accent-tint);
 }
 
 .chat-question-option-label {
@@ -1408,49 +1552,48 @@ button.secondary:hover {
   margin-bottom: 0;
 }
 
-/* Segmented view switcher */
-.view-switcher {
+/* Floating source/diagram toggle pinned to the document's top-right corner.
+   Sticky + zero height keeps it in the corner while .content scrolls without
+   pushing the document down. */
+.doc-corner {
+  position: sticky;
+  top: 0;
+  height: 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  z-index: 5;
+}
+
+.doc-corner-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 12px 16px 0 0;
+  height: 30px;
+  padding: 0 16px;
   display: inline-flex;
+  align-items: center;
   border: 1px solid var(--border);
   border-radius: 6px;
-  overflow: hidden;
-  background: var(--bg);
-}
-
-.view-switcher-btn {
-  padding: 4px 12px;
-  background: transparent;
-  border: 0;
-  border-right: 1px solid var(--border);
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  letter-spacing: 0.02em;
-}
-
-.view-switcher-btn:last-child {
-  border-right: 0;
-}
-
-.view-switcher-btn:hover:not(.is-active) {
-  background: var(--bg-muted);
+  background: var(--bg-raised);
   color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
 }
 
-.view-switcher-btn.is-active {
-  background: var(--accent);
-  color: #fff;
-  cursor: default;
+.doc-corner-btn:hover {
+  background: #26262c;
+  border-color: #34343c;
 }
 
 /* Read view — magazine-style document reader */
 .read-view {
   flex: 1;
   overflow: auto;
-  background:
-    linear-gradient(180deg, #fafbfc 0%, #ffffff 240px),
-    var(--bg);
+  background: var(--bg);
   font-size: 16px;
   line-height: 1.7;
   color: var(--text);
@@ -1582,7 +1725,7 @@ button.secondary:hover {
 }
 
 .read-prose .diagram-prose pre {
-  background: #f6f8fa;
+  background: var(--bg-muted);
   border: 1px solid var(--border);
   padding: 14px 16px;
   border-radius: 8px;
@@ -1777,7 +1920,7 @@ button.secondary:hover {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   padding: 4px;
   z-index: 40;
   max-height: 320px;
@@ -1806,7 +1949,7 @@ button.secondary:hover {
 }
 
 .chat-session-menu-item.is-current {
-  background: rgba(9, 105, 218, 0.1);
+  background: var(--accent-tint);
   color: var(--accent);
 }
 
@@ -1856,7 +1999,7 @@ button.secondary:hover {
 .mermaid-error-detail {
   margin: 0;
   padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(0, 0, 0, 0.35);
   border: 1px solid var(--error-border);
   border-radius: 4px;
   font-family:
@@ -1995,8 +2138,8 @@ button.secondary:hover {
  * target's #L10-L22 range. Warm GitHub-yellow tint plus a left-edge bar
  * so the range is visible even without scrolling. */
 .cm-target-line {
-  background: rgba(212, 167, 44, 0.18);
-  box-shadow: -3px 0 0 #d4a72c inset;
+  background: rgba(217, 167, 62, 0.14);
+  box-shadow: -3px 0 0 var(--warning) inset;
 }
 
 /* Settings pane — slides in between the session bar and the message list
@@ -2020,7 +2163,7 @@ button.secondary:hover {
   min-height: 360px;
   overflow: hidden;
   background:
-    radial-gradient(circle, rgba(0, 0, 0, 0.06) 1px, transparent 1px) 0 0 / 24px 24px,
+    radial-gradient(circle, rgba(255, 255, 255, 0.05) 1px, transparent 1px) 0 0 / 24px 24px,
     var(--bg);
   cursor: grab;
 }
@@ -2058,7 +2201,7 @@ body.is-panning .diagram-canvas-wrap {
   color: var(--text-muted);
   cursor: pointer;
   font-family: inherit;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   z-index: 5;
 }
 
@@ -2159,9 +2302,9 @@ body.is-panning .diagram-canvas-wrap {
 }
 
 .skills-badge-link {
-  color: #1f6feb;
-  border-color: rgba(31, 111, 235, 0.35);
-  background: rgba(31, 111, 235, 0.08);
+  color: var(--accent);
+  border-color: rgba(110, 155, 255, 0.35);
+  background: rgba(110, 155, 255, 0.08);
 }
 
 .skills-view-title .skills-badge {
@@ -2179,7 +2322,7 @@ body.is-panning .diagram-canvas-wrap {
   padding: 8px 16px;
   font-size: 12px;
   color: var(--text-muted);
-  background: rgba(31, 111, 235, 0.06);
+  background: rgba(110, 155, 255, 0.07);
   border-bottom: 1px solid var(--border);
 }
 
@@ -2264,26 +2407,26 @@ body.is-panning .diagram-canvas-wrap {
 }
 
 .skills-scope-workspace {
-  color: #1f6feb;
-  border-color: rgba(31, 111, 235, 0.35);
-  background: rgba(31, 111, 235, 0.08);
+  color: var(--accent);
+  border-color: rgba(110, 155, 255, 0.35);
+  background: rgba(110, 155, 255, 0.08);
 }
 
 .skills-scope-global {
-  color: #6e40c9;
-  border-color: rgba(110, 64, 201, 0.35);
-  background: rgba(110, 64, 201, 0.08);
+  color: #b392f0;
+  border-color: rgba(179, 146, 240, 0.35);
+  background: rgba(179, 146, 240, 0.08);
 }
 
 .skills-scope-builtin {
-  color: #6e7681;
+  color: #8b8b96;
 }
 
 .skills-dirty-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #d4a72c;
+  background: var(--warning);
   display: inline-block;
 }
 
@@ -2860,4 +3003,104 @@ body.is-panning .diagram-canvas-wrap {
   font-size: 11.5px;
   color: var(--text-muted);
   white-space: pre-wrap;
+}
+
+/* Terminal panel — outer wrapper fills the side panel */
+.terminal-panel-outer {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #0e0e11;
+  overflow: hidden;
+}
+
+/* Tab bar — VS Code-style strip above the terminal */
+.terminal-tab-bar {
+  display: flex;
+  align-items: center;
+  background: #1a1a1f;
+  border-bottom: 1px solid #2a2a32;
+  height: 32px;
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.terminal-tab-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.terminal-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  height: 100%;
+  cursor: pointer;
+  color: #8a8a9a;
+  font-size: 12px;
+  white-space: nowrap;
+  border-right: 1px solid #2a2a32;
+  user-select: none;
+  transition: color 0.1s;
+}
+.terminal-tab:hover {
+  color: #d4d4d4;
+}
+.terminal-tab.active {
+  color: #d4d4d4;
+  background: #0e0e11;
+  border-top: 1px solid #569cd6;
+}
+
+.terminal-tab-label {
+  pointer-events: none;
+}
+
+.terminal-tab-close {
+  background: none;
+  border: none;
+  padding: 0 2px;
+  cursor: pointer;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  border-radius: 3px;
+  opacity: 0.5;
+  transition: opacity 0.1s;
+}
+.terminal-tab-close:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.terminal-add-btn {
+  background: none;
+  border: none;
+  padding: 0 10px;
+  height: 100%;
+  cursor: pointer;
+  color: #8a8a9a;
+  font-size: 16px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color 0.1s;
+}
+.terminal-add-btn:hover {
+  color: #d4d4d4;
+}
+
+/* Container for all terminal instances — stacked absolutely */
+.terminal-instances {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+/* Each instance fills the container; inactive ones are hidden */
+.terminal-instance {
+  position: absolute;
+  inset: 0;
+  padding: 4px 6px;
+  box-sizing: border-box;
 }

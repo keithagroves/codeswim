@@ -12,10 +12,11 @@ import { ScriptOutput } from './components/ScriptOutput'
 import { SearchPanel } from './components/SearchPanel'
 import { SkillsPanel } from './components/SkillsPanel'
 import { SkillsView } from './components/SkillsView'
+import { TerminalPanel } from './components/TerminalPanel'
 import { Toasts } from './components/Toasts'
 import { extname } from './path-utils'
 import { StoreProvider } from './state'
-import { useStore, type FileView } from './store'
+import { useStore } from './store'
 import logoUrl from './assets/codeswim.svg'
 
 function SidePanel(): React.JSX.Element | null {
@@ -60,6 +61,7 @@ function SidePanel(): React.JSX.Element | null {
       {state.activeSection === 'search' ? <SearchPanel /> : null}
       {state.activeSection === 'skills' ? <SkillsPanel /> : null}
       {state.activeSection === 'git' ? <GitPanel /> : null}
+      {state.activeSection === 'terminal' ? <TerminalPanel /> : null}
       <div
         className="side-panel-resizer"
         onMouseDown={onResizeStart}
@@ -70,37 +72,31 @@ function SidePanel(): React.JSX.Element | null {
   )
 }
 
-function ViewSwitcher(): React.JSX.Element | null {
-  const { state, setView } = useStore()
+// Floating toggle pinned to the document's top-right corner. Flips a
+// markdown file between the rendered diagram and its raw source.
+function SourceToggle(): React.JSX.Element | null {
+  const { state, toggleSource } = useStore()
+  if (state.activeSection === 'skills') return null
   if (!state.currentFile) return null
   if (extname(state.currentFile) !== '.md') return null
-  if (state.view === 'output') return null
+  if (state.view !== 'diagram' && state.view !== 'code') return null
 
-  // Read view exists in code but is hidden from the switcher for now —
-  // re-enable by re-adding `{ key: 'read', label: 'Read' }` here.
-  const options: Array<{ key: FileView; label: string }> = [
-    { key: 'diagram', label: 'Diagram' },
-    { key: 'code', label: 'Source' }
-  ]
-
+  const showingSource = state.view === 'code'
   return (
-    <div className="view-switcher" role="group" aria-label="View mode">
-      {options.map((opt) => (
-        <button
-          key={opt.key}
-          className={`view-switcher-btn ${state.view === opt.key ? 'is-active' : ''}`}
-          onClick={() => setView(opt.key)}
-          aria-pressed={state.view === opt.key}
-        >
-          {opt.label}
-        </button>
-      ))}
+    <div className="doc-corner">
+      <button
+        className="doc-corner-btn"
+        onClick={toggleSource}
+        title={showingSource ? 'Show rendered diagram' : 'Show markdown source'}
+      >
+        {showingSource ? 'Diagram' : 'Source'}
+      </button>
     </div>
   )
 }
 
 function Header(): React.JSX.Element {
-  const { state, popTo, showOutput, navigateAbsolute, syncDiagrams } = useStore()
+  const { state, popTo, showOutput, navigateAbsolute } = useStore()
   const canGoBack = state.breadcrumbs.length > 0
   const running = state.runningScript
   const chip = running !== null && state.view !== 'output' ? running : null
@@ -129,14 +125,6 @@ function Header(): React.JSX.Element {
       </button>
       <Breadcrumbs />
       <div className="header-actions">
-        <button
-          className="secondary"
-          onClick={() => void syncDiagrams()}
-          title="Audit diagrams against the code and ask the agent to fix any drift"
-        >
-          ↻ Sync diagrams
-        </button>
-        <ViewSwitcher />
         {chip ? (
           <button
             className={`run-chip ${chip.status === 'running' ? 'is-running' : 'is-exited'}`}
@@ -286,6 +274,7 @@ function Shell(): React.JSX.Element {
         <div className="main-column">
           {state.activeSection === 'skills' ? null : <Header />}
           <div className="content">
+            <SourceToggle />
             <Body />
           </div>
         </div>

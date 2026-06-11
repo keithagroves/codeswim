@@ -56,7 +56,23 @@ function ensureMermaidInitialized(): void {
   mermaid.initialize({
     startOnLoad: false,
     securityLevel: 'loose',
-    theme: 'default',
+    theme: 'base',
+    themeVariables: {
+      darkMode: true,
+      background: '#0e0e11',
+      primaryColor: '#1d1d22',
+      primaryTextColor: '#ececf1',
+      primaryBorderColor: '#3a3a44',
+      secondaryColor: '#26262c',
+      tertiaryColor: '#16161a',
+      lineColor: '#62626e',
+      textColor: '#ececf1',
+      mainBkg: '#1d1d22',
+      nodeBorder: '#3a3a44',
+      clusterBkg: '#141417',
+      clusterBorder: '#26262c',
+      edgeLabelBackground: '#16161a'
+    },
     fontFamily: 'inherit'
   })
   mermaidInitialized = true

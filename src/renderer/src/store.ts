@@ -81,16 +81,16 @@ export interface AppState {
   // Side-panel layout. ActivityBar lives at the very left and stays
   // visible; SidePanel sits to its right and shows whichever section is
   // active. null = side panel collapsed (icons only, like VS Code).
-  activeSection: 'files' | 'agent' | 'search' | 'skills' | 'git' | null
+  activeSection: 'files' | 'agent' | 'search' | 'skills' | 'git' | 'terminal' | null
   // Remembers which section was last open so toggling the panel closed
   // and back open restores it (rather than always returning to 'files').
-  lastActiveSection: 'files' | 'agent' | 'search' | 'skills' | 'git'
+  lastActiveSection: 'files' | 'agent' | 'search' | 'skills' | 'git' | 'terminal'
   // Side panel width in pixels. Persisted to localStorage so it survives
   // reloads.
   sidePanelWidth: number
   // User-controlled order of activity-bar sections (drag-to-reorder).
   // Persisted to localStorage.
-  activityOrder: Array<'agent' | 'files' | 'search' | 'skills' | 'git'>
+  activityOrder: Array<'agent' | 'files' | 'search' | 'skills' | 'git' | 'terminal'>
   // Selected skill in the Skills view (null = nothing picked yet).
   // linkTarget is set when the skill directory is a symlink, so the view
   // can show where it came from and adjust delete messaging. `file` is the
@@ -139,10 +139,10 @@ export interface StoreApi {
   toggleSidebar(): void
   refreshTree(): Promise<void>
   sendChat(text: string): Promise<void>
-  setActiveSection(section: 'files' | 'agent' | 'search' | 'skills' | 'git' | null): void
-  toggleActiveSection(section: 'files' | 'agent' | 'search' | 'skills' | 'git'): void
+  setActiveSection(section: 'files' | 'agent' | 'search' | 'skills' | 'git' | 'terminal' | null): void
+  toggleActiveSection(section: 'files' | 'agent' | 'search' | 'skills' | 'git' | 'terminal'): void
   setSidePanelWidth(width: number): void
-  setActivityOrder(order: Array<'agent' | 'files' | 'search' | 'skills' | 'git'>): void
+  setActivityOrder(order: Array<'agent' | 'files' | 'search' | 'skills' | 'git' | 'terminal'>): void
   setCurrentSkill(
     skill:
       | {

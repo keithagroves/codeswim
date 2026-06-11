@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../store'
 
-type Section = 'agent' | 'files' | 'search' | 'skills' | 'git'
+type Section = 'agent' | 'files' | 'search' | 'skills' | 'git' | 'terminal'
 
 interface Item {
   key: Section
@@ -87,6 +87,22 @@ function SkillsIcon(): React.JSX.Element {
   )
 }
 
+function TerminalIcon(): React.JSX.Element {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M7 9l3.5 3L7 15"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <line x1="13" y1="15" x2="17" y2="15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 function GitIcon(): React.JSX.Element {
   // Commit-graph glyph: two nodes on a line with a branch tap.
   return (
@@ -109,7 +125,8 @@ const ITEM_BY_KEY: Record<Section, Item> = {
   files: { key: 'files', label: 'Files', icon: <FolderIcon /> },
   search: { key: 'search', label: 'Search', icon: <SearchIcon /> },
   skills: { key: 'skills', label: 'Skills', icon: <SkillsIcon /> },
-  git: { key: 'git', label: 'Commit', icon: <GitIcon /> }
+  git: { key: 'git', label: 'Commit', icon: <GitIcon /> },
+  terminal: { key: 'terminal', label: 'Terminal', icon: <TerminalIcon /> }
 }
 
 export function ActivityBar(): React.JSX.Element {

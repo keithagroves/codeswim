@@ -8,5 +8,10 @@
     <true/>
     <key>com.apple.security.cs.allow-dyld-environment-variables</key>
     <true/>
+    <!-- Required under hardened runtime so the app can load/run the bundled
+         opencode binary (signed by us during the build, but a separate
+         Mach-O) and any native modules. -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
   </dict>
 </plist>
