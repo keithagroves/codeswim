@@ -184,8 +184,8 @@ function StartScreen(): React.JSX.Element {
     <div className="start-screen">
       <img className="start-screen-logo" src={logoUrl} alt="codeswim" />
       <p>
-        Pick a folder of markdown files with embedded mermaid diagrams. The agent in the side
-        panel edits diagrams first, then code at the leaves.
+        Pick a folder of markdown files with embedded mermaid diagrams. The agent in the side panel
+        edits diagrams first, then code at the leaves.
       </p>
       <div className="start-screen-actions">
         <button className="primary" onClick={() => void newProject()}>
@@ -230,8 +230,26 @@ function StartScreen(): React.JSX.Element {
   )
 }
 
+// Ctrl+` toggles the terminal panel, as in VS Code. Uses e.code so it
+// keys off the physical backquote key regardless of keyboard layout, and
+// the capture phase so focused inputs can't swallow it.
+function useTerminalShortcut(): void {
+  const { toggleActiveSection } = useStore()
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && e.code === 'Backquote') {
+        e.preventDefault()
+        toggleActiveSection('terminal')
+      }
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [toggleActiveSection])
+}
+
 function Shell(): React.JSX.Element {
   const { state } = useStore()
+  useTerminalShortcut()
 
   if (!state.rootPath) {
     // Skills view works without a workspace open — global + built-in skills

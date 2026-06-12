@@ -6,6 +6,13 @@
 
 
 
+- add a internal browser like codex. The agent should be able to view and control this browser to help debug and improve. 
+
+
+- Agent.md should be viewable in the skills menu.
+
+- We should stop using a system.txt etc and use an Agent.md probably. I need to ask some questions before updateing this
+
 
 FUTURE FEATURES:
 

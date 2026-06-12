@@ -98,20 +98,27 @@ type Action =
   | { type: 'hide-output' }
   | { type: 'set-tree'; tree: TreeNode[] }
   | { type: 'toggle-sidebar' }
-  | { type: 'set-active-section'; section: 'files' | 'agent' | 'search' | 'skills' | 'git' | null }
-  | { type: 'toggle-active-section'; section: 'files' | 'agent' | 'search' | 'skills' | 'git' }
+  | {
+      type: 'set-active-section'
+      section: 'files' | 'agent' | 'search' | 'skills' | 'git' | 'terminal' | null
+    }
+  | {
+      type: 'toggle-active-section'
+      section: 'files' | 'agent' | 'search' | 'skills' | 'git' | 'terminal'
+    }
   | { type: 'set-side-panel-width'; width: number }
-  | { type: 'set-activity-order'; order: Array<'agent' | 'files' | 'search' | 'skills' | 'git'> }
+  | {
+      type: 'set-activity-order'
+      order: Array<'agent' | 'files' | 'search' | 'skills' | 'git' | 'terminal'>
+    }
   | {
       type: 'set-current-skill'
-      skill:
-        | {
-            scope: 'global' | 'workspace' | 'builtin'
-            name: string
-            linkTarget?: string
-            file?: string
-          }
-        | null
+      skill: {
+        scope: 'global' | 'workspace' | 'builtin'
+        name: string
+        linkTarget?: string
+        file?: string
+      } | null
     }
   | { type: 'set-pending-question'; question: PendingQuestion | null }
   | { type: 'toggle-source' }
@@ -358,84 +365,81 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       }))
       .filter((m) => m.parts.length > 0)
 
-  const ensureAgent = useCallback(
-    async (rootPath: string): Promise<AgentClient | null> => {
-      if (agentRef.current) return agentRef.current
-      try {
-        dispatch({ type: 'chat-status', status: 'connecting' })
-        const conn = await window.api.startHarness(rootPath)
-        const agent = await connectAgent(conn.url, rootPath)
-        agentRef.current = agent
+  const ensureAgent = useCallback(async (rootPath: string): Promise<AgentClient | null> => {
+    if (agentRef.current) return agentRef.current
+    try {
+      dispatch({ type: 'chat-status', status: 'connecting' })
+      const conn = await window.api.startHarness(rootPath)
+      const agent = await connectAgent(conn.url, rootPath)
+      agentRef.current = agent
 
-        // Stream incremental parts (text deltas, tool starts, reasoning) into
-        // the active session as they arrive, so the user sees the agent
-        // working instead of a static "thinking…" placeholder.
-        agent.subscribeParts(({ sessionID, messageID, part }) => {
-          if (sessionID !== stateRef.current.currentSessionId) return
-          dispatch({ type: 'chat-upsert-part', messageID, part })
+      // Stream incremental parts (text deltas, tool starts, reasoning) into
+      // the active session as they arrive, so the user sees the agent
+      // working instead of a static "thinking…" placeholder.
+      agent.subscribeParts(({ sessionID, messageID, part }) => {
+        if (sessionID !== stateRef.current.currentSessionId) return
+        dispatch({ type: 'chat-upsert-part', messageID, part })
+      })
+
+      // Forward question events for the current session. We only ever
+      // render one prompt at a time — opencode shouldn't fire concurrent
+      // questions for a single session in practice.
+      agent.subscribeQuestions((event) => {
+        if (event.kind === 'asked') {
+          if (event.question.sessionID !== stateRef.current.currentSessionId) return
+          dispatch({ type: 'set-pending-question', question: event.question })
+        } else {
+          const pending = stateRef.current.pendingQuestion
+          if (pending && pending.id === event.requestID) {
+            dispatch({ type: 'set-pending-question', question: null })
+          }
+        }
+      })
+
+      // Populate the session list and load the most recent session (or
+      // create one if there's no history for this workspace yet).
+      const sessions = await agent.listSessions()
+      dispatch({ type: 'sessions-set', sessions })
+
+      let activeSessionId: string
+      if (sessions.length === 0) {
+        const created = await agent.createSession()
+        dispatch({ type: 'sessions-set', sessions: [created] })
+        dispatch({ type: 'session-set-current', sessionId: created.id, messages: [] })
+        activeSessionId = created.id
+      } else {
+        const latest = sessions[0]
+        const messages = await agent.loadMessages(latest.id)
+        dispatch({
+          type: 'session-set-current',
+          sessionId: latest.id,
+          messages: toChatMessages(messages)
         })
+        activeSessionId = latest.id
+      }
 
-        // Forward question events for the current session. We only ever
-        // render one prompt at a time — opencode shouldn't fire concurrent
-        // questions for a single session in practice.
-        agent.subscribeQuestions((event) => {
-          if (event.kind === 'asked') {
-            if (event.question.sessionID !== stateRef.current.currentSessionId) return
-            dispatch({ type: 'set-pending-question', question: event.question })
-          } else {
-            const pending = stateRef.current.pendingQuestion
-            if (pending && pending.id === event.requestID) {
-              dispatch({ type: 'set-pending-question', question: null })
-            }
+      // Pick up any question opencode raised before we connected (e.g.
+      // the agent asked a question last session and the user closed the
+      // app without answering).
+      void agent
+        .listPendingQuestions(activeSessionId)
+        .then((pending) => {
+          if (pending.length > 0) {
+            dispatch({ type: 'set-pending-question', question: pending[0] })
           }
         })
+        .catch(() => {
+          // best-effort; missing pending questions are non-fatal
+        })
 
-        // Populate the session list and load the most recent session (or
-        // create one if there's no history for this workspace yet).
-        const sessions = await agent.listSessions()
-        dispatch({ type: 'sessions-set', sessions })
-
-        let activeSessionId: string
-        if (sessions.length === 0) {
-          const created = await agent.createSession()
-          dispatch({ type: 'sessions-set', sessions: [created] })
-          dispatch({ type: 'session-set-current', sessionId: created.id, messages: [] })
-          activeSessionId = created.id
-        } else {
-          const latest = sessions[0]
-          const messages = await agent.loadMessages(latest.id)
-          dispatch({
-            type: 'session-set-current',
-            sessionId: latest.id,
-            messages: toChatMessages(messages)
-          })
-          activeSessionId = latest.id
-        }
-
-        // Pick up any question opencode raised before we connected (e.g.
-        // the agent asked a question last session and the user closed the
-        // app without answering).
-        void agent
-          .listPendingQuestions(activeSessionId)
-          .then((pending) => {
-            if (pending.length > 0) {
-              dispatch({ type: 'set-pending-question', question: pending[0] })
-            }
-          })
-          .catch(() => {
-            // best-effort; missing pending questions are non-fatal
-          })
-
-        dispatch({ type: 'chat-status', status: 'ready' })
-        return agent
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        dispatch({ type: 'chat-status', status: 'error', error: msg })
-        return null
-      }
-    },
-    []
-  )
+      dispatch({ type: 'chat-status', status: 'ready' })
+      return agent
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      dispatch({ type: 'chat-status', status: 'error', error: msg })
+      return null
+    }
+  }, [])
 
   const sendChat = useCallback(
     async (text: string) => {
@@ -582,12 +586,12 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
   }, [])
 
   const setActiveSection = useCallback(
-    (section: 'files' | 'agent' | 'search' | 'skills' | 'git' | null) =>
+    (section: 'files' | 'agent' | 'search' | 'skills' | 'git' | 'terminal' | null) =>
       dispatch({ type: 'set-active-section', section }),
     []
   )
   const toggleActiveSection = useCallback(
-    (section: 'files' | 'agent' | 'search' | 'skills' | 'git') =>
+    (section: 'files' | 'agent' | 'search' | 'skills' | 'git' | 'terminal') =>
       dispatch({ type: 'toggle-active-section', section }),
     []
   )
@@ -596,27 +600,22 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
     []
   )
   const setActivityOrder = useCallback(
-    (order: Array<'agent' | 'files' | 'search' | 'skills' | 'git'>) =>
+    (order: Array<'agent' | 'files' | 'search' | 'skills' | 'git' | 'terminal'>) =>
       dispatch({ type: 'set-activity-order', order }),
     []
   )
   const setCurrentSkill = useCallback(
     (
-      skill:
-        | {
-            scope: 'global' | 'workspace' | 'builtin'
-            name: string
-            linkTarget?: string
-            file?: string
-          }
-        | null
+      skill: {
+        scope: 'global' | 'workspace' | 'builtin'
+        name: string
+        linkTarget?: string
+        file?: string
+      } | null
     ) => dispatch({ type: 'set-current-skill', skill }),
     []
   )
-  const toggleChatSettings = useCallback(
-    () => dispatch({ type: 'chat-toggle-settings' }),
-    []
-  )
+  const toggleChatSettings = useCallback(() => dispatch({ type: 'chat-toggle-settings' }), [])
 
   const fetchProviderMethods = useCallback(async (): Promise<ProviderAuthMap> => {
     const root = stateRef.current.rootPath
@@ -1002,7 +1001,8 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
   useEffect(() => {
     return window.api.onHarnessExit(({ code, signal, stderrTail }) => {
       agentRef.current = null
-      const tail = stderrTail.length > 0 ? `\n\nLast stderr:\n${stderrTail.slice(-10).join('\n')}` : ''
+      const tail =
+        stderrTail.length > 0 ? `\n\nLast stderr:\n${stderrTail.slice(-10).join('\n')}` : ''
       const sigPart = signal ? `, signal ${signal}` : ''
       dispatch({
         type: 'chat-status',
