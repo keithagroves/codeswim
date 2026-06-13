@@ -115,6 +115,13 @@ export interface GitInitResult {
   createdGitignore: boolean
 }
 
+export interface GitIgnoreResult {
+  // Patterns actually appended to .gitignore (ones already present are skipped).
+  added: string[]
+  // Paths that had to be `git rm --cached` because they were already tracked.
+  untracked: string[]
+}
+
 export interface GitCommitEntry {
   hash: string
   shortHash: string
@@ -205,7 +212,10 @@ export interface DiagramNavApi {
   ): Promise<void>
   gitStatus(rootPath: string): Promise<GitStatus>
   gitStagedDiff(rootPath: string): Promise<string>
+  gitWorkingDiff(rootPath: string): Promise<string>
   gitCommit(rootPath: string, subject: string, body: string): Promise<string>
+  gitCommitGroup(rootPath: string, paths: string[], subject: string, body: string): Promise<string>
+  gitAddToGitignore(rootPath: string, patterns: string[]): Promise<GitIgnoreResult>
   gitInit(rootPath: string): Promise<GitInitResult>
   gitStageAll(rootPath: string): Promise<void>
   gitUnstageAll(rootPath: string): Promise<void>

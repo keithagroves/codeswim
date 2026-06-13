@@ -235,6 +235,139 @@ export async function gitStagedDiff(rootPath: string): Promise<string> {
   return git(rootPath, ['diff', '--staged', '--no-color'])
 }
 
+// The whole working picture for the Sync triage: every tracked change vs HEAD
+// (staged or not) plus newly added files. `git add -N` records untracked files
+// as intent-to-add so `git diff HEAD` includes them, then we undo the intent so
+// the index is left exactly as we found it — triage is a read-only inspection.
+//
+// On a repo with no commits yet there's no HEAD to diff against, so we fall
+// back to diffing the empty tree (every file reads as an addition).
+export async function gitWorkingDiff(rootPath: string): Promise<string> {
+  const untracked = (await git(rootPath, ['ls-files', '--others', '--exclude-standard', '-z']))
+    .split('\0')
+    .filter((p) => p.length > 0)
+
+  if (untracked.length > 0) {
+    await git(rootPath, ['add', '-N', '--', ...untracked])
+  }
+  try {
+    let hasHead = true
+    try {
+      await git(rootPath, ['rev-parse', '--verify', 'HEAD'])
+    } catch {
+      hasHead = false
+    }
+    const base = hasHead
+      ? ['diff', 'HEAD', '--no-color']
+      : // 4b825dc… is git's canonical empty-tree object: diffing against it
+        // makes the very first commit's files show up as additions.
+        ['diff', '--no-color', '4b825dc642cb6eb9a060e54bf8d69288fbee4904']
+    return await git(rootPath, base)
+  } finally {
+    // Drop the intent-to-add marks regardless of how the diff went.
+    if (untracked.length > 0) {
+      await git(rootPath, ['reset', '--quiet', '--', ...untracked]).catch(() => {})
+    }
+  }
+}
+
+// Commit exactly the given paths as one isolated commit: clear the index, stage
+// just this group (`add -A` so deletions and additions both land), then commit.
+// Sequential calls from the panel each produce a clean, single-purpose commit.
+// Drop any untracked path that git would refuse to `add` because it's ignored.
+// `git check-ignore` exits 0 and prints the ignored paths, exits 1 (which our
+// git() wrapper throws on) when none match, and — importantly — reports a
+// tracked-but-ignored path as NOT ignored, so those still stage correctly. A
+// stale plan can carry an untracked `dist/` the user just ignored; without this
+// the whole commit would abort.
+async function dropIgnoredPaths(rootPath: string, paths: string[]): Promise<string[]> {
+  if (paths.length === 0) return []
+  let ignoredOut: string
+  try {
+    ignoredOut = await git(rootPath, ['check-ignore', '-z', '--', ...paths])
+  } catch {
+    // Exit 1 = nothing ignored (or check-ignore unavailable) — keep them all.
+    return paths
+  }
+  const ignored = new Set(ignoredOut.split('\0').filter((p) => p.length > 0))
+  return paths.filter((p) => !ignored.has(p))
+}
+
+export async function gitCommitGroup(
+  rootPath: string,
+  paths: string[],
+  subject: string,
+  body: string
+): Promise<string> {
+  const trimmedSubject = subject.trim()
+  if (!trimmedSubject) throw new Error('commit subject is empty')
+  if (paths.length === 0) throw new Error('no files in this commit group')
+  const stageable = await dropIgnoredPaths(rootPath, paths)
+  if (stageable.length === 0) {
+    throw new Error('Every file in this commit is ignored by .gitignore — nothing to save.')
+  }
+  await gitUnstageAll(rootPath)
+  await git(rootPath, ['add', '-A', '--', ...stageable])
+  const args = ['commit', '-m', trimmedSubject]
+  if (body.trim()) args.push('-m', body)
+  await git(rootPath, args)
+  const sha = await git(rootPath, ['rev-parse', 'HEAD'])
+  return sha.trim()
+}
+
+export interface GitIgnoreResult {
+  // Patterns we actually appended (ones already present are skipped).
+  added: string[]
+  // Paths we had to `git rm --cached` because they were already tracked —
+  // adding them to .gitignore alone wouldn't stop tracking them.
+  untracked: string[]
+}
+
+// Append patterns to .gitignore (creating it if absent), de-duplicating against
+// what's already there, and stop tracking any path that git already follows so
+// the ignore actually takes effect. Used by the Sync triage's "ignore instead"
+// guardrail for secrets / build output / large blobs.
+export async function gitAddToGitignore(
+  rootPath: string,
+  patterns: string[]
+): Promise<GitIgnoreResult> {
+  const clean = patterns.map((p) => p.trim()).filter((p) => p.length > 0)
+  if (clean.length === 0) return { added: [], untracked: [] }
+
+  const file = path.join(rootPath, '.gitignore')
+  let existing = ''
+  try {
+    existing = await fs.readFile(file, 'utf-8')
+  } catch {
+    // No .gitignore yet — we'll create one.
+  }
+  const present = new Set(
+    existing
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0 && !l.startsWith('#'))
+  )
+  const added = clean.filter((p) => !present.has(p))
+  if (added.length > 0) {
+    const prefix = existing.length > 0 && !existing.endsWith('\n') ? '\n' : ''
+    const block = `${prefix}\n# Added by codeswim sync\n${added.join('\n')}\n`
+    await fs.appendFile(file, block, 'utf-8')
+  }
+
+  // Stop tracking anything that matches and is already tracked. `git rm
+  // --cached` removes it from the index but leaves it on disk.
+  const untracked: string[] = []
+  for (const p of clean) {
+    try {
+      await git(rootPath, ['rm', '-r', '--cached', '--quiet', '--ignore-unmatch', '--', p])
+      untracked.push(p)
+    } catch {
+      // Not tracked (or no match) — the .gitignore entry alone suffices.
+    }
+  }
+  return { added, untracked }
+}
+
 export async function gitCommit(rootPath: string, subject: string, body: string): Promise<string> {
   const trimmedSubject = subject.trim()
   if (!trimmedSubject) throw new Error('commit subject is empty')
@@ -264,31 +397,32 @@ const LOG_RECORD = '\u001e'
 
 // Pure parser for the custom `git log` format below. Exported for testing.
 export function parseGitLog(raw: string): GitCommitEntry[] {
-  return raw
-    .split(LOG_RECORD)
-    // git joins records with a newline; strip the leading one off each.
-    .map((r) => r.replace(/^\n+/, ''))
-    .filter((r) => r.trim().length > 0)
-    .map((rec) => {
-      const parts = rec.split(LOG_FIELD)
-      const hash = (parts[0] ?? '').trim()
-      const body = (parts[4] ?? '').trim()
-      return {
-        hash,
-        shortHash: hash.slice(0, 7),
-        author: parts[1] ?? '',
-        date: parts[2] ?? '',
-        subject: parts[3] ?? '',
-        body,
-        synthesized: /^Codeswim-Synthesized:\s*true\s*$/m.test(body)
-      }
-    })
-    .filter((c) => c.hash.length > 0)
+  return (
+    raw
+      .split(LOG_RECORD)
+      // git joins records with a newline; strip the leading one off each.
+      .map((r) => r.replace(/^\n+/, ''))
+      .filter((r) => r.trim().length > 0)
+      .map((rec) => {
+        const parts = rec.split(LOG_FIELD)
+        const hash = (parts[0] ?? '').trim()
+        const body = (parts[4] ?? '').trim()
+        return {
+          hash,
+          shortHash: hash.slice(0, 7),
+          author: parts[1] ?? '',
+          date: parts[2] ?? '',
+          subject: parts[3] ?? '',
+          body,
+          synthesized: /^Codeswim-Synthesized:\s*true\s*$/m.test(body)
+        }
+      })
+      .filter((c) => c.hash.length > 0)
+  )
 }
 
 export async function gitLog(rootPath: string, limit = 100): Promise<GitCommitEntry[]> {
-  const fmt =
-    ['%H', '%an', '%aI', '%s', '%b'].join(LOG_FIELD) + LOG_RECORD
+  const fmt = ['%H', '%an', '%aI', '%s', '%b'].join(LOG_FIELD) + LOG_RECORD
   let out: string
   try {
     out = await git(rootPath, [

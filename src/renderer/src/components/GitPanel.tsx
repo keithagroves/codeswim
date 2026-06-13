@@ -3,7 +3,7 @@ import { useStore } from '../store'
 import type { GitStatus, GitCommitEntry } from '../../../preload/index.d'
 import { runCoverage } from '../coverage/run'
 import type { CoverageReport } from '../coverage/coverage'
-import { composeCommitBody, buildTrailers } from '../commit/synthesize'
+import type { SyncPlan } from '../commit/triage'
 
 type Tab = 'changes' | 'history'
 
@@ -24,11 +24,15 @@ function relTime(iso: string): string {
   return `${Math.floor(mo / 12)}y ago`
 }
 
+// The Sync flow is a small state machine. We never show the user "staged" vs
+// "unstaged" — they see their changes, press Sync, and the agent sorts out
+// grouping / ignoring / committing.
 type Phase =
   | { kind: 'idle' }
   | { kind: 'working'; label: string }
   | { kind: 'blocked'; report: CoverageReport }
-  | { kind: 'review'; subject: string; body: string }
+  | { kind: 'plan'; plan: SyncPlan }
+  | { kind: 'done'; commits: Array<{ subject: string; sha: string }> }
   | { kind: 'error'; message: string }
 
 function coverageIssueCount(r: CoverageReport): number {
@@ -40,26 +44,45 @@ function coverageIssueCount(r: CoverageReport): number {
   )
 }
 
-// Single-letter status from the porcelain index code, for the staged list.
-function codeLabel(code: string): string {
+// Plain-language verb for a porcelain worktree/index code, for the change list.
+function changeVerb(code: string): string {
   switch (code) {
     case 'A':
       return 'added'
     case 'M':
-      return 'modified'
+      return 'edited'
     case 'D':
       return 'deleted'
     case 'R':
       return 'renamed'
     case 'C':
       return 'copied'
+    case '?':
+      return 'new'
     default:
-      return code
+      return 'changed'
   }
 }
 
+// Collapse git's staged/unstaged/untracked split into a single list the user
+// can read: one row per path with a plain-language verb. Staged wins over
+// worktree for the verb, untracked reads as "new".
+interface SimpleChange {
+  path: string
+  verb: string
+}
+function flattenChanges(git: GitStatus): SimpleChange[] {
+  const byPath = new Map<string, string>()
+  for (const f of git.unstaged) byPath.set(f.path, changeVerb(f.worktree))
+  for (const f of git.staged) byPath.set(f.path, changeVerb(f.index))
+  for (const p of git.untracked) byPath.set(p, 'new')
+  return [...byPath.entries()]
+    .map(([path, verb]) => ({ path, verb }))
+    .sort((a, b) => a.path.localeCompare(b.path))
+}
+
 export function GitPanel(): React.JSX.Element {
-  const { state, toast, synthesizeCommitMessage, syncDiagrams } = useStore()
+  const { state, toast, planSync, commitGroup, addToGitignore, syncDiagrams } = useStore()
   const root = state.rootPath
   const [git, setGit] = useState<GitStatus | null>(null)
   const [statusError, setStatusError] = useState<string | null>(null)
@@ -71,8 +94,6 @@ export function GitPanel(): React.JSX.Element {
   const [historyNonce, setHistoryNonce] = useState(0)
 
   const refreshStatus = useCallback(async () => {
-    // When there's no workspace the panel renders its empty state and never
-    // reads `git`, so we skip rather than reset synchronously here.
     if (!root) return
     try {
       const s = await window.api.gitStatus(root)
@@ -85,9 +106,9 @@ export function GitPanel(): React.JSX.Element {
   }, [root])
 
   // Load on mount / when the workspace changes, and whenever the file tree
-  // shifts (stage/unstage shows up as changes the watcher already reports).
-  // Inlined (rather than calling refreshStatus) so the only setState calls
-  // happen after an await — keeps the effect off the cascading-render path.
+  // shifts. Inlined (rather than calling refreshStatus) so the only setState
+  // calls happen after an await — keeps the effect off the cascading-render
+  // path.
   useEffect(() => {
     if (!root) return
     let cancelled = false
@@ -111,8 +132,7 @@ export function GitPanel(): React.JSX.Element {
   }, [root, state.tree])
 
   // Load commit history when the History tab is active (and after each new
-  // commit, via historyNonce). Inlined for the same setState-after-await
-  // reason as the status effect.
+  // commit, via historyNonce).
   useEffect(() => {
     if (tab !== 'history' || !root) return
     let cancelled = false
@@ -135,67 +155,87 @@ export function GitPanel(): React.JSX.Element {
     }
   }, [tab, root, historyNonce])
 
-  const onCompose = useCallback(async () => {
-    if (!root) return
-    // 1. Coverage gates first — never synthesize for a commit we'd refuse.
-    setPhase({ kind: 'working', label: 'Checking diagram coverage…' })
-    let report: CoverageReport
-    try {
-      report = await runCoverage(root)
-    } catch (err) {
-      setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
-      return
-    }
-    // Only enforce the diagram gate for codeswim-style repos — ones that
-    // actually have diagrams to keep aligned. A plain project (no diagrams,
-    // e.g. right after `git init`) has nothing to drift, so skip the block.
-    if (report.totals.diagrams > 0 && coverageIssueCount(report) > 0) {
-      setPhase({ kind: 'blocked', report })
-      return
-    }
-    // 2. Coverage clean — synthesize the prompt from the staged diff.
-    setPhase({ kind: 'working', label: 'Reading staged diff…' })
-    let diff: string
-    try {
-      diff = await window.api.gitStagedDiff(root)
-    } catch (err) {
-      setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
-      return
-    }
-    if (!diff.trim()) {
-      setPhase({ kind: 'error', message: 'Nothing staged — stage changes before composing.' })
-      return
-    }
-    setPhase({ kind: 'working', label: 'Synthesizing commit prompt…' })
-    try {
-      const msg = await synthesizeCommitMessage(diff)
-      setPhase({ kind: 'review', subject: msg.subject, body: msg.body })
-    } catch (err) {
-      setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
-    }
-  }, [root, synthesizeCommitMessage])
-
-  const onCommit = useCallback(
-    async (subject: string, body: string) => {
+  // Commit every group in a plan, sequentially, then land on the done screen.
+  const commitPlan = useCallback(
+    async (plan: SyncPlan) => {
       if (!root) return
-      const trimmed = subject.trim()
-      if (!trimmed) {
-        toast('Commit subject is empty.', 'error')
-        return
-      }
       setPhase({ kind: 'working', label: 'Committing…' })
+      const done: Array<{ subject: string; sha: string }> = []
       try {
-        const fullBody = composeCommitBody(body, { coveragePassed: true })
-        const sha = await window.api.gitCommit(root, trimmed, fullBody)
-        toast(`Committed ${sha.slice(0, 7)}`, 'info')
-        setPhase({ kind: 'idle' })
+        for (const g of plan.groups) {
+          const sha = await commitGroup(g.paths, g.subject, g.body)
+          done.push({ subject: g.subject, sha })
+        }
+        setPhase({ kind: 'done', commits: done })
         setHistoryNonce((n) => n + 1)
-        void refreshStatus()
+        await refreshStatus()
       } catch (err) {
         setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
       }
     },
-    [root, toast, refreshStatus]
+    [root, commitGroup, refreshStatus]
+  )
+
+  // The Sync button. Coverage-gates first (for diagram repos), then asks the
+  // agent to triage. A simple, safe change commits itself; anything else lands
+  // on the review screen.
+  const onSync = useCallback(
+    async (instruction?: string) => {
+      if (!root) return
+      setPhase({ kind: 'working', label: 'Looking at your changes…' })
+
+      // 1. Coverage gate — only for codeswim-style repos that have diagrams.
+      let report: CoverageReport
+      try {
+        report = await runCoverage(root)
+      } catch (err) {
+        setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
+        return
+      }
+      if (report.totals.diagrams > 0 && coverageIssueCount(report) > 0) {
+        setPhase({ kind: 'blocked', report })
+        return
+      }
+
+      // 2. Gather the working picture.
+      let status: GitStatus
+      let diff: string
+      try {
+        status = await window.api.gitStatus(root)
+        diff = await window.api.gitWorkingDiff(root)
+      } catch (err) {
+        setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
+        return
+      }
+      const changes = flattenChanges(status)
+      if (changes.length === 0) {
+        setPhase({ kind: 'error', message: 'Nothing has changed since your last commit.' })
+        return
+      }
+      const changedPaths = changes.map((c) => c.path)
+
+      // 3. Triage with the agent.
+      setPhase({ kind: 'working', label: 'Asking the agent to sort it out…' })
+      let plan: SyncPlan
+      try {
+        plan = await planSync(diff, changedPaths, instruction)
+      } catch (err) {
+        setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
+        return
+      }
+      if (plan.groups.length === 0) {
+        setPhase({ kind: 'error', message: 'The agent could not find anything to commit.' })
+        return
+      }
+
+      // 4. Obvious + safe → just commit. Otherwise let the user review.
+      if (plan.obvious) {
+        await commitPlan(plan)
+        return
+      }
+      setPhase({ kind: 'plan', plan })
+    },
+    [root, planSync, commitPlan]
   )
 
   const onInit = useCallback(async () => {
@@ -216,51 +256,45 @@ export function GitPanel(): React.JSX.Element {
     }
   }, [root, refreshStatus, toast])
 
-  const onStageAll = useCallback(async () => {
-    if (!root) return
-    try {
-      await window.api.gitStageAll(root)
-      await refreshStatus()
-    } catch (err) {
-      toast(err instanceof Error ? err.message : String(err), 'error')
-    }
-  }, [root, refreshStatus, toast])
-
-  const onUnstageAll = useCallback(async () => {
-    if (!root) return
-    try {
-      await window.api.gitUnstageAll(root)
-      await refreshStatus()
-    } catch (err) {
-      toast(err instanceof Error ? err.message : String(err), 'error')
-    }
-  }, [root, refreshStatus, toast])
+  const onIgnore = useCallback(
+    async (patterns: string[]) => {
+      try {
+        await addToGitignore(patterns)
+        toast(`Now ignoring ${patterns.join(', ')}.`, 'info')
+        await refreshStatus()
+        // Re-triage so the ignored files drop out of the plan.
+        await onSync()
+      } catch (err) {
+        toast(err instanceof Error ? err.message : String(err), 'error')
+      }
+    },
+    [addToGitignore, toast, refreshStatus, onSync]
+  )
 
   if (!root) {
     return (
-      <aside className="git-panel" aria-label="Commit">
+      <aside className="git-panel" aria-label="Sync">
         <div className="git-panel-header">
-          <span className="sidebar-title">Commit</span>
+          <span className="sidebar-title">Sync</span>
         </div>
-        <div className="sidebar-empty">Open a folder to commit.</div>
+        <div className="sidebar-empty">Open a folder to sync your work.</div>
       </aside>
     )
   }
 
-  // Folder isn't a git repo yet — offer to initialize one, then the normal
-  // flow (stage → compose → commit) takes over for the first commit.
+  // Folder isn't a git repo yet — offer to initialize one.
   if (git && !git.isRepo) {
     return (
-      <aside className="git-panel" aria-label="Commit">
+      <aside className="git-panel" aria-label="Sync">
         <div className="git-panel-header">
-          <span className="sidebar-title">Commit</span>
+          <span className="sidebar-title">Sync</span>
         </div>
         <div className="git-panel-body">
           <div className="git-init">
-            <div className="git-init-title">This folder isn’t a git repository</div>
+            <div className="git-init-title">This folder isn’t tracked yet</div>
             <p className="git-init-hint">
-              Initialize one to start tracking changes, then create your first
-              commit through the same compose flow.
+              Start tracking your work so you can save versions of it and sync. We’ll add a sensible
+              ignore list for things that shouldn’t be saved.
             </p>
             <div className="git-actions">
               <button
@@ -268,7 +302,7 @@ export function GitPanel(): React.JSX.Element {
                 disabled={phase.kind === 'working'}
                 onClick={() => void onInit()}
               >
-                {phase.kind === 'working' ? 'Initializing…' : 'Initialize repository'}
+                {phase.kind === 'working' ? 'Starting…' : 'Start tracking'}
               </button>
             </div>
             {phase.kind === 'error' ? <div className="git-error">{phase.message}</div> : null}
@@ -278,21 +312,19 @@ export function GitPanel(): React.JSX.Element {
     )
   }
 
-  const stagedCount = git?.staged.length ?? 0
-  const unstaged = git?.unstaged ?? []
-  const untracked = git?.untracked ?? []
-  const changeCount = unstaged.length + untracked.length
+  const changes = git ? flattenChanges(git) : []
+  const busy = phase.kind === 'working'
 
   return (
-    <aside className="git-panel" aria-label="Commit">
+    <aside className="git-panel" aria-label="Sync">
       <div className="git-panel-header">
-        <span className="sidebar-title">Commit</span>
+        <span className="sidebar-title">Sync</span>
         {git?.branch ? <span className="git-branch">{git.branch}</span> : null}
         <button
           className="sidebar-icon-btn git-refresh"
           onClick={() => void refreshStatus()}
-          title="Refresh status"
-          aria-label="Refresh status"
+          title="Refresh"
+          aria-label="Refresh"
         >
           ↻
         </button>
@@ -328,107 +360,202 @@ export function GitPanel(): React.JSX.Element {
           <>
             {statusError ? <div className="git-error">{statusError}</div> : null}
 
+            {/* Plain change list — what's different since the last save. */}
             <section className="git-section">
               <div className="git-section-title">
-                <span>Staged ({stagedCount})</span>
-                {stagedCount > 0 ? (
-                  <button className="git-stage-all" onClick={() => void onUnstageAll()}>
-                    Unstage all
-                  </button>
-                ) : null}
+                <span>Changes ({changes.length})</span>
               </div>
-          {stagedCount === 0 ? (
-            <div className="sidebar-empty">
-              Stage changes in your editor or terminal, then compose a commit.
-            </div>
-          ) : (
-            <ul className="git-file-list">
-              {git!.staged.map((f) => (
-                <li key={f.path} className="git-file-row" title={f.path}>
-                  <span className={`git-file-badge git-badge-${f.index}`}>{f.index}</span>
-                  <span className="git-file-path">{f.path}</span>
-                  <span className="git-file-kind">{codeLabel(f.index)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+              {changes.length === 0 ? (
+                <div className="sidebar-empty">Everything’s saved — nothing to sync.</div>
+              ) : (
+                <ul className="git-file-list">
+                  {changes.map((c) => (
+                    <li key={c.path} className="git-file-row" title={c.path}>
+                      <span className={`git-file-badge git-verb-${c.verb}`}>{c.verb[0]}</span>
+                      <span className="git-file-path">{c.path}</span>
+                      <span className="git-file-kind">{c.verb}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
 
-        {changeCount > 0 ? (
-          <section className="git-section">
-            <div className="git-section-title">
-              <span>Changes ({changeCount})</span>
-              <button className="git-stage-all" onClick={() => void onStageAll()}>
-                Stage all
-              </button>
-            </div>
-            <ul className="git-file-list">
-              {unstaged.map((f) => (
-                <li key={`u:${f.path}`} className="git-file-row" title={f.path}>
-                  <span className={`git-file-badge git-badge-${f.worktree}`}>{f.worktree}</span>
-                  <span className="git-file-path">{f.path}</span>
-                  <span className="git-file-kind">{codeLabel(f.worktree)}</span>
-                </li>
-              ))}
-              {untracked.map((p) => (
-                <li key={`t:${p}`} className="git-file-row" title={p}>
-                  <span className="git-file-badge">?</span>
-                  <span className="git-file-path">{p}</span>
-                  <span className="git-file-kind">untracked</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
+            {phase.kind === 'working' ? <div className="git-working">{phase.label}</div> : null}
 
-        {phase.kind === 'working' ? <div className="git-working">{phase.label}</div> : null}
+            {phase.kind === 'error' ? (
+              <div className="git-error">
+                {phase.message}
+                <div className="git-actions">
+                  <button className="script-btn" onClick={() => setPhase({ kind: 'idle' })}>
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
-        {phase.kind === 'error' ? (
-          <div className="git-error">
-            {phase.message}
-            <div className="git-actions">
-              <button className="script-btn" onClick={() => setPhase({ kind: 'idle' })}>
-                Dismiss
-              </button>
-            </div>
-          </div>
-        ) : null}
+            {phase.kind === 'blocked' ? (
+              <CoverageBlock
+                report={phase.report}
+                onFix={() => void syncDiagrams()}
+                onRecheck={() => void onSync()}
+              />
+            ) : null}
 
-        {phase.kind === 'blocked' ? (
-          <CoverageBlock
-            report={phase.report}
-            onFix={() => {
-              void syncDiagrams()
-            }}
-            onRecheck={() => void onCompose()}
-          />
-        ) : null}
+            {phase.kind === 'done' ? (
+              <SyncDone commits={phase.commits} onDismiss={() => setPhase({ kind: 'idle' })} />
+            ) : null}
 
-        {phase.kind === 'review' ? (
-          <ReviewForm
-            initialSubject={phase.subject}
-            initialBody={phase.body}
-            onCommit={onCommit}
-            onRegenerate={() => void onCompose()}
-            onCancel={() => setPhase({ kind: 'idle' })}
-          />
-        ) : null}
+            {phase.kind === 'plan' ? (
+              <PlanReview
+                plan={phase.plan}
+                onCommit={() => void commitPlan(phase.plan)}
+                onIgnore={(p) => void onIgnore(p)}
+                onAdjust={(note) => void onSync(note)}
+                onCancel={() => setPhase({ kind: 'idle' })}
+              />
+            ) : null}
 
-        {phase.kind === 'idle' || phase.kind === 'error' ? (
-          <div className="git-actions">
-            <button
-              className="script-btn script-run"
-              disabled={stagedCount === 0}
-              onClick={() => void onCompose()}
-            >
-              Compose commit
-            </button>
-          </div>
-        ) : null}
+            {/* The one button. Hidden while a plan/done screen is showing. */}
+            {phase.kind === 'idle' || phase.kind === 'working' || phase.kind === 'error' ? (
+              <div className="git-actions">
+                <button
+                  className="script-btn script-run git-sync-btn"
+                  disabled={changes.length === 0 || busy}
+                  onClick={() => void onSync()}
+                >
+                  {busy ? 'Working…' : 'Sync'}
+                </button>
+              </div>
+            ) : null}
           </>
         )}
       </div>
     </aside>
+  )
+}
+
+function PlanReview({
+  plan,
+  onCommit,
+  onIgnore,
+  onAdjust,
+  onCancel
+}: {
+  plan: SyncPlan
+  onCommit: () => void
+  onIgnore: (patterns: string[]) => void
+  onAdjust: (note: string) => void
+  onCancel: () => void
+}): React.JSX.Element {
+  const [note, setNote] = useState('')
+  const submitNote = (): void => {
+    const trimmed = note.trim()
+    if (!trimmed) return
+    setNote('')
+    onAdjust(trimmed)
+  }
+
+  const multi = plan.groups.length > 1
+
+  return (
+    <div className="git-plan">
+      {plan.summary ? <p className="git-plan-summary">{plan.summary}</p> : null}
+
+      {plan.ignore.length > 0 ? (
+        <div className="git-plan-ignore">
+          <div className="git-plan-ignore-title">Probably shouldn’t be saved</div>
+          {plan.ignore.map((i) => (
+            <div key={i.pattern} className="git-ignore-row">
+              <div className="git-ignore-text">
+                <span className="git-ignore-pattern">{i.pattern}</span>
+                <span className="git-ignore-reason">{i.reason}</span>
+              </div>
+              <button className="script-btn" onClick={() => onIgnore([i.pattern])}>
+                Ignore
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="git-plan-groups">
+        <div className="git-plan-groups-title">
+          {multi ? `${plan.groups.length} commits` : 'One commit'}
+        </div>
+        {plan.groups.map((g, idx) => (
+          <div key={idx} className="git-plan-card">
+            <div className="git-plan-card-subject">{g.subject}</div>
+            {g.body ? <div className="git-plan-card-body">{g.body}</div> : null}
+            <div className="git-plan-card-files">
+              {g.paths.map((p) => (
+                <span key={p} className="git-plan-card-file" title={p}>
+                  {p}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="git-plan-adjust">
+        <input
+          className="git-subject-input"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              submitNote()
+            }
+          }}
+          placeholder="Want it different? e.g. “keep it all in one commit”"
+          spellCheck={false}
+        />
+        {note.trim() ? (
+          <button className="script-btn" onClick={submitNote}>
+            Ask
+          </button>
+        ) : null}
+      </div>
+
+      <div className="git-actions">
+        <button className="script-btn script-run" onClick={onCommit}>
+          {multi ? `Save all ${plan.groups.length}` : 'Save'}
+        </button>
+        <button className="script-btn" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function SyncDone({
+  commits,
+  onDismiss
+}: {
+  commits: Array<{ subject: string; sha: string }>
+  onDismiss: () => void
+}): React.JSX.Element {
+  return (
+    <div className="git-done">
+      <div className="git-done-title">
+        ✓ Saved {commits.length === 1 ? 'your change' : `${commits.length} commits`}
+      </div>
+      <ul className="git-done-list">
+        {commits.map((c) => (
+          <li key={c.sha} className="git-done-row">
+            <span className="git-done-sha">{c.sha.slice(0, 7)}</span>
+            <span className="git-done-subject">{c.subject}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="git-actions">
+        <button className="script-btn" onClick={onDismiss}>
+          Done
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -444,7 +571,7 @@ function HistoryView({
   return (
     <div className="git-history">
       <div className="git-history-header">
-        <span className="git-section-title">Prompt history</span>
+        <span className="git-section-title">History</span>
         <button
           className="git-stage-all"
           onClick={onRefresh}
@@ -458,7 +585,7 @@ function HistoryView({
       {commits === null ? (
         <div className="git-working">Loading history…</div>
       ) : commits.length === 0 ? (
-        <div className="sidebar-empty">No commits yet.</div>
+        <div className="sidebar-empty">No saved versions yet.</div>
       ) : (
         <ul className="git-commit-list">
           {commits.map((c) => (
@@ -511,7 +638,7 @@ function CoverageBlock({
 }): React.JSX.Element {
   return (
     <div className="git-blocked">
-      <div className="git-blocked-title">Commit blocked — diagrams are out of sync</div>
+      <div className="git-blocked-title">Hold on — your diagrams are out of date</div>
       <ul className="git-blocked-list">
         {report.brokenLinks.length > 0 ? <li>{report.brokenLinks.length} broken link(s)</li> : null}
         {report.orphanDiagrams.length > 0 ? (
@@ -525,7 +652,7 @@ function CoverageBlock({
         ) : null}
       </ul>
       <p className="git-blocked-hint">
-        Align the diagrams with the code, then re-check. The agent can fix the drift for you.
+        Let the agent bring the diagrams back in line with the code, then sync again.
       </p>
       <div className="git-actions">
         <button className="script-btn script-run" onClick={onFix}>
@@ -533,63 +660,6 @@ function CoverageBlock({
         </button>
         <button className="script-btn" onClick={onRecheck}>
           Re-check
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function ReviewForm({
-  initialSubject,
-  initialBody,
-  onCommit,
-  onRegenerate,
-  onCancel
-}: {
-  initialSubject: string
-  initialBody: string
-  onCommit: (subject: string, body: string) => void
-  onRegenerate: () => void
-  onCancel: () => void
-}): React.JSX.Element {
-  const [subject, setSubject] = useState(initialSubject)
-  const [body, setBody] = useState(initialBody)
-
-  return (
-    <div className="git-review">
-      <div className="git-review-label">Commit message (edit before committing)</div>
-      <input
-        className="git-subject-input"
-        value={subject}
-        onChange={(e) => setSubject(e.target.value)}
-        placeholder="Subject line"
-        spellCheck={false}
-      />
-      <textarea
-        className="git-body-input"
-        value={body}
-        onChange={(e) => setBody(e.target.value)}
-        placeholder="Body — the prompt that regenerates this change"
-        rows={10}
-        spellCheck={false}
-      />
-      <div className="git-trailers">
-        <div className="git-trailers-label">Appended automatically</div>
-        <pre className="git-trailers-pre">{buildTrailers({ coveragePassed: true })}</pre>
-      </div>
-      <div className="git-actions">
-        <button
-          className="script-btn script-run"
-          disabled={!subject.trim()}
-          onClick={() => onCommit(subject, body)}
-        >
-          Commit
-        </button>
-        <button className="script-btn" onClick={onRegenerate}>
-          Regenerate
-        </button>
-        <button className="script-btn" onClick={onCancel}>
-          Cancel
         </button>
       </div>
     </div>

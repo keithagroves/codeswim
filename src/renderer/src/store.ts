@@ -1,6 +1,8 @@
 import { createContext, useContext } from 'react'
 import type { PendingQuestion } from './agent'
 import type { CommitMessage } from './commit/synthesize'
+import type { SyncPlan } from './commit/triage'
+import type { GitIgnoreResult } from '../../preload/index.d'
 
 export type { PendingQuestion } from './agent'
 export type { CommitMessage } from './commit/synthesize'
@@ -171,6 +173,15 @@ export interface StoreApi {
   // Asks the agent to reconstruct the prompt that would regenerate the
   // staged diff, for use as the commit message (subject + body spec).
   synthesizeCommitMessage(diff: string): Promise<CommitMessage>
+  // The Sync triage: hands the whole working diff to the agent and gets back a
+  // plain-language plan (how to group commits, what to ignore, whether it's
+  // safe to auto-commit). Pure inspection — leaves the index untouched.
+  planSync(diff: string, changedPaths: string[], instruction?: string): Promise<SyncPlan>
+  // Commits exactly the given paths as one isolated commit (subject + body),
+  // returning the new sha. Sequential calls build up a multi-commit sync.
+  commitGroup(paths: string[], subject: string, body: string): Promise<string>
+  // Appends patterns to .gitignore and stops tracking anything already tracked.
+  addToGitignore(patterns: string[]): Promise<GitIgnoreResult>
 }
 
 export const StoreContext = createContext<StoreApi | null>(null)

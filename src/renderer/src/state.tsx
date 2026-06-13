@@ -11,9 +11,11 @@ import {
 import { runCoverage, buildSyncPrompt } from './coverage/run'
 import {
   buildCommitSynthesisPrompt,
+  composeCommitBody,
   parseCommitMessage,
   type CommitMessage
 } from './commit/synthesize'
+import { buildTriagePrompt, parseSyncPlan, type SyncPlan } from './commit/triage'
 import { extname, parseTarget, relativeToRoot, resolveRelative, toPosix } from './path-utils'
 import {
   StoreContext,
@@ -951,6 +953,43 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
     [ensureAgent]
   )
 
+  const planSync = useCallback(
+    async (diff: string, changedPaths: string[], instruction?: string): Promise<SyncPlan> => {
+      const root = stateRef.current.rootPath
+      if (!root) throw new Error('Open a folder first.')
+      const agent = await ensureAgent(root)
+      if (!agent) throw new Error('Agent is not connected — configure a provider first.')
+      // Ephemeral session, same as commit synthesis: triage must never show up
+      // in the chat the user reads.
+      const session = await agent.createSession()
+      const reply = await agent.send(session.id, buildTriagePrompt(diff, changedPaths, instruction))
+      const text = reply.parts
+        .filter((p) => p.kind === 'text' && p.text)
+        .map((p) => p.text as string)
+        .join('')
+        .trim()
+      if (!text) throw new Error('The agent returned an empty response.')
+      return parseSyncPlan(text, changedPaths)
+    },
+    [ensureAgent]
+  )
+
+  const commitGroup = useCallback(
+    async (paths: string[], subject: string, body: string): Promise<string> => {
+      const root = stateRef.current.rootPath
+      if (!root) throw new Error('Open a folder first.')
+      const fullBody = composeCommitBody(body, { coveragePassed: true })
+      return window.api.gitCommitGroup(root, paths, subject, fullBody)
+    },
+    []
+  )
+
+  const addToGitignore = useCallback(async (patterns: string[]) => {
+    const root = stateRef.current.rootPath
+    if (!root) throw new Error('Open a folder first.')
+    return window.api.gitAddToGitignore(root, patterns)
+  }, [])
+
   const reload = useCallback(async () => {
     if (!state.rootPath || !state.currentFile) return
     const result = await readFileSafe(state.rootPath, state.currentFile)
@@ -1192,6 +1231,9 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
       clearRecents,
       syncDiagrams,
       synthesizeCommitMessage,
+      planSync,
+      commitGroup,
+      addToGitignore,
       setCurrentSkill,
       answerQuestion,
       rejectQuestion
@@ -1230,6 +1272,9 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
       clearRecents,
       syncDiagrams,
       synthesizeCommitMessage,
+      planSync,
+      commitGroup,
+      addToGitignore,
       setCurrentSkill,
       answerQuestion,
       rejectQuestion

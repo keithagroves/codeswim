@@ -357,7 +357,10 @@ The companion document belongs at \`${documentPath}\`.
       clean: true
     }),
     gitStagedDiff: async () => '',
+    gitWorkingDiff: async () => '',
     gitCommit: notInBrowser<string>('gitCommit'),
+    gitCommitGroup: notInBrowser<string>('gitCommitGroup'),
+    gitAddToGitignore: notInBrowser<{ added: string[]; untracked: string[] }>('gitAddToGitignore'),
     gitInit: notInBrowser<{ createdGitignore: boolean }>('gitInit'),
     gitStageAll: notInBrowser<void>('gitStageAll'),
     gitUnstageAll: notInBrowser<void>('gitUnstageAll'),

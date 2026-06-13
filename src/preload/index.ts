@@ -132,6 +132,11 @@ export interface RoomIdentity {
   provider: 'github' | 'git'
 }
 
+export interface GitIgnoreResult {
+  added: string[]
+  untracked: string[]
+}
+
 const api = {
   pickFolder: (): Promise<string | null> => ipcRenderer.invoke('pick-folder'),
   readFile: (absPath: string): Promise<string> => ipcRenderer.invoke('read-file', absPath),
@@ -269,8 +274,18 @@ const api = {
   gitStatus: (rootPath: string): Promise<GitStatus> => ipcRenderer.invoke('git:status', rootPath),
   gitStagedDiff: (rootPath: string): Promise<string> =>
     ipcRenderer.invoke('git:staged-diff', rootPath),
+  gitWorkingDiff: (rootPath: string): Promise<string> =>
+    ipcRenderer.invoke('git:working-diff', rootPath),
   gitCommit: (rootPath: string, subject: string, body: string): Promise<string> =>
     ipcRenderer.invoke('git:commit', rootPath, subject, body),
+  gitCommitGroup: (
+    rootPath: string,
+    paths: string[],
+    subject: string,
+    body: string
+  ): Promise<string> => ipcRenderer.invoke('git:commit-group', rootPath, paths, subject, body),
+  gitAddToGitignore: (rootPath: string, patterns: string[]): Promise<GitIgnoreResult> =>
+    ipcRenderer.invoke('git:add-to-gitignore', rootPath, patterns),
   gitInit: (rootPath: string): Promise<GitInitResult> => ipcRenderer.invoke('git:init', rootPath),
   gitStageAll: (rootPath: string): Promise<void> => ipcRenderer.invoke('git:stage-all', rootPath),
   gitUnstageAll: (rootPath: string): Promise<void> =>

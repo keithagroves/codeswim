@@ -1,4 +1,12 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, Menu, type MenuItemConstructorOptions } from 'electron'
+import {
+  app,
+  shell,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  Menu,
+  type MenuItemConstructorOptions
+} from 'electron'
 import { join, basename, dirname } from 'path'
 import { promises as fs } from 'fs'
 import { spawn, ChildProcess } from 'child_process'
@@ -22,7 +30,10 @@ import {
 import {
   gitStatus,
   gitStagedDiff,
+  gitWorkingDiff,
   gitCommit,
+  gitCommitGroup,
+  gitAddToGitignore,
   gitInit,
   gitStageAll,
   gitUnstageAll,
@@ -270,10 +281,7 @@ async function readCustomRuns(rootPath: string): Promise<RunEntry[]> {
 }
 
 async function listRuns(rootPath: string): Promise<RunEntry[]> {
-  const [pkg, custom] = await Promise.all([
-    readPackageRuns(rootPath),
-    readCustomRuns(rootPath)
-  ])
+  const [pkg, custom] = await Promise.all([readPackageRuns(rootPath), readCustomRuns(rootPath)])
   return [...custom, ...pkg]
 }
 
@@ -727,13 +735,7 @@ app.whenReady().then(async () => {
 
   ipcMain.handle(
     'skills:open-in-editor',
-    async (
-      _event,
-      scope: SkillScope,
-      name: string,
-      rootPath: string | null,
-      relPath?: string
-    ) => {
+    async (_event, scope: SkillScope, name: string, rootPath: string | null, relPath?: string) => {
       const filePath = resolveSkillFilePath(scope, name, rootPath, relPath)
       // shell.openPath returns "" on success, or a stringified error message
       // on failure (e.g. no app registered for .md). Surface failures so the
@@ -752,13 +754,7 @@ app.whenReady().then(async () => {
 
   ipcMain.handle(
     'skills:read-file',
-    async (
-      _event,
-      scope: SkillScope,
-      name: string,
-      relPath: string,
-      rootPath: string | null
-    ) => {
+    async (_event, scope: SkillScope, name: string, relPath: string, rootPath: string | null) => {
       return readSkillFile(scope, name, relPath, rootPath)
     }
   )
@@ -785,12 +781,24 @@ app.whenReady().then(async () => {
     return gitStagedDiff(rootPath)
   })
 
+  ipcMain.handle('git:working-diff', async (_event, rootPath: string) => {
+    return gitWorkingDiff(rootPath)
+  })
+
   ipcMain.handle(
-    'git:commit',
-    async (_event, rootPath: string, subject: string, body: string) => {
-      return gitCommit(rootPath, subject, body)
+    'git:commit-group',
+    async (_event, rootPath: string, paths: string[], subject: string, body: string) => {
+      return gitCommitGroup(rootPath, paths, subject, body)
     }
   )
+
+  ipcMain.handle('git:add-to-gitignore', async (_event, rootPath: string, patterns: string[]) => {
+    return gitAddToGitignore(rootPath, patterns)
+  })
+
+  ipcMain.handle('git:commit', async (_event, rootPath: string, subject: string, body: string) => {
+    return gitCommit(rootPath, subject, body)
+  })
 
   ipcMain.handle('git:init', async (_event, rootPath: string) => {
     return gitInit(rootPath)
@@ -844,7 +852,11 @@ app.whenReady().then(async () => {
   ipcMain.on('terminal:destroy', (_event, id: string) => {
     const ptyProcess = terminals.get(id)
     if (ptyProcess) {
-      try { ptyProcess.kill() } catch { /* already exited */ }
+      try {
+        ptyProcess.kill()
+      } catch {
+        /* already exited */
+      }
       terminals.delete(id)
     }
   })
