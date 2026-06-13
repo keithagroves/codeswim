@@ -6,7 +6,18 @@
 // All Electron-only side effects (folder pick, file watcher, harness spawn)
 // fail with a friendly error; everything that just reads state works.
 
-import type { DiagramNavApi, HarnessConnection, NewProjectResult, TreeNode } from '../../preload/index.d'
+import type {
+  DiagramNavApi,
+  HarnessConnection,
+  NewProjectResult,
+  SourceExplanation,
+  TreeNode
+} from '../../preload/index.d'
+import {
+  createDefaultKanbanBoard,
+  normalizeKanbanBoard,
+  type KanbanBoard
+} from '../../shared/kanban'
 
 function notInBrowser<T>(name: string): () => Promise<T> {
   return () => Promise.reject(new Error(`${name} is only available inside the Electron app`))
@@ -14,6 +25,60 @@ function notInBrowser<T>(name: string): () => Promise<T> {
 
 function noopUnsub(): () => void {
   return () => {}
+}
+
+function browserFixtureOverview(): string {
+  return `---
+name: Browser fixture
+description: Source explanation review
+tags: [browser, fixture]
+---
+
+\`\`\`mermaid
+flowchart LR
+  Login["login.ts"]
+  Missing["missing.ts"]
+  click Login call navigate("./src/auth/login.ts")
+  click Missing call navigate("./src/auth/missing.ts")
+\`\`\`
+
+Open either source leaf to review its companion documentation.
+`
+}
+
+function browserFixtureExplanation(sourcePath: string): SourceExplanation | null {
+  if (sourcePath !== 'src/auth/login.ts') return null
+  return {
+    sourcePath,
+    documentPath: `.codeswim/explanations/${sourcePath}.md`,
+    exists: true,
+    content: `---
+name: Login handler
+description: Authenticates a user and establishes an application session.
+tags: [auth, source, explanation]
+---
+
+## Purpose
+
+Validates login credentials and creates the authenticated session used by later requests.
+
+## Flow
+
+1. Validate the submitted email and password.
+2. Load the matching user record.
+3. Compare the password against the stored credential.
+4. Return the signed session token.
+
+## Failure modes
+
+- Invalid credentials produce an authentication error without identifying which field failed.
+- Disabled accounts are rejected before a session is created.
+
+## Related docs
+
+- [Architecture overview](../../../../overview.md)
+`
+  }
 }
 
 // When running standalone in a browser, you can preconfigure these in
@@ -25,9 +90,10 @@ function noopUnsub(): () => void {
 // browser without Electron.
 function readTestConfig(): { rootPath: string | null; harnessUrl: string | null } {
   try {
+    const params = new URLSearchParams(window.location.search)
     return {
-      rootPath: localStorage.getItem('codeswim:test:rootPath'),
-      harnessUrl: localStorage.getItem('codeswim:test:harnessUrl')
+      rootPath: localStorage.getItem('codeswim:test:rootPath') ?? params.get('workspace'),
+      harnessUrl: localStorage.getItem('codeswim:test:harnessUrl') ?? params.get('harness')
     }
   } catch {
     return { rootPath: null, harnessUrl: null }
@@ -38,10 +104,14 @@ export function installBrowserApiStub(): void {
   if (typeof window === 'undefined') return
   if ('api' in window && window.api) return
 
+  let browserBoard = createDefaultKanbanBoard('Browser board')
   const stub: DiagramNavApi = {
     pickFolder: async () => readTestConfig().rootPath,
     readFile: async (absPath: string) => {
       const cfg = readTestConfig()
+      if (cfg.rootPath && !cfg.harnessUrl && absPath === `${cfg.rootPath}/overview.md`) {
+        return browserFixtureOverview()
+      }
       if (!cfg.harnessUrl || !cfg.rootPath) {
         throw new Error('readFile is only available inside the Electron app')
       }
@@ -56,8 +126,33 @@ export function installBrowserApiStub(): void {
       const data = (await res.json()) as { type: string; content: string }
       return data.content
     },
+    readSourceExplanation: async (
+      _rootPath: string,
+      sourcePath: string
+    ): Promise<SourceExplanation> => {
+      const fixture = browserFixtureExplanation(sourcePath)
+      if (fixture) return fixture
+      const documentPath = `.codeswim/explanations/${sourcePath}.md`
+      return {
+        sourcePath,
+        documentPath,
+        exists: false,
+        content: `---
+name: ${JSON.stringify(sourcePath.split('/').pop() ?? sourcePath)}
+description: ${JSON.stringify(`Explanation for ${sourcePath}`)}
+tags: [source, explanation, missing]
+---
+
+\`${sourcePath}\` is an implementation leaf. Codeswim intentionally does not render its source code here.
+
+The companion document belongs at \`${documentPath}\`.
+`
+      }
+    },
+    openWorkspaceFile: notInBrowser<void>('Opening files in an editor'),
     listMarkdown: async () => {
       const cfg = readTestConfig()
+      if (cfg.rootPath && !cfg.harnessUrl) return [`${cfg.rootPath}/overview.md`]
       if (!cfg.harnessUrl || !cfg.rootPath) return []
       try {
         const url = new URL('/find/file', cfg.harnessUrl)
@@ -75,6 +170,27 @@ export function installBrowserApiStub(): void {
     },
     listTree: async () => {
       const cfg = readTestConfig()
+      if (cfg.rootPath && !cfg.harnessUrl) {
+        return [
+          { kind: 'file', name: 'overview.md', path: 'overview.md' },
+          {
+            kind: 'dir',
+            name: 'src',
+            path: 'src',
+            children: [
+              {
+                kind: 'dir',
+                name: 'auth',
+                path: 'src/auth',
+                children: [
+                  { kind: 'file', name: 'login.ts', path: 'src/auth/login.ts' },
+                  { kind: 'file', name: 'missing.ts', path: 'src/auth/missing.ts' }
+                ]
+              }
+            ]
+          }
+        ]
+      }
       if (!cfg.harnessUrl || !cfg.rootPath) return []
       try {
         const url = new URL('/find/file', cfg.harnessUrl)
@@ -131,6 +247,13 @@ export function installBrowserApiStub(): void {
         return []
       }
     },
+    kanbanRead: async () => browserBoard,
+    kanbanWrite: async (_rootPath: string, board: KanbanBoard) => {
+      browserBoard = normalizeKanbanBoard(board, 'Browser board')
+      return browserBoard
+    },
+    kanbanGitHubSync: notInBrowser<KanbanBoard>('GitHub Projects sync'),
+    kanbanGitHubMove: notInBrowser<void>('GitHub Projects status updates'),
     watch: () => Promise.resolve(),
     unwatch: () => Promise.resolve(),
     onFileChanged: noopUnsub,
@@ -239,6 +362,7 @@ export function installBrowserApiStub(): void {
     gitStageAll: notInBrowser<void>('gitStageAll'),
     gitUnstageAll: notInBrowser<void>('gitUnstageAll'),
     gitLog: async () => [],
+    roomIdentity: async () => null,
     terminalCreate: notInBrowser<string>('terminalCreate'),
     terminalWrite: () => {},
     terminalResize: () => {},

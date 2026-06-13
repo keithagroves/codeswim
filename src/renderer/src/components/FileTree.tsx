@@ -68,7 +68,7 @@ function NodeRow({
 }
 
 export function FileTree(): React.JSX.Element | null {
-  const { state, navigateAbsolute, refreshTree } = useStore()
+  const { state, inspectFile, refreshTree } = useStore()
   // Two sets so we can override the auto-expansion of ancestors of the
   // current file. A path in `opened` is forced open; a path in `closed`
   // is forced closed; otherwise it's open iff it's an ancestor of the
@@ -119,9 +119,9 @@ export function FileTree(): React.JSX.Element | null {
 
   const open = useCallback(
     (path: string): void => {
-      void navigateAbsolute(path, true)
+      void inspectFile(path)
     },
-    [navigateAbsolute]
+    [inspectFile]
   )
 
   // Visibility is owned by the parent SidePanel; this component just renders.

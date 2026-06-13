@@ -12,14 +12,14 @@ them clickable.
 
 ## Commands
 
-| | |
-|---|---|
-| `npm run dev` | electron-vite dev server with HMR (renderer) and rebuild (main/preload) |
-| `npm run build` | typecheck + production build into `out/` |
-| `npm run typecheck` | runs `typecheck:node` (main + preload) then `typecheck:web` (renderer) |
-| `npm run lint` | eslint, cached |
-| `npm run format` | prettier --write |
-| `npm run build:mac` / `:win` / `:linux` | electron-builder packaging |
+|                                         |                                                                         |
+| --------------------------------------- | ----------------------------------------------------------------------- |
+| `npm run dev`                           | electron-vite dev server with HMR (renderer) and rebuild (main/preload) |
+| `npm run build`                         | typecheck + production build into `out/`                                |
+| `npm run typecheck`                     | runs `typecheck:node` (main + preload) then `typecheck:web` (renderer)  |
+| `npm run lint`                          | eslint, cached                                                          |
+| `npm run format`                        | prettier --write                                                        |
+| `npm run build:mac` / `:win` / `:linux` | electron-builder packaging                                              |
 
 ## Process layout
 
@@ -49,9 +49,16 @@ State is a single reducer in [state.tsx](src/renderer/src/state.tsx),
 exposed via context defined in [store.ts](src/renderer/src/store.ts). The
 two files are split so vite's fast-refresh works (only-components rule).
 
-Views: `'diagram' | 'code' | 'output'`. The current file is tracked as a
-relative posix path (`currentFile`). Breadcrumbs are a stack; navigation
-pushes onto it, "back" / clicking a crumb pops to that point.
+Views render diagrams or Markdown explanations; source code is never shown
+inside Codeswim. The current implementation file is tracked as a relative
+posix path (`currentFile`), while `currentDocumentPath` is the Markdown
+document being rendered. Breadcrumbs are a stack; navigation pushes onto it,
+"back" / clicking a crumb pops to that point.
+
+Source links continue to target real files for coverage. The main process
+resolves them to `.codeswim/explanations/<source-path>.md` (with adjacent
+Markdown fallbacks). The header's "Open in editor" command opens the actual
+source file through Electron.
 
 Path resolution lives in [path-utils.ts](src/renderer/src/path-utils.ts).
 Renderer code never deals in absolute paths — it converts to absolute only
@@ -67,7 +74,7 @@ imperatively via `mermaid.render()`; `startOnLoad` is off.
 The webview-style CSP in `src/renderer/index.html` needs
 `'unsafe-eval'` in `script-src` for mermaid loose mode and inline styles
 allowed for the SVG output. If you tighten CSP, verify mermaid still
-renders before shipping — there are *two* prior bugs of this exact shape.
+renders before shipping — there are _two_ prior bugs of this exact shape.
 
 ## Markdown parser
 
@@ -84,6 +91,7 @@ version regressed twice. The shipped VS Code extension at
 ## File watching
 
 The chokidar watcher in main starts when the user picks a folder. It:
+
 - Emits `file-changed` on every `.md` or non-`.md` change (renderer reloads
   if the changed file is currently displayed).
 - Emits a debounced (200ms) `tree-changed` on add/unlink/addDir/unlinkDir
@@ -112,7 +120,7 @@ parsed scripts before spawning, then shell-quoted defensively.
 hand-authored fictional project ("Triage" billing app, unrelated to this
 repo's architecture) used to develop against. It's a real codeswim-style
 hierarchy: `overview.md` → architecture/ → flows/ → src/. Use it as the
-reference for what diagram authors *should* produce.
+reference for what diagram authors _should_ produce.
 
 `~/projects/codeswim-example` is a more elaborate version of the same
 fixture with runnable code — point the navigator at it for end-to-end demos.

@@ -1,7 +1,5 @@
 import { useState } from 'react'
-import { useStore } from '../store'
-
-type Section = 'agent' | 'files' | 'search' | 'skills' | 'git' | 'terminal'
+import { useStore, type Section } from '../store'
 
 interface Item {
   key: Section
@@ -14,7 +12,7 @@ interface Item {
 
 function FolderIcon(): React.JSX.Element {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg width="27" height="27" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
         d="M3 6.5a2 2 0 0 1 2-2h3.59a2 2 0 0 1 1.41.59l1 1A2 2 0 0 0 12.41 6.5H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-11z"
         stroke="currentColor"
@@ -27,7 +25,7 @@ function FolderIcon(): React.JSX.Element {
 
 function ChatIcon(): React.JSX.Element {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg width="27" height="27" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
         d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H10l-4 4v-4H5.5A1.5 1.5 0 0 1 4 14.5v-9z"
         stroke="currentColor"
@@ -40,7 +38,7 @@ function ChatIcon(): React.JSX.Element {
 
 function SearchIcon(): React.JSX.Element {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg width="27" height="27" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.5" />
       <line
         x1="15.5"
@@ -57,7 +55,7 @@ function SearchIcon(): React.JSX.Element {
 
 function SkillsIcon(): React.JSX.Element {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg width="27" height="27" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
         d="M6 4h10a3 3 0 0 1 3 3v13l-3-2-3 2-3-2-3 2V6a2 2 0 0 1-1.5-1.5"
         stroke="currentColor"
@@ -89,7 +87,7 @@ function SkillsIcon(): React.JSX.Element {
 
 function TerminalIcon(): React.JSX.Element {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg width="27" height="27" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.5" />
       <path
         d="M7 9l3.5 3L7 15"
@@ -106,12 +104,34 @@ function TerminalIcon(): React.JSX.Element {
 function GitIcon(): React.JSX.Element {
   // Commit-graph glyph: two nodes on a line with a branch tap.
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg width="27" height="27" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <circle cx="6" cy="6" r="2.5" stroke="currentColor" strokeWidth="1.5" />
       <circle cx="6" cy="18" r="2.5" stroke="currentColor" strokeWidth="1.5" />
       <circle cx="17" cy="12" r="2.5" stroke="currentColor" strokeWidth="1.5" />
       <path
         d="M6 8.5v7M6 12h8.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function PeopleIcon(): React.JSX.Element {
+  // Two figures — distinct from the agent's single chat bubble; this is the
+  // "chat with other people on this project" section.
+  return (
+    <svg width="27" height="27" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="9" cy="8" r="3" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M3.5 19a5.5 5.5 0 0 1 11 0"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M16 5.5a3 3 0 0 1 0 5.8M17 14.2a5.5 5.5 0 0 1 3.5 4.8"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
@@ -126,7 +146,8 @@ const ITEM_BY_KEY: Record<Section, Item> = {
   search: { key: 'search', label: 'Search', icon: <SearchIcon /> },
   skills: { key: 'skills', label: 'Skills', icon: <SkillsIcon /> },
   git: { key: 'git', label: 'Commit', icon: <GitIcon /> },
-  terminal: { key: 'terminal', label: 'Terminal', icon: <TerminalIcon /> }
+  terminal: { key: 'terminal', label: 'Terminal', icon: <TerminalIcon /> },
+  chat: { key: 'chat', label: 'Chat', icon: <PeopleIcon /> }
 }
 
 export function ActivityBar(): React.JSX.Element {

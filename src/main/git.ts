@@ -217,6 +217,19 @@ export async function gitUnstageAll(rootPath: string): Promise<void> {
   }
 }
 
+// The push/fetch URL of the `origin` remote, or null when there's no origin
+// (local-only repo, or not a repo). Used to derive a stable chat-room ID that
+// two clones of the same repo agree on without any central registry.
+export async function gitRemoteUrl(rootPath: string): Promise<string | null> {
+  try {
+    const out = await git(rootPath, ['remote', 'get-url', 'origin'])
+    return out.trim() || null
+  } catch {
+    // No origin configured, or not a repo — both mean "no shared room".
+    return null
+  }
+}
+
 export async function gitStagedDiff(rootPath: string): Promise<string> {
   // --staged shows what `git commit` would record. No color, full context.
   return git(rootPath, ['diff', '--staged', '--no-color'])

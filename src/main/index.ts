@@ -28,6 +28,14 @@ import {
   gitUnstageAll,
   gitLog
 } from './git'
+import { getRoomIdentity } from './room'
+import {
+  moveGitHubKanbanItem,
+  readKanbanBoard,
+  syncKanbanWithGitHub,
+  writeKanbanBoard
+} from './kanban'
+import { readSourceExplanation, resolveWorkspaceFile } from './source-explanations'
 
 let mainWindow: BrowserWindow | null = null
 let watcher: FSWatcher | null = null
@@ -570,6 +578,19 @@ app.whenReady().then(async () => {
     return fs.readFile(absPath, 'utf-8')
   })
 
+  ipcMain.handle(
+    'source-explanation:read',
+    async (_event, rootPath: string, sourcePath: string) => {
+      return readSourceExplanation(rootPath, sourcePath)
+    }
+  )
+
+  ipcMain.handle('workspace:open-file', async (_event, rootPath: string, relPath: string) => {
+    const filePath = resolveWorkspaceFile(rootPath, relPath)
+    const err = await shell.openPath(filePath)
+    if (err) throw new Error(err)
+  })
+
   ipcMain.handle('list-markdown', async (_event, rootPath: string) => {
     const out: string[] = []
     await walkMarkdown(rootPath, out)
@@ -579,6 +600,25 @@ app.whenReady().then(async () => {
   ipcMain.handle('list-tree', async (_event, rootPath: string) => {
     return listTree(rootPath)
   })
+
+  ipcMain.handle('kanban:read', async (_event, rootPath: string) => {
+    return readKanbanBoard(rootPath)
+  })
+
+  ipcMain.handle('kanban:write', async (_event, rootPath: string, board: unknown) => {
+    return writeKanbanBoard(rootPath, board)
+  })
+
+  ipcMain.handle('kanban:github-sync', async (_event, rootPath: string, board: unknown) => {
+    return syncKanbanWithGitHub(rootPath, board)
+  })
+
+  ipcMain.handle(
+    'kanban:github-move',
+    async (_event, rootPath: string, board: unknown, cardId: string, columnId: string) => {
+      await moveGitHubKanbanItem(rootPath, board, cardId, columnId)
+    }
+  )
 
   ipcMain.handle('watch', async (_event, rootPath: string) => {
     startWatching(rootPath)
@@ -766,6 +806,10 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('git:log', async (_event, rootPath: string, limit?: number) => {
     return gitLog(rootPath, limit)
+  })
+
+  ipcMain.handle('room:identity', async (_event, rootPath: string) => {
+    return getRoomIdentity(rootPath)
   })
 
   ipcMain.handle('terminal:create', (_event, cwd?: string) => {

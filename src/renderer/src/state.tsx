@@ -14,15 +14,7 @@ import {
   parseCommitMessage,
   type CommitMessage
 } from './commit/synthesize'
-import {
-  extname,
-  joinPosix,
-  parseTarget,
-  relativeToRoot,
-  resolveRelative,
-  toPosix,
-  type LineRange
-} from './path-utils'
+import { extname, parseTarget, relativeToRoot, resolveRelative, toPosix } from './path-utils'
 import {
   StoreContext,
   type AppState,
@@ -32,16 +24,34 @@ import {
   type FileView,
   type RunEntry,
   type RunningScript,
+  type Section,
   type SessionInfo,
   type StoreApi,
   type Toast,
   type TreeNode,
-  type View
+  type View,
+  type WorkspaceView
 } from './store'
+
+// Canonical section order + the single source of truth for which sections
+// exist. Used for the default activity-bar order and to sanitize a stale
+// saved order (drop unknowns, re-append any missing).
+const DEFAULT_ACTIVITY_ORDER: Section[] = [
+  'agent',
+  'files',
+  'search',
+  'skills',
+  'git',
+  'terminal',
+  'chat'
+]
 
 const initialState: AppState = {
   rootPath: null,
+  workspaceView: 'kanban',
   currentFile: null,
+  currentDocumentPath: null,
+  sourceExplanationExists: true,
   breadcrumbs: [],
   view: 'diagram',
   fileContents: null,
@@ -54,7 +64,7 @@ const initialState: AppState = {
   activeSection: 'agent',
   lastActiveSection: 'agent',
   sidePanelWidth: 320,
-  activityOrder: ['agent', 'files', 'search', 'skills', 'git', 'terminal'],
+  activityOrder: [...DEFAULT_ACTIVITY_ORDER],
   currentSkill: null,
   chatStatus: 'idle',
   chatError: null,
@@ -63,7 +73,6 @@ const initialState: AppState = {
   sessions: [],
   currentSessionId: null,
   recents: [],
-  currentRange: null,
   pendingQuestion: null
 }
 
@@ -74,18 +83,21 @@ type Action =
       type: 'load-success'
       file: string
       contents: string
-      view: 'diagram' | 'code'
+      view: 'diagram' | 'read'
       pushBreadcrumb: boolean
       previous: string | null
-      range: LineRange | null
+      revealNavigator: boolean
+      documentPath: string
+      sourceExplanationExists: boolean
     }
   | {
       type: 'pop-to'
       index: number
       file: string
       contents: string
-      view: 'diagram' | 'code'
-      range: LineRange | null
+      view: 'diagram' | 'read'
+      documentPath: string
+      sourceExplanationExists: boolean
     }
   | { type: 'set-loading'; loading: boolean }
   | { type: 'add-toast'; toast: Toast }
@@ -100,16 +112,16 @@ type Action =
   | { type: 'toggle-sidebar' }
   | {
       type: 'set-active-section'
-      section: 'files' | 'agent' | 'search' | 'skills' | 'git' | 'terminal' | null
+      section: Section | null
     }
   | {
       type: 'toggle-active-section'
-      section: 'files' | 'agent' | 'search' | 'skills' | 'git' | 'terminal'
+      section: Section
     }
   | { type: 'set-side-panel-width'; width: number }
   | {
       type: 'set-activity-order'
-      order: Array<'agent' | 'files' | 'search' | 'skills' | 'git' | 'terminal'>
+      order: Section[]
     }
   | {
       type: 'set-current-skill'
@@ -121,8 +133,7 @@ type Action =
       } | null
     }
   | { type: 'set-pending-question'; question: PendingQuestion | null }
-  | { type: 'toggle-source' }
-  | { type: 'set-view'; view: FileView }
+  | { type: 'set-workspace-view'; view: WorkspaceView }
   | { type: 'chat-status'; status: ChatStatus; error?: string | null }
   | { type: 'chat-add-message'; message: ChatMessage }
   | { type: 'chat-upsert-part'; messageID: string; part: ChatMessagePart & { id: string } }
@@ -133,8 +144,8 @@ type Action =
   | { type: 'session-set-current'; sessionId: string | null; messages: ChatMessage[] }
   | { type: 'recents-set'; recents: string[] }
 
-function fileViewFor(rel: string): 'diagram' | 'code' {
-  return extname(rel) === '.md' ? 'diagram' : 'code'
+function fileViewFor(rel: string): 'diagram' | 'read' {
+  return extname(rel) === '.md' ? 'diagram' : 'read'
 }
 
 function reducer(state: AppState, action: Action): AppState {
@@ -148,31 +159,32 @@ function reducer(state: AppState, action: Action): AppState {
         action.pushBreadcrumb && action.previous
           ? [...state.breadcrumbs, action.previous]
           : state.breadcrumbs
-      // A line ref only makes sense in source view — even for .md targets.
-      const view = action.range ? 'code' : action.view
       return {
         ...state,
         currentFile: action.file,
+        currentDocumentPath: action.documentPath,
+        sourceExplanationExists: action.sourceExplanationExists,
         fileContents: action.contents,
-        view,
+        view: action.view,
         breadcrumbs,
         loading: false,
         prevView: null,
-        currentRange: action.range
+        workspaceView: action.revealNavigator ? 'navigator' : state.workspaceView
       }
     }
     case 'pop-to': {
       const breadcrumbs = state.breadcrumbs.slice(0, action.index)
-      const view = action.range ? 'code' : action.view
       return {
         ...state,
         currentFile: action.file,
+        currentDocumentPath: action.documentPath,
+        sourceExplanationExists: action.sourceExplanationExists,
         fileContents: action.contents,
-        view,
+        view: action.view,
         breadcrumbs,
         loading: false,
         prevView: null,
-        currentRange: action.range
+        workspaceView: 'navigator'
       }
     }
     case 'set-loading':
@@ -192,7 +204,7 @@ function reducer(state: AppState, action: Action): AppState {
         output: '',
         startedAt: action.startedAt
       }
-      const prevView = state.view === 'output' ? state.prevView : (state.view as 'diagram' | 'code')
+      const prevView = state.view === 'output' ? state.prevView : (state.view as FileView)
       return { ...state, runningScript: running, view: 'output', prevView }
     }
     case 'script-output': {
@@ -219,7 +231,7 @@ function reducer(state: AppState, action: Action): AppState {
     }
     case 'show-output': {
       if (!state.runningScript) return state
-      const prevView = state.view === 'output' ? state.prevView : (state.view as 'diagram' | 'code')
+      const prevView = state.view === 'output' ? state.prevView : (state.view as FileView)
       return { ...state, view: 'output', prevView }
     }
     case 'hide-output': {
@@ -258,16 +270,15 @@ function reducer(state: AppState, action: Action): AppState {
     case 'set-activity-order': {
       // Sanitize: dedupe and re-add any missing sections at the end so we
       // never end up with a partial order if the saved one is stale.
-      const seen = new Set<string>()
-      const cleaned: Array<'agent' | 'files' | 'search' | 'skills' | 'git'> = []
+      const known = new Set<Section>(DEFAULT_ACTIVITY_ORDER)
+      const seen = new Set<Section>()
+      const cleaned: Section[] = []
       for (const k of action.order) {
-        if (seen.has(k)) continue
-        if (k !== 'agent' && k !== 'files' && k !== 'search' && k !== 'skills' && k !== 'git')
-          continue
+        if (seen.has(k) || !known.has(k)) continue
         cleaned.push(k)
         seen.add(k)
       }
-      for (const k of ['agent', 'files', 'search', 'skills', 'git'] as const) {
+      for (const k of DEFAULT_ACTIVITY_ORDER) {
         if (!seen.has(k)) cleaned.push(k)
       }
       return { ...state, activityOrder: cleaned }
@@ -276,19 +287,12 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, currentSkill: action.skill }
     case 'set-pending-question':
       return { ...state, pendingQuestion: action.question }
-    case 'toggle-source': {
-      // Only meaningful for markdown files. Flip rendered <-> raw source.
-      if (!state.currentFile) return state
-      if (extname(state.currentFile) !== '.md') return state
-      if (state.view === 'code') return { ...state, view: 'diagram' }
-      return { ...state, view: 'code' }
-    }
-    case 'set-view': {
-      if (!state.currentFile) return state
-      const isMd = extname(state.currentFile) === '.md'
-      // Non-markdown files only support 'code'.
-      if (!isMd && action.view !== 'code') return state
-      return { ...state, view: action.view, prevView: null }
+    case 'set-workspace-view': {
+      const view =
+        state.view === 'output'
+          ? (state.prevView ?? (state.currentFile ? fileViewFor(state.currentFile) : 'diagram'))
+          : state.view
+      return { ...state, workspaceView: action.view, view, prevView: null }
     }
     case 'chat-status':
       return { ...state, chatStatus: action.status, chatError: action.error ?? null }
@@ -486,6 +490,36 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
     [ensureAgent, toast]
   )
 
+  const openCurrentFileInEditor = useCallback(async (): Promise<void> => {
+    const { rootPath, currentFile } = stateRef.current
+    if (!rootPath || !currentFile) return
+    try {
+      await window.api.openWorkspaceFile(rootPath, currentFile)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      toast(`Could not open ${currentFile}: ${msg}`, 'error')
+    }
+  }, [toast])
+
+  const createCurrentExplanation = useCallback(async (): Promise<void> => {
+    const { currentFile, currentDocumentPath } = stateRef.current
+    if (!currentFile || extname(currentFile) === '.md' || !currentDocumentPath) return
+    dispatch({ type: 'set-active-section', section: 'agent' })
+    await sendChat(`Create the source explanation document \`${currentDocumentPath}\` for \`${currentFile}\`.
+
+Read the source file and the architecture, flow, and decision documents that reference it. Write a concise Markdown document with YAML frontmatter (\`name\`, \`description\`, and \`tags\`) and these sections where relevant:
+
+- Purpose
+- Responsibilities
+- Inputs and outputs
+- Control and data flow
+- Dependencies and side effects
+- Failure modes
+- Related diagrams and decisions
+
+Explain behavior and intent without pasting the implementation. Use relative Markdown links back to the relevant Codeswim documents. Do not add a Mermaid block unless a small diagram materially clarifies the logic.`)
+  }, [sendChat])
+
   const newSession = useCallback(async () => {
     const root = stateRef.current.rootPath
     if (!root) return
@@ -586,13 +620,11 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
   }, [])
 
   const setActiveSection = useCallback(
-    (section: 'files' | 'agent' | 'search' | 'skills' | 'git' | 'terminal' | null) =>
-      dispatch({ type: 'set-active-section', section }),
+    (section: Section | null) => dispatch({ type: 'set-active-section', section }),
     []
   )
   const toggleActiveSection = useCallback(
-    (section: 'files' | 'agent' | 'search' | 'skills' | 'git' | 'terminal') =>
-      dispatch({ type: 'toggle-active-section', section }),
+    (section: Section) => dispatch({ type: 'toggle-active-section', section }),
     []
   )
   const setSidePanelWidth = useCallback(
@@ -600,8 +632,7 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
     []
   )
   const setActivityOrder = useCallback(
-    (order: Array<'agent' | 'files' | 'search' | 'skills' | 'git' | 'terminal'>) =>
-      dispatch({ type: 'set-activity-order', order }),
+    (order: Section[]) => dispatch({ type: 'set-activity-order', order }),
     []
   )
   const setCurrentSkill = useCallback(
@@ -646,12 +677,32 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
   const readFileSafe = useCallback(
     async (
       rootPath: string,
-      relPath: string
-    ): Promise<{ contents: string; view: 'diagram' | 'code' } | null> => {
-      const abs = joinPosix(toPosix(rootPath), relPath)
+      relPath: string,
+      markdownView: 'diagram' | 'read' = 'diagram'
+    ): Promise<{
+      contents: string
+      view: 'diagram' | 'read'
+      documentPath: string
+      sourceExplanationExists: boolean
+    } | null> => {
       try {
-        const contents = await window.api.readFile(abs)
-        return { contents, view: fileViewFor(relPath) }
+        if (extname(relPath) === '.md') {
+          const abs = `${toPosix(rootPath).replace(/\/$/, '')}/${relPath}`
+          const contents = await window.api.readFile(abs)
+          return {
+            contents,
+            view: markdownView,
+            documentPath: relPath,
+            sourceExplanationExists: true
+          }
+        }
+        const explanation = await window.api.readSourceExplanation(rootPath, relPath)
+        return {
+          contents: explanation.content,
+          view: 'read',
+          documentPath: explanation.documentPath,
+          sourceExplanationExists: explanation.exists
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         toast(`Could not read ${relPath}: ${msg}`, 'error')
@@ -662,13 +713,15 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
   )
 
   const navigateAbsolute = useCallback(
-    async (relPath: string, pushBreadcrumb: boolean) => {
+    async (relPath: string, pushBreadcrumb: boolean, markdownView?: 'diagram' | 'read') => {
       if (!state.rootPath) return
-      // The path may carry a #L10-L22 line ref; peel it off before reading.
-      const { path, range } = parseTarget(relPath)
+      // The path may carry a legacy #L10-L22 line ref; peel it off before
+      // reading. Ranges are not rendered — codeswim explains source behavior
+      // instead of showing line ranges.
+      const { path } = parseTarget(relPath)
       dispatch({ type: 'set-loading', loading: true })
       const previous = state.currentFile
-      const result = await readFileSafe(state.rootPath, path)
+      const result = await readFileSafe(state.rootPath, path, markdownView)
       if (!result) {
         dispatch({ type: 'set-loading', loading: false })
         return
@@ -680,27 +733,29 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
         view: result.view,
         pushBreadcrumb,
         previous,
-        range
+        revealNavigator: true,
+        documentPath: result.documentPath,
+        sourceExplanationExists: result.sourceExplanationExists
       })
     },
     [readFileSafe, state.rootPath, state.currentFile]
   )
 
+  const inspectFile = useCallback(
+    (relPath: string): Promise<void> => navigateAbsolute(relPath, true, 'read'),
+    [navigateAbsolute]
+  )
+
   const navigateRelative = useCallback(
     async (target: string) => {
-      if (!state.currentFile) return
-      // Peel off the line ref first so resolveRelative doesn't try to make
+      const baseFile = state.currentDocumentPath ?? state.currentFile
+      if (!baseFile) return
+      // Peel off any legacy line ref so resolveRelative doesn't try to make
       // the fragment part of the path.
-      const { path, range } = parseTarget(target)
-      const resolved = resolveRelative(state.currentFile, path)
-      // Re-attach the line ref so navigateAbsolute (which uses parseTarget)
-      // sees it.
-      const withRef = range
-        ? `${resolved}#L${range.start}${range.end !== range.start ? `-L${range.end}` : ''}`
-        : resolved
-      await navigateAbsolute(withRef, true)
+      const { path } = parseTarget(target)
+      await navigateAbsolute(resolveRelative(baseFile, path), true)
     },
-    [navigateAbsolute, state.currentFile]
+    [navigateAbsolute, state.currentDocumentPath, state.currentFile]
   )
 
   const popTo = useCallback(
@@ -717,7 +772,8 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
         file: target,
         contents: result.contents,
         view: result.view,
-        range: null
+        documentPath: result.documentPath,
+        sourceExplanationExists: result.sourceExplanationExists
       })
     },
     [readFileSafe, state.rootPath, state.breadcrumbs]
@@ -803,7 +859,9 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
         view: result.view,
         pushBreadcrumb: false,
         previous: null,
-        range: null
+        revealNavigator: false,
+        documentPath: result.documentPath,
+        sourceExplanationExists: result.sourceExplanationExists
       })
     },
     [ensureAgent, findEntryFile, readFileSafe, toast]
@@ -904,11 +962,11 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       view: result.view,
       pushBreadcrumb: false,
       previous: null,
-      // Reload (e.g. from chokidar) preserves the existing highlight range
-      // so the user doesn't lose it on every save.
-      range: state.currentRange
+      revealNavigator: false,
+      documentPath: result.documentPath,
+      sourceExplanationExists: result.sourceExplanationExists
     })
-  }, [readFileSafe, state.rootPath, state.currentFile, state.currentRange])
+  }, [readFileSafe, state.rootPath, state.currentFile])
 
   const runScript = useCallback(
     async (entry: RunEntry) => {
@@ -937,8 +995,10 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
   const showOutput = useCallback(() => dispatch({ type: 'show-output' }), [])
   const hideOutput = useCallback(() => dispatch({ type: 'hide-output' }), [])
   const toggleSidebar = useCallback(() => dispatch({ type: 'toggle-sidebar' }), [])
-  const toggleSource = useCallback(() => dispatch({ type: 'toggle-source' }), [])
-  const setView = useCallback((view: FileView) => dispatch({ type: 'set-view', view }), [])
+  const setWorkspaceView = useCallback(
+    (view: WorkspaceView) => dispatch({ type: 'set-workspace-view', view }),
+    []
+  )
 
   // Live reload: re-read the current file when it changes on disk.
   // Also refresh the runs list when its source files (package.json scripts
@@ -951,12 +1011,15 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       if (rel === 'package.json' || rel === '.codeswim/runs.json') {
         void refreshRuns()
       }
-      if (state.currentFile && rel === state.currentFile) {
+      if (
+        (state.currentFile && rel === state.currentFile) ||
+        (state.currentDocumentPath && rel === state.currentDocumentPath)
+      ) {
         void reload()
       }
     })
     return unsub
-  }, [reload, refreshRuns, state.rootPath, state.currentFile])
+  }, [reload, refreshRuns, state.rootPath, state.currentDocumentPath, state.currentFile])
 
   // Refresh the file tree when files are added/removed.
   useEffect(() => {
@@ -1100,6 +1163,7 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       pickRoot,
       navigateRelative,
       navigateAbsolute,
+      inspectFile,
       popTo,
       toast,
       reload,
@@ -1108,8 +1172,9 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       showOutput,
       hideOutput,
       toggleSidebar,
-      toggleSource,
-      setView,
+      setWorkspaceView,
+      openCurrentFileInEditor,
+      createCurrentExplanation,
       refreshTree,
       sendChat,
       setActiveSection,
@@ -1136,6 +1201,7 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       pickRoot,
       navigateRelative,
       navigateAbsolute,
+      inspectFile,
       popTo,
       toast,
       reload,
@@ -1144,8 +1210,9 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       showOutput,
       hideOutput,
       toggleSidebar,
-      toggleSource,
-      setView,
+      setWorkspaceView,
+      openCurrentFileInEditor,
+      createCurrentExplanation,
       refreshTree,
       sendChat,
       setActiveSection,

@@ -1,4 +1,13 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
+import type { KanbanBoard } from '../shared/kanban'
+
+export type {
+  KanbanBoard,
+  KanbanCard,
+  KanbanColumn,
+  KanbanGitHubConfig,
+  KanbanPriority
+} from '../shared/kanban'
 
 export interface ScriptOutputPayload {
   name: string
@@ -44,6 +53,13 @@ export interface RunEntry {
   name: string
   command: string
   description?: string
+}
+
+export interface SourceExplanation {
+  sourcePath: string
+  documentPath: string
+  content: string
+  exists: boolean
 }
 
 export type SkillScope = 'global' | 'workspace' | 'builtin'
@@ -109,11 +125,28 @@ export interface GitCommitEntry {
   synthesized: boolean
 }
 
+export interface RoomIdentity {
+  roomId: string
+  slug: string
+  provider: 'github' | 'git'
+}
+
 export interface DiagramNavApi {
   pickFolder(): Promise<string | null>
   readFile(absPath: string): Promise<string>
+  readSourceExplanation(rootPath: string, sourcePath: string): Promise<SourceExplanation>
+  openWorkspaceFile(rootPath: string, relPath: string): Promise<void>
   listMarkdown(rootPath: string): Promise<string[]>
   listTree(rootPath: string): Promise<TreeNode[]>
+  kanbanRead(rootPath: string): Promise<KanbanBoard>
+  kanbanWrite(rootPath: string, board: KanbanBoard): Promise<KanbanBoard>
+  kanbanGitHubSync(rootPath: string, board: KanbanBoard): Promise<KanbanBoard>
+  kanbanGitHubMove(
+    rootPath: string,
+    board: KanbanBoard,
+    cardId: string,
+    columnId: string
+  ): Promise<void>
   watch(rootPath: string): Promise<void>
   unwatch(): Promise<void>
   onFileChanged(cb: (absPath: string) => void): () => void
@@ -177,6 +210,9 @@ export interface DiagramNavApi {
   gitStageAll(rootPath: string): Promise<void>
   gitUnstageAll(rootPath: string): Promise<void>
   gitLog(rootPath: string, limit?: number): Promise<GitCommitEntry[]>
+  // Stable chat-room identity derived from the repo's origin remote, or null
+  // when the workspace has no shared remote to key a room on.
+  roomIdentity(rootPath: string): Promise<RoomIdentity | null>
   terminalCreate(cwd?: string): Promise<string>
   terminalWrite(id: string, data: string): void
   terminalResize(id: string, cols: number, rows: number): void

@@ -72,7 +72,7 @@ Key conventions:
 - Exactly one mermaid code block per file (v1 assumption — fail loudly if there are multiple)
 - Navigation uses mermaid's `click NodeId call navigate("path")` syntax
 - Paths in `navigate(...)` are resolved relative to the current file's directory
-- A path ending in `.md` loads as a child diagram; anything else opens in the code panel
+- A path ending in `.md` loads as a child diagram; anything else opens its companion Markdown explanation
 
 ## Architecture
 
@@ -82,7 +82,7 @@ Standard Electron three-process model:
 
 **Preload** (`src/preload/`): exposes a minimal API to the renderer via `contextBridge`. Keep `contextIsolation: true` and `nodeIntegration: false`.
 
-**Renderer** (`src/renderer/`): React app. Owns all UI state including current diagram, breadcrumb stack, code panel contents.
+**Renderer** (`src/renderer/`): React app. Owns all UI state including current diagram, breadcrumb stack, and source explanation contents.
 
 ### Preload API
 

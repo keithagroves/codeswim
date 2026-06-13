@@ -36,9 +36,7 @@ function attachFallbackClicks(
     if (hasExplicit) continue
     node.style.cursor = 'pointer'
     node.classList.add('has-default-navigation')
-    const existingTitle = Array.from(node.children).find(
-      (c) => c.tagName.toLowerCase() === 'title'
-    )
+    const existingTitle = Array.from(node.children).find((c) => c.tagName.toLowerCase() === 'title')
     existingTitle?.remove()
     const title = document.createElementNS('http://www.w3.org/2000/svg', 'title')
     title.textContent = `No specific destination — opens ${defaultTarget}`
@@ -79,7 +77,7 @@ function ensureMermaidInitialized(): void {
 }
 
 export function ReadView({ source }: { source: string }): React.JSX.Element {
-  const { state, navigateRelative, navigateAbsolute } = useStore()
+  const { state, navigateRelative, navigateAbsolute, createCurrentExplanation } = useStore()
   const parsed = useMemo(() => parseMarkdown(source), [source])
   const canvasRef = useRef<HTMLDivElement>(null)
   const reactId = useId().replace(/[^a-zA-Z0-9]/g, '')
@@ -140,6 +138,20 @@ export function ReadView({ source }: { source: string }): React.JSX.Element {
 
   return (
     <div className="read-view">
+      {!state.sourceExplanationExists ? (
+        <div className="read-text-col">
+          <div className="explanation-empty-action" role="status">
+            <div>
+              <strong>This file has not been explained yet.</strong>
+              <p>Generate the companion Markdown document for this file.</p>
+            </div>
+            <button className="primary" onClick={() => void createCurrentExplanation()}>
+              Explain file
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="read-text-col">
         <header className="read-header">
           {state.currentFile ? <div className="read-path">{state.currentFile}</div> : null}

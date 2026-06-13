@@ -13,15 +13,16 @@ fix — apply them by editing the diagram(s), not the code.
 5. **Navigable mermaid nodes** — `click NodeId call navigate("../path/to/file.ts")`.
 6. **"Source" section per architecture diagram** — bulleted list of files with a one-line role each.
 7. **Layering** — `overview.md` at root is the only required file; the rest is convention. Adopt whatever folder structure the project already uses (e.g. `architecture/`, `subsystems/`, `flows/`, `arch/`, or flat). Defaults for empty projects: `overview.md` → `architecture/*.md` → `flows/*.md`; ADRs in `decisions/adr-*.md`.
+8. **Source explanations** — directly navigable source files have companion Markdown at `.codeswim/explanations/<source-path>.md`; Codeswim renders these instead of source code.
 
 ## Drift table
 
-| Coverage report               | Cause                          | Fix                                                                                                                |
-| ----------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| **Broken link to a directory** | Rule 3 violation               | Replace with a link to a specific file inside the directory.                                                       |
-| **Broken link to moved file** | Source moved without doc update | Update the link; check whether the file's role in the diagram still makes sense.                                   |
-| **Orphan diagram**            | Rule 2 violation               | Add a markdown link from `overview.md` (or another already-reachable diagram) pointing at it.                       |
-| **Uncovered source file**     | Rule 1 violation               | Add a reference in the most relevant existing architecture doc — usually under its "Source" list.                   |
+| Coverage report                | Cause                           | Fix                                                                                               |
+| ------------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------- |
+| **Broken link to a directory** | Rule 3 violation                | Replace with a link to a specific file inside the directory.                                      |
+| **Broken link to moved file**  | Source moved without doc update | Update the link; check whether the file's role in the diagram still makes sense.                  |
+| **Orphan diagram**             | Rule 2 violation                | Add a markdown link from `overview.md` (or another already-reachable diagram) pointing at it.     |
+| **Uncovered source file**      | Rule 1 violation                | Add a reference in the most relevant existing architecture doc — usually under its "Source" list. |
 
 For uncovered files, prefer extending an existing diagram over creating
 a new one. Cross-cutting files (env, logger, config) belong in
@@ -35,8 +36,9 @@ When you edit, add, move, or delete a source file, update any diagram
 that references it in the same change:
 
 - **Renamed/moved** — grep for the old path in `*.md` and update every link.
-- **New** — find the diagram whose subsystem owns it; add a Source entry, and add a `click ... call navigate(...)` if it's a node in the flow.
-- **Deleted** — remove all references; if it was a node in a mermaid block, remove that node and any edges into it.
+- **New** — find the diagram whose subsystem owns it; add a Source entry, add a `click ... call navigate(...)` if it's a node in the flow, and create its explanation if directly navigable.
+- **Behavior changed** — update the companion explanation.
+- **Deleted** — remove all references and its companion explanation; if it was a node in a mermaid block, remove that node and any edges into it.
 - **New subsystem** — create a subsystem diagram in whatever folder the project uses for them (defaulting to `architecture/<name>.md` if there's no precedent) with frontmatter, a mermaid diagram, and a Source list. Add a `click` handler from `overview.md` pointing to it.
 
 If you can't tell which diagram owns a file, ask before guessing —

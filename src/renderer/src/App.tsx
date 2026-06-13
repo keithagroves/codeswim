@@ -2,10 +2,10 @@ import { useCallback, useEffect, useRef } from 'react'
 import { ActivityBar } from './components/ActivityBar'
 import { Breadcrumbs } from './components/Breadcrumbs'
 import { ChatPanel } from './components/ChatPanel'
-import { CodeView } from './components/CodeView'
 import { DiagramView } from './components/DiagramView'
 import { FileTree } from './components/FileTree'
 import { GitPanel } from './components/GitPanel'
+import { KanbanView } from './components/KanbanView'
 import { ReadView } from './components/ReadView'
 import { ScriptControls } from './components/ScriptControls'
 import { ScriptOutput } from './components/ScriptOutput'
@@ -13,8 +13,8 @@ import { SearchPanel } from './components/SearchPanel'
 import { SkillsPanel } from './components/SkillsPanel'
 import { SkillsView } from './components/SkillsView'
 import { TerminalPanel } from './components/TerminalPanel'
+import { RoomChatPanel } from './components/RoomChatPanel'
 import { Toasts } from './components/Toasts'
-import { extname } from './path-utils'
 import { StoreProvider } from './state'
 import { useStore } from './store'
 import logoUrl from './assets/codeswim.svg'
@@ -62,6 +62,7 @@ function SidePanel(): React.JSX.Element | null {
       {state.activeSection === 'skills' ? <SkillsPanel /> : null}
       {state.activeSection === 'git' ? <GitPanel /> : null}
       {state.activeSection === 'terminal' ? <TerminalPanel /> : null}
+      {state.activeSection === 'chat' ? <RoomChatPanel /> : null}
       <div
         className="side-panel-resizer"
         onMouseDown={onResizeStart}
@@ -72,59 +73,69 @@ function SidePanel(): React.JSX.Element | null {
   )
 }
 
-// Floating toggle pinned to the document's top-right corner. Flips a
-// markdown file between the rendered diagram and its raw source.
-function SourceToggle(): React.JSX.Element | null {
-  const { state, toggleSource } = useStore()
-  if (state.activeSection === 'skills') return null
-  if (!state.currentFile) return null
-  if (extname(state.currentFile) !== '.md') return null
-  if (state.view !== 'diagram' && state.view !== 'code') return null
-
-  const showingSource = state.view === 'code'
-  return (
-    <div className="doc-corner">
-      <button
-        className="doc-corner-btn"
-        onClick={toggleSource}
-        title={showingSource ? 'Show rendered diagram' : 'Show markdown source'}
-      >
-        {showingSource ? 'Diagram' : 'Source'}
-      </button>
-    </div>
-  )
-}
-
 function Header(): React.JSX.Element {
-  const { state, popTo, showOutput, navigateAbsolute } = useStore()
-  const canGoBack = state.breadcrumbs.length > 0
+  const { state, popTo, showOutput, navigateAbsolute, setWorkspaceView, openCurrentFileInEditor } =
+    useStore()
+  const inNavigator = state.workspaceView === 'navigator'
+  const canGoBack = inNavigator && state.breadcrumbs.length > 0
   const running = state.runningScript
   const chip = running !== null && state.view !== 'output' ? running : null
   const atOverview = state.currentFile === 'overview.md'
+  const rootName = state.rootPath?.split('/').filter(Boolean).at(-1) ?? 'Workspace'
 
   return (
     <div className="header">
-      {canGoBack ? (
+      <div className="workspace-view-switch" role="tablist" aria-label="Workspace view">
         <button
-          className="icon-btn"
-          onClick={() => void popTo(state.breadcrumbs.length - 1)}
-          title="Back"
-          aria-label="Back"
+          className={`tab-board ${state.workspaceView === 'kanban' ? 'is-active' : ''}`}
+          role="tab"
+          aria-selected={state.workspaceView === 'kanban'}
+          onClick={() => setWorkspaceView('kanban')}
         >
-          ←
+          Board
         </button>
-      ) : null}
-      <button
-        className="icon-btn"
-        onClick={() => void navigateAbsolute('overview.md', true)}
-        title="Overview"
-        aria-label="Overview"
-        disabled={atOverview}
-      >
-        ⌂
-      </button>
-      <Breadcrumbs />
+        <button
+          className={`tab-diagram ${state.workspaceView === 'navigator' ? 'is-active' : ''}`}
+          role="tab"
+          aria-selected={state.workspaceView === 'navigator'}
+          disabled={!state.currentFile}
+          onClick={() => setWorkspaceView('navigator')}
+        >
+          Diagram
+        </button>
+      </div>
+      {inNavigator ? (
+        <>
+          {canGoBack ? (
+            <button
+              className="icon-btn"
+              onClick={() => void popTo(state.breadcrumbs.length - 1)}
+              title="Back"
+              aria-label="Back"
+            >
+              ←
+            </button>
+          ) : null}
+          <button
+            className="icon-btn"
+            onClick={() => void navigateAbsolute('overview.md', true)}
+            title="Overview"
+            aria-label="Overview"
+            disabled={atOverview}
+          >
+            ⌂
+          </button>
+          <Breadcrumbs />
+        </>
+      ) : (
+        <div className="workspace-heading">{rootName}</div>
+      )}
       <div className="header-actions">
+        {inNavigator && state.currentFile ? (
+          <button className="secondary" onClick={() => void openCurrentFileInEditor()}>
+            Open in editor
+          </button>
+        ) : null}
         {chip ? (
           <button
             className={`run-chip ${chip.status === 'running' ? 'is-running' : 'is-exited'}`}
@@ -150,6 +161,9 @@ function Body(): React.JSX.Element {
   if (state.view === 'output') {
     return <ScriptOutput />
   }
+  if (state.workspaceView === 'kanban') {
+    return <KanbanView />
+  }
   if (!state.currentFile || state.fileContents === null) {
     return (
       <div className="empty-state">
@@ -167,13 +181,7 @@ function Body(): React.JSX.Element {
   if (state.view === 'read') {
     return <ReadView source={state.fileContents} />
   }
-  return (
-    <CodeView
-      path={state.currentFile}
-      contents={state.fileContents}
-      highlightRange={state.currentRange}
-    />
-  )
+  return <ReadView source={state.fileContents} />
 }
 
 function StartScreen(): React.JSX.Element {
@@ -258,8 +266,6 @@ function Shell(): React.JSX.Element {
       return (
         <div className="app">
           <div className="main-row">
-            <ActivityBar />
-            <SidePanel />
             <div className="content">
               <StartScreen />
             </div>
@@ -292,7 +298,6 @@ function Shell(): React.JSX.Element {
         <div className="main-column">
           {state.activeSection === 'skills' ? null : <Header />}
           <div className="content">
-            <SourceToggle />
             <Body />
           </div>
         </div>

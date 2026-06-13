@@ -1,5 +1,14 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import type { KanbanBoard } from '../shared/kanban'
+
+export type {
+  KanbanBoard,
+  KanbanCard,
+  KanbanColumn,
+  KanbanGitHubConfig,
+  KanbanPriority
+} from '../shared/kanban'
 
 export interface ScriptOutputPayload {
   name: string
@@ -45,6 +54,13 @@ export interface RunEntry {
   name: string
   command: string
   description?: string
+}
+
+export interface SourceExplanation {
+  sourcePath: string
+  documentPath: string
+  content: string
+  exists: boolean
 }
 
 export type SkillScope = 'global' | 'workspace' | 'builtin'
@@ -110,12 +126,34 @@ export interface GitCommitEntry {
   synthesized: boolean
 }
 
+export interface RoomIdentity {
+  roomId: string
+  slug: string
+  provider: 'github' | 'git'
+}
+
 const api = {
   pickFolder: (): Promise<string | null> => ipcRenderer.invoke('pick-folder'),
   readFile: (absPath: string): Promise<string> => ipcRenderer.invoke('read-file', absPath),
+  readSourceExplanation: (rootPath: string, sourcePath: string): Promise<SourceExplanation> =>
+    ipcRenderer.invoke('source-explanation:read', rootPath, sourcePath),
+  openWorkspaceFile: (rootPath: string, relPath: string): Promise<void> =>
+    ipcRenderer.invoke('workspace:open-file', rootPath, relPath),
   listMarkdown: (rootPath: string): Promise<string[]> =>
     ipcRenderer.invoke('list-markdown', rootPath),
   listTree: (rootPath: string): Promise<TreeNode[]> => ipcRenderer.invoke('list-tree', rootPath),
+  kanbanRead: (rootPath: string): Promise<KanbanBoard> =>
+    ipcRenderer.invoke('kanban:read', rootPath),
+  kanbanWrite: (rootPath: string, board: KanbanBoard): Promise<KanbanBoard> =>
+    ipcRenderer.invoke('kanban:write', rootPath, board),
+  kanbanGitHubSync: (rootPath: string, board: KanbanBoard): Promise<KanbanBoard> =>
+    ipcRenderer.invoke('kanban:github-sync', rootPath, board),
+  kanbanGitHubMove: (
+    rootPath: string,
+    board: KanbanBoard,
+    cardId: string,
+    columnId: string
+  ): Promise<void> => ipcRenderer.invoke('kanban:github-move', rootPath, board, cardId, columnId),
   watch: (rootPath: string): Promise<void> => ipcRenderer.invoke('watch', rootPath),
   unwatch: (): Promise<void> => ipcRenderer.invoke('unwatch'),
   onFileChanged: (cb: (absPath: string) => void): (() => void) => {
@@ -239,6 +277,8 @@ const api = {
     ipcRenderer.invoke('git:unstage-all', rootPath),
   gitLog: (rootPath: string, limit?: number): Promise<GitCommitEntry[]> =>
     ipcRenderer.invoke('git:log', rootPath, limit),
+  roomIdentity: (rootPath: string): Promise<RoomIdentity | null> =>
+    ipcRenderer.invoke('room:identity', rootPath),
   terminalCreate: (cwd?: string): Promise<string> => ipcRenderer.invoke('terminal:create', cwd),
   terminalWrite: (id: string, data: string): void => ipcRenderer.send('terminal:write', id, data),
   terminalResize: (id: string, cols: number, rows: number): void =>

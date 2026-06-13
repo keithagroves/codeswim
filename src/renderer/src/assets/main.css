@@ -15,6 +15,12 @@
   --error-bg: rgba(244, 112, 103, 0.1);
   --error-border: rgba(244, 112, 103, 0.5);
   --error-text: #f47067;
+
+  /* Pastel accents for tab identities. */
+  --pastel-mint: #a7e8c5;
+  --pastel-periwinkle: #bcc8ff;
+  --pastel-lavender: #d8c4f5;
+  --pastel-peach: #ffd3ae;
 }
 
 * {
@@ -80,7 +86,7 @@ body {
 /* Activity bar — narrow icon strip at the very left, like VS Code.
  * Always visible; clicking an icon switches the active SidePanel section. */
 .activity-bar {
-  width: 48px;
+  width: 54px;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
   background: var(--bg-muted);
@@ -96,7 +102,7 @@ body {
   background: transparent;
   border: 0;
   cursor: pointer;
-  height: 40px;
+  height: 46px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -462,6 +468,90 @@ button.secondary:hover {
   min-height: 48px;
 }
 
+.workspace-view-switch {
+  display: flex;
+  flex-shrink: 0;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.workspace-view-switch button {
+  /* Each tab carries a pastel identity color; inactive tabs show a faint
+     dot of it, the active tab gets a translucent wash. */
+  --tab-tint: var(--text-muted);
+  --tab-wash: var(--bg-raised);
+  min-width: 68px;
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.workspace-view-switch button.tab-board {
+  --tab-tint: var(--pastel-mint);
+  --tab-wash: rgba(120, 220, 170, 0.14);
+}
+
+.workspace-view-switch button.tab-diagram {
+  --tab-tint: var(--pastel-periwinkle);
+  --tab-wash: rgba(140, 160, 255, 0.14);
+}
+
+.workspace-view-switch button::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tab-tint);
+  opacity: 0.4;
+  transition: opacity 120ms ease;
+}
+
+.workspace-view-switch button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--tab-wash);
+}
+
+.workspace-view-switch button.is-active {
+  background: var(--tab-wash);
+  color: var(--tab-tint);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--tab-tint) 30%, transparent),
+    0 1px 3px rgb(0 0 0 / 28%);
+}
+
+.workspace-view-switch button.is-active::before,
+.workspace-view-switch button:hover:not(:disabled)::before {
+  opacity: 1;
+}
+
+.workspace-view-switch button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.workspace-heading {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .breadcrumbs {
   display: flex;
   align-items: center;
@@ -523,6 +613,481 @@ button.secondary:hover {
   flex: 1;
   overflow: auto;
   position: relative;
+}
+
+/* Kanban */
+.kanban-view {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  background: var(--bg);
+}
+
+.kanban-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  color: var(--text-muted);
+}
+
+.kanban-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  flex-shrink: 0;
+}
+
+.kanban-title-block {
+  min-width: 0;
+}
+
+.kanban-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.kanban-title-row h1 {
+  overflow: hidden;
+  margin: 0;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kanban-save-state {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.kanban-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kanban-subtitle-separator {
+  color: var(--border);
+}
+
+.kanban-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.kanban-toolbar-actions .primary,
+.kanban-toolbar-actions .secondary {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.kanban-board {
+  display: grid;
+  grid-auto-columns: minmax(260px, 310px);
+  grid-auto-flow: column;
+  align-items: stretch;
+  flex: 1;
+  gap: 14px;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 20px 24px;
+}
+
+.kanban-column {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-top: 2px solid var(--border);
+  background: rgb(255 255 255 / 1.5%);
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.kanban-column.is-drop-target {
+  border-top-color: var(--accent);
+  background: var(--accent-tint);
+}
+
+.kanban-column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 42px;
+  padding: 0 8px 0 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.kanban-column-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.kanban-column-name h2 {
+  overflow: hidden;
+  margin: 0;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kanban-column-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.kanban-column-count {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.kanban-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.kanban-icon-btn:hover {
+  background: var(--bg-raised);
+  color: var(--text);
+}
+
+.kanban-card-list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 80px;
+  overflow-y: auto;
+  padding: 10px 8px;
+}
+
+.kanban-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-raised);
+  cursor: pointer;
+  outline: none;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+
+.kanban-card:hover,
+.kanban-card:focus-visible {
+  border-color: rgb(110 155 255 / 58%);
+  box-shadow: 0 5px 16px rgb(0 0 0 / 24%);
+  transform: translateY(-1px);
+}
+
+.kanban-card.is-dragging {
+  opacity: 0.42;
+  transform: scale(0.98);
+}
+
+.kanban-card-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 12px;
+}
+
+.kanban-priority {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.kanban-priority-low {
+  background: #64c4c7;
+}
+
+.kanban-priority-medium {
+  background: #d9a73e;
+}
+
+.kanban-priority-high {
+  background: #ef6f78;
+}
+
+.kanban-card-source {
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.kanban-card h3 {
+  overflow-wrap: anywhere;
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.35;
+}
+
+.kanban-card p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.kanban-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.kanban-label {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text-muted);
+  font-size: 9.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kanban-card-links {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.kanban-card-links button {
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  font-size: 10.5px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kanban-card-links button:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+.kanban-card-links .kanban-external-link {
+  flex-shrink: 0;
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.kanban-empty-column {
+  min-height: 58px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+
+.kanban-empty-column:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.kanban-modal-backdrop {
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgb(0 0 0 / 62%);
+}
+
+.kanban-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(560px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-raised);
+  box-shadow: 0 20px 70px rgb(0 0 0 / 50%);
+}
+
+.kanban-github-modal {
+  width: min(440px, 100%);
+}
+
+.kanban-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.kanban-modal-header h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.kanban-field {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.kanban-field > span {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.kanban-field input,
+.kanban-field textarea,
+.kanban-field select {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.kanban-field input,
+.kanban-field select {
+  height: 34px;
+  padding: 0 9px;
+}
+
+.kanban-field textarea {
+  min-height: 104px;
+  padding: 8px 9px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.kanban-field input:focus,
+.kanban-field textarea:focus,
+.kanban-field select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.kanban-field-row {
+  display: flex;
+  gap: 12px;
+}
+
+.kanban-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 4px;
+}
+
+.kanban-modal-actions > div {
+  display: flex;
+  gap: 8px;
+}
+
+.kanban-danger-btn {
+  padding: 6px 10px;
+  border: 1px solid var(--error-border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--error-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.kanban-danger-btn:hover {
+  background: var(--error-bg);
+}
+
+@media (max-width: 760px) {
+  .kanban-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .kanban-toolbar-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .kanban-field-row {
+    flex-direction: column;
+  }
 }
 
 /* Diagram view */
@@ -706,23 +1271,6 @@ button.secondary:hover {
 .diagram-canvas .has-navigation-target:hover > path {
   stroke: var(--accent) !important;
   stroke-width: 2px !important;
-}
-
-/* Code view */
-.code-view {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.code-view .cm-editor {
-  height: 100%;
-  font-size: 13px;
-}
-
-.code-view .cm-scroller {
-  font-family:
-    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 }
 
 /* Banners and toasts */
@@ -1201,8 +1749,13 @@ button.secondary:hover {
 }
 
 @keyframes chat-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
 }
 
 .chat-list {
@@ -1552,43 +2105,6 @@ button.secondary:hover {
   margin-bottom: 0;
 }
 
-/* Floating source/diagram toggle pinned to the document's top-right corner.
-   Sticky + zero height keeps it in the corner while .content scrolls without
-   pushing the document down. */
-.doc-corner {
-  position: sticky;
-  top: 0;
-  height: 0;
-  display: flex;
-  justify-content: flex-end;
-  align-items: flex-start;
-  z-index: 5;
-}
-
-.doc-corner-btn {
-  appearance: none;
-  -webkit-appearance: none;
-  margin: 12px 16px 0 0;
-  height: 30px;
-  padding: 0 16px;
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg-raised);
-  color: var(--text);
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-}
-
-.doc-corner-btn:hover {
-  background: #26262c;
-  border-color: #34343c;
-}
-
 /* Read view — magazine-style document reader */
 .read-view {
   flex: 1;
@@ -1752,6 +2268,31 @@ button.secondary:hover {
   border-bottom-color: var(--accent);
 }
 
+.explanation-empty-action {
+  margin: 24px 0 8px;
+  padding: 18px 20px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-raised);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.explanation-empty-action strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.explanation-empty-action p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
 .read-eyebrow {
   /* legacy fallback; see .read-path / .read-tags below */
   display: none;
@@ -1787,16 +2328,16 @@ button.secondary:hover {
 /* Visual hint that a mermaid node in the read view is clickable. The
  * underlying click handler is bound by mermaid's own bindFunctions; this
  * just makes the cursor and hover state communicate it. */
-.read-diagram .node[role="button"],
+.read-diagram .node[role='button'],
 .read-diagram .node.clickable-node {
   cursor: pointer;
 }
 
-.read-diagram .node[role="button"]:hover rect,
-.read-diagram .node[role="button"]:hover polygon,
-.read-diagram .node[role="button"]:hover circle,
-.read-diagram .node[role="button"]:hover ellipse,
-.read-diagram .node[role="button"]:hover path {
+.read-diagram .node[role='button']:hover rect,
+.read-diagram .node[role='button']:hover polygon,
+.read-diagram .node[role='button']:hover circle,
+.read-diagram .node[role='button']:hover ellipse,
+.read-diagram .node[role='button']:hover path {
   filter: brightness(0.96);
 }
 
@@ -2132,14 +2673,6 @@ button.secondary:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 100%;
-}
-
-/* Line-range highlight in CodeView — applied to each line in the navigate
- * target's #L10-L22 range. Warm GitHub-yellow tint plus a left-edge bar
- * so the range is visible even without scrolling. */
-.cm-target-line {
-  background: rgba(217, 167, 62, 0.14);
-  box-shadow: -3px 0 0 var(--warning) inset;
 }
 
 /* Settings pane — slides in between the session bar and the message list
@@ -2738,11 +3271,17 @@ body.is-panning .diagram-canvas-wrap {
 
 .git-tab:hover {
   color: var(--text);
+  border-bottom-color: color-mix(in srgb, var(--pastel-lavender) 40%, transparent);
 }
 
 .git-tab.is-active {
-  color: var(--text);
-  border-bottom-color: var(--accent);
+  color: var(--pastel-lavender);
+  border-bottom-color: var(--pastel-lavender);
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--pastel-lavender) 10%, transparent),
+    transparent 70%
+  );
 }
 
 .git-history {
@@ -3048,9 +3587,9 @@ body.is-panning .diagram-canvas-wrap {
   color: #d4d4d4;
 }
 .terminal-tab.active {
-  color: #d4d4d4;
+  color: var(--pastel-peach);
   background: #0e0e11;
-  border-top: 1px solid #569cd6;
+  border-top: 1px solid var(--pastel-peach);
 }
 
 .terminal-tab-label {
@@ -3103,4 +3642,213 @@ body.is-panning .diagram-canvas-wrap {
   inset: 0;
   padding: 4px 6px;
   box-sizing: border-box;
+}
+
+/* Room chat panel — per-project multi-user chat. Sits inside .side-panel. */
+.chat-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-muted);
+}
+
+.chat-empty {
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 18px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.chat-empty-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.chat-empty code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  background: var(--bg-raised);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.chat-name-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 240px;
+}
+
+.chat-name-form label {
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.chat-name-form input,
+.chat-composer input {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.chat-name-form input:focus,
+.chat-composer input:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--pastel-periwinkle) 60%, var(--border));
+}
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  min-height: 48px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.chat-room-name {
+  font-size: 12px;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-status {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.chat-status::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.chat-status-open::before {
+  background: var(--pastel-mint);
+}
+
+.chat-status-connecting::before {
+  background: var(--pastel-peach);
+}
+
+.chat-status-closed::before {
+  background: var(--error-text);
+}
+
+/* "Who's viewing what" presence strip. */
+.chat-presence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.chat-presence-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  max-width: 100%;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--pastel-periwinkle) 14%, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.chat-presence-item:hover {
+  background: color-mix(in srgb, var(--pastel-periwinkle) 24%, transparent);
+}
+
+.chat-presence-name {
+  font-weight: 600;
+}
+
+.chat-presence-file {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chat-message {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat-message-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.chat-message-author {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pastel-periwinkle);
+}
+
+.chat-message-time {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.chat-message-text {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.chat-composer {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.chat-composer input {
+  flex: 1;
+}
+
+.chat-composer input:disabled {
+  opacity: 0.6;
 }

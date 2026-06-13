@@ -1,14 +1,16 @@
 import { createContext, useContext } from 'react'
 import type { PendingQuestion } from './agent'
-import type { LineRange } from './path-utils'
 import type { CommitMessage } from './commit/synthesize'
 
-export type { LineRange } from './path-utils'
 export type { PendingQuestion } from './agent'
 export type { CommitMessage } from './commit/synthesize'
 
-export type View = 'diagram' | 'code' | 'read' | 'output'
-export type FileView = 'diagram' | 'code' | 'read'
+export type View = 'diagram' | 'read' | 'output'
+export type FileView = 'diagram' | 'read'
+export type WorkspaceView = 'kanban' | 'navigator'
+// Activity-bar / side-panel sections, in no particular order. The user's
+// preferred order lives in AppState.activityOrder.
+export type Section = 'agent' | 'files' | 'search' | 'skills' | 'git' | 'terminal' | 'chat'
 
 export interface Toast {
   id: number
@@ -67,7 +69,12 @@ export interface ChatMessage {
 
 export interface AppState {
   rootPath: string | null
+  workspaceView: WorkspaceView
   currentFile: string | null
+  // Markdown document currently rendered for currentFile. For source
+  // leaves this is the companion explanation path.
+  currentDocumentPath: string | null
+  sourceExplanationExists: boolean
   breadcrumbs: string[]
   view: View
   fileContents: string | null
@@ -81,29 +88,27 @@ export interface AppState {
   // Side-panel layout. ActivityBar lives at the very left and stays
   // visible; SidePanel sits to its right and shows whichever section is
   // active. null = side panel collapsed (icons only, like VS Code).
-  activeSection: 'files' | 'agent' | 'search' | 'skills' | 'git' | 'terminal' | null
+  activeSection: Section | null
   // Remembers which section was last open so toggling the panel closed
   // and back open restores it (rather than always returning to 'files').
-  lastActiveSection: 'files' | 'agent' | 'search' | 'skills' | 'git' | 'terminal'
+  lastActiveSection: Section
   // Side panel width in pixels. Persisted to localStorage so it survives
   // reloads.
   sidePanelWidth: number
   // User-controlled order of activity-bar sections (drag-to-reorder).
   // Persisted to localStorage.
-  activityOrder: Array<'agent' | 'files' | 'search' | 'skills' | 'git' | 'terminal'>
+  activityOrder: Section[]
   // Selected skill in the Skills view (null = nothing picked yet).
   // linkTarget is set when the skill directory is a symlink, so the view
   // can show where it came from and adjust delete messaging. `file` is the
   // POSIX-relative path of the file currently being viewed inside the
   // skill — defaults to SKILL.md when omitted.
-  currentSkill:
-    | {
-        scope: 'global' | 'workspace' | 'builtin'
-        name: string
-        linkTarget?: string
-        file?: string
-      }
-    | null
+  currentSkill: {
+    scope: 'global' | 'workspace' | 'builtin'
+    name: string
+    linkTarget?: string
+    file?: string
+  } | null
   chatStatus: ChatStatus
   chatError: string | null
   chatMessages: ChatMessage[]
@@ -111,9 +116,6 @@ export interface AppState {
   sessions: SessionInfo[]
   currentSessionId: string | null
   recents: string[]
-  // Highlight range when navigating to a source file with a #L10-L22 ref;
-  // null otherwise. Reset on workspace change.
-  currentRange: LineRange | null
   // Most recent unanswered question opencode raised for the current
   // session. Cleared on reply/reject or when switching sessions.
   pendingQuestion: PendingQuestion | null
@@ -124,6 +126,7 @@ export interface StoreApi {
   pickRoot(): Promise<void>
   navigateRelative(relativePathFromCurrent: string): Promise<void>
   navigateAbsolute(relativeToRoot: string, pushBreadcrumb: boolean): Promise<void>
+  inspectFile(relativeToRoot: string): Promise<void>
   popTo(index: number): Promise<void>
   toast(message: string, kind?: 'info' | 'error'): void
   reload(): Promise<void>
@@ -131,27 +134,25 @@ export interface StoreApi {
   killScript(): Promise<void>
   showOutput(): void
   hideOutput(): void
-  // For markdown files: switch between rendered diagram and raw source view.
-  toggleSource(): void
-  // Switch directly to one of the file-level views (read/diagram/code).
-  setView(view: FileView): void
+  // Switch the main workspace surface while preserving the selected file.
+  setWorkspaceView(view: WorkspaceView): void
+  openCurrentFileInEditor(): Promise<void>
+  createCurrentExplanation(): Promise<void>
   // Toggle side panel visibility (collapsed ↔ last-active-section).
   toggleSidebar(): void
   refreshTree(): Promise<void>
   sendChat(text: string): Promise<void>
-  setActiveSection(section: 'files' | 'agent' | 'search' | 'skills' | 'git' | 'terminal' | null): void
-  toggleActiveSection(section: 'files' | 'agent' | 'search' | 'skills' | 'git' | 'terminal'): void
+  setActiveSection(section: Section | null): void
+  toggleActiveSection(section: Section): void
   setSidePanelWidth(width: number): void
-  setActivityOrder(order: Array<'agent' | 'files' | 'search' | 'skills' | 'git' | 'terminal'>): void
+  setActivityOrder(order: Section[]): void
   setCurrentSkill(
-    skill:
-      | {
-          scope: 'global' | 'workspace' | 'builtin'
-          name: string
-          linkTarget?: string
-          file?: string
-        }
-      | null
+    skill: {
+      scope: 'global' | 'workspace' | 'builtin'
+      name: string
+      linkTarget?: string
+      file?: string
+    } | null
   ): void
   answerQuestion(requestID: string, answers: string[][]): Promise<void>
   rejectQuestion(requestID: string): Promise<void>

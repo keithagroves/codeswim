@@ -1,0 +1,15 @@
+{
+  "comment": "Editor/standalone typecheck for the PartyKit server. Not part of `npm run typecheck` — PartyKit bundles party/ with its own toolchain. Run `npx partykit dev` to build/serve it.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "WebWorker"],
+    "types": [],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true
+  },
+  "include": ["**/*.ts", "../src/shared/chat.ts"]
+}

@@ -1,0 +1,6 @@
+{
+  "$schema": "https://www.partykit.io/schema.json",
+  "name": "codeswim",
+  "main": "party/codeswim.ts",
+  "compatibilityDate": "2025-01-01"
+}

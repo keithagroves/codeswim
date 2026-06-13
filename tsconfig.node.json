@@ -4,7 +4,8 @@
     "electron.vite.config.*",
     "src/main/**/*",
     "src/preload/**/*",
-    "src/harness/**/*"
+    "src/harness/**/*",
+    "src/shared/**/*"
   ],
   "compilerOptions": {
     "composite": true,
