@@ -87,6 +87,7 @@ Vitest tests live next to the modules they cover:
 - [AGENTS.md](AGENTS.md) — guidance for AI agents working in this repo.
 - [CLAUDE.md](CLAUDE.md) — Claude Code project instructions (process layout, gotchas, "don'ts").
 - [todos.md](todos.md) — ongoing work notes.
+- [philosphy.md](philosphy.md) — design philosophy: two-panel loop, MDD principles, attention-based design.
 - [pitch/pitch-deck.md](pitch/pitch-deck.md) — pitch deck slide content (generated to .pptx via `pitch/generate.js`).
 - [pitch/generate.js](pitch/generate.js) — pitch deck .pptx generator.
 

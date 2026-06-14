@@ -53,6 +53,7 @@ flowchart TD
 - [src/main/room.ts](../src/main/room.ts) — room identity management for chat.
 - [src/main/source-explanations.ts](../src/main/source-explanations.ts) — companion explanation path resolution and read.
 - [src/main/agents-doc.ts](../src/main/agents-doc.ts) — reads and writes AGENTS.md files (workspace scope and global ~/.agents/ scope).
+- [src/main/github-auth.ts](../src/main/github-auth.ts) — GitHub OAuth device-flow authentication for the chat feature.
 - [src/shared/chat.ts](../src/shared/chat.ts) — shared chat types used by main and renderer.
 - [src/shared/kanban.ts](../src/shared/kanban.ts) — shared kanban types used by main and renderer.
 

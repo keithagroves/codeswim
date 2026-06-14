@@ -2821,7 +2821,9 @@ body.is-mac .header {
 .diagram-canvas-wrap {
   position: relative;
   flex: 1;
-  min-height: 360px;
+  /* Keep the canvas the dominant element even when prose follows it — flex:1
+   * alone collapses to this floor once prose claims the leftover space. */
+  min-height: 75vh;
   overflow: hidden;
   background:
     radial-gradient(circle, rgba(255, 255, 255, 0.05) 1px, transparent 1px) 0 0 / 24px 24px,
