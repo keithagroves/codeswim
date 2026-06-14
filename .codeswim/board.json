@@ -18,6 +18,126 @@
       "labels": ["agent-harness", "search"],
       "createdAt": 1749830000000,
       "updatedAt": 1749830000000
+    },
+    {
+      "id": "card-002",
+      "title": "AI-driven kanban card creation",
+      "description": "The AI agent should be the primary way users add cards to the kanban board — capture tasks from conversation and add them automatically.",
+      "columnId": "backlog",
+      "priority": "medium",
+      "labels": ["agent-harness", "board"],
+      "createdAt": 1749830000000,
+      "updatedAt": 1749830000000
+    },
+    {
+      "id": "card-003",
+      "title": "Add light/dark mode toggle",
+      "description": "The app should support both light mode and dark mode themes.",
+      "columnId": "backlog",
+      "priority": "medium",
+      "labels": ["ui"],
+      "createdAt": 1749830000000,
+      "updatedAt": 1749830000000
+    },
+    {
+      "id": "card-004",
+      "title": "Move 'Open in editor' from header to file viewer",
+      "description": "The open-in-editor button shouldn't be in the app header; it should be a button in the viewer for the file.",
+      "columnId": "backlog",
+      "priority": "medium",
+      "labels": ["ui"],
+      "createdAt": 1749830000000,
+      "updatedAt": 1749830000000
+    },
+    {
+      "id": "card-005",
+      "title": "Node deep-linking to specific code sections",
+      "description": "When clicking a node related to specific code, navigate to that exact section (e.g. `# enemy-detection` anchor) rather than just the file.",
+      "columnId": "backlog",
+      "priority": "medium",
+      "labels": ["navigation"],
+      "createdAt": 1749830000000,
+      "updatedAt": 1749830000000
+    },
+    {
+      "id": "card-006",
+      "title": "Fix refresh bug — files show 'loading' forever",
+      "description": "When clicking refresh, files show 'loading' state indefinitely until clicked individually.",
+      "columnId": "backlog",
+      "priority": "high",
+      "labels": ["bug"],
+      "createdAt": 1749830000000,
+      "updatedAt": 1749830000000
+    },
+    {
+      "id": "card-007",
+      "title": "Fix skill load/link buttons at workspace level",
+      "description": "The skill load and link buttons don't work at the workspace level.",
+      "columnId": "backlog",
+      "priority": "high",
+      "labels": ["bug"],
+      "createdAt": 1749830000000,
+      "updatedAt": 1749830000000
+    },
+    {
+      "id": "card-008",
+      "title": "Add internal browser (like Codex)",
+      "description": "The agent should have an internal browser it can view and control to help debug and improve the app.",
+      "columnId": "backlog",
+      "priority": "medium",
+      "labels": ["feature"],
+      "createdAt": 1749830000000,
+      "updatedAt": 1749830000000
+    },
+    {
+      "id": "card-009",
+      "title": "Auto-create GitHub kanban board project",
+      "description": "Codeswim should automatically create a kanban board project on GitHub for the repo.",
+      "columnId": "backlog",
+      "priority": "low",
+      "labels": ["feature", "github"],
+      "createdAt": 1749830000000,
+      "updatedAt": 1749830000000
+    },
+    {
+      "id": "card-010",
+      "title": "Show Agent.md in skills menu",
+      "description": "Agent.md should be viewable from the skills menu in the app.",
+      "columnId": "backlog",
+      "priority": "medium",
+      "labels": ["ui"],
+      "createdAt": 1749830000000,
+      "updatedAt": 1749830000000
+    },
+    {
+      "id": "card-011",
+      "title": "Migrate from system.txt to Agent.md",
+      "description": "Stop using system.txt and use Agent.md instead. Needs discussion before updating.",
+      "columnId": "backlog",
+      "priority": "medium",
+      "labels": ["discussion"],
+      "createdAt": 1749830000000,
+      "updatedAt": 1749830000000
+    },
+    {
+      "id": "card-012",
+      "title": "Team chat feature per GitHub repo",
+      "description": "Add ability to chat with teammates based on GitHub URL. Repo owner defines chat structure, admins, bans via a file. Requires a websocket server.",
+      "columnId": "backlog",
+      "priority": "low",
+      "labels": ["feature", "future"],
+      "createdAt": 1749830000000,
+      "updatedAt": 1749830000000
+    },
+    {
+      "id": "card-013",
+      "title": "In-app kanban board for project tracking",
+      "description": "Add a kanban board view for tracking project progress within codeswim.",
+      "columnId": "backlog",
+      "priority": "low",
+      "labels": ["feature", "board", "future"],
+      "createdAt": 1749830000000,
+      "updatedAt": 1749830000000
     }
   ]
 }
