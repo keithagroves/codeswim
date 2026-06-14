@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
-import type { GitStatus, GitCommitEntry } from '../../../preload/index.d'
+import type { GitStatus, GitCommitEntry, GitSyncResult } from '../../../preload/index.d'
 import { runCoverage } from '../coverage/run'
 import type { CoverageReport } from '../coverage/coverage'
 import type { SyncPlan } from '../commit/triage'
@@ -32,7 +32,7 @@ type Phase =
   | { kind: 'working'; label: string }
   | { kind: 'blocked'; report: CoverageReport }
   | { kind: 'plan'; plan: SyncPlan }
-  | { kind: 'done'; commits: Array<{ subject: string; sha: string }> }
+  | { kind: 'done'; commits: Array<{ subject: string; sha: string }>; sync: GitSyncResult }
   | { kind: 'error'; message: string }
 
 function coverageIssueCount(r: CoverageReport): number {
@@ -158,23 +158,40 @@ export function GitPanel(): React.JSX.Element {
     }
   }, [tab, root, historyNonce])
 
-  // Commit every group in a plan, sequentially, then land on the done screen.
+  // Commit every group in a plan, sequentially, then back the commits up to the
+  // remote (pull + push). The commits are saved locally before we touch the
+  // network, so a failed/absent push never loses the user's work — the done
+  // screen just reports "saved here" instead of "backed up online".
   const commitPlan = useCallback(
     async (plan: SyncPlan) => {
       if (!root) return
-      setPhase({ kind: 'working', label: 'Committing…' })
+      setPhase({ kind: 'working', label: 'Saving…' })
       const done: Array<{ subject: string; sha: string }> = []
       try {
         for (const g of plan.groups) {
           const sha = await commitGroup(g.paths, g.subject, g.body)
           done.push({ subject: g.subject, sha })
         }
-        setPhase({ kind: 'done', commits: done })
-        setHistoryNonce((n) => n + 1)
-        await refreshStatus()
       } catch (err) {
         setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
+        return
       }
+      setPhase({ kind: 'working', label: 'Backing up online…' })
+      let sync: GitSyncResult
+      try {
+        sync = await window.api.gitPush(root)
+      } catch (err) {
+        sync = {
+          remote: true,
+          pushed: false,
+          branch: null,
+          conflict: false,
+          error: err instanceof Error ? err.message : String(err)
+        }
+      }
+      setPhase({ kind: 'done', commits: done, sync })
+      setHistoryNonce((n) => n + 1)
+      await refreshStatus()
     },
     [root, commitGroup, refreshStatus]
   )
@@ -454,7 +471,11 @@ export function GitPanel(): React.JSX.Element {
             ) : null}
 
             {phase.kind === 'done' ? (
-              <SyncDone commits={phase.commits} onDismiss={() => setPhase({ kind: 'idle' })} />
+              <SyncDone
+                commits={phase.commits}
+                sync={phase.sync}
+                onDismiss={() => setPhase({ kind: 'idle' })}
+              />
             ) : null}
 
             {phase.kind === 'plan' ? (
@@ -591,17 +612,47 @@ function PlanReview({
   )
 }
 
+// Plain-language summary of the backup (push) step for the done screen.
+function backupStatus(sync: GitSyncResult): { title: string; note: string; kind: 'ok' | 'warn' } {
+  if (sync.pushed) {
+    return { title: '✓ Saved and backed up online', note: '', kind: 'ok' }
+  }
+  if (!sync.remote) {
+    return {
+      title: '✓ Saved on this computer',
+      note: 'Connect this project to GitHub to back your work up online.',
+      kind: 'ok'
+    }
+  }
+  if (sync.conflict) {
+    return {
+      title: '✓ Saved on this computer',
+      note: 'Someone else changed things online. Your work is safe here — ask the agent to help merge it before backing up.',
+      kind: 'warn'
+    }
+  }
+  return {
+    title: '✓ Saved on this computer',
+    note: 'Couldn’t reach GitHub just now — we’ll back it up next time you sync.',
+    kind: 'warn'
+  }
+}
+
 function SyncDone({
   commits,
+  sync,
   onDismiss
 }: {
   commits: Array<{ subject: string; sha: string }>
+  sync: GitSyncResult
   onDismiss: () => void
 }): React.JSX.Element {
+  const status = backupStatus(sync)
   return (
     <div className="git-done">
-      <div className="git-done-title">
-        ✓ Saved {commits.length === 1 ? 'your change' : `${commits.length} commits`}
+      <div className="git-done-title">{status.title}</div>
+      <div className="git-done-count">
+        {commits.length === 1 ? '1 commit' : `${commits.length} commits`}
       </div>
       <ul className="git-done-list">
         {commits.map((c) => (
@@ -611,6 +662,9 @@ function SyncDone({
           </li>
         ))}
       </ul>
+      {status.note ? (
+        <p className={`git-done-note ${status.kind === 'warn' ? 'is-warn' : ''}`}>{status.note}</p>
+      ) : null}
       <div className="git-actions">
         <button className="script-btn" onClick={onDismiss}>
           Done

@@ -124,6 +124,14 @@ export interface GitInitResult {
   createdGitignore: boolean
 }
 
+export interface GitSyncResult {
+  remote: boolean
+  pushed: boolean
+  branch: string | null
+  conflict: boolean
+  error?: string
+}
+
 export interface GitCommitEntry {
   hash: string
   shortHash: string
@@ -138,6 +146,23 @@ export interface RoomIdentity {
   roomId: string
   slug: string
   provider: 'github' | 'git'
+}
+
+export interface GitHubUser {
+  id: number
+  login: string
+  name: string | null
+  avatarUrl: string | null
+}
+
+export interface GitHubStatus {
+  configured: boolean
+  user: GitHubUser | null
+}
+
+export interface GitHubSignInResult {
+  userCode: string
+  verificationUri: string
 }
 
 export interface GitIgnoreResult {
@@ -292,6 +317,7 @@ const api = {
     ipcRenderer.invoke('git:working-diff', rootPath),
   gitFileDiff: (rootPath: string, filePath: string): Promise<string> =>
     ipcRenderer.invoke('git:file-diff', rootPath, filePath),
+  gitPush: (rootPath: string): Promise<GitSyncResult> => ipcRenderer.invoke('git:push', rootPath),
   gitCommit: (rootPath: string, subject: string, body: string): Promise<string> =>
     ipcRenderer.invoke('git:commit', rootPath, subject, body),
   gitCommitGroup: (
@@ -310,6 +336,16 @@ const api = {
     ipcRenderer.invoke('git:log', rootPath, limit),
   roomIdentity: (rootPath: string): Promise<RoomIdentity | null> =>
     ipcRenderer.invoke('room:identity', rootPath),
+  githubStatus: (): Promise<GitHubStatus> => ipcRenderer.invoke('github:status'),
+  githubSignIn: (): Promise<GitHubSignInResult | { error: string }> =>
+    ipcRenderer.invoke('github:sign-in'),
+  githubSignOut: (): Promise<void> => ipcRenderer.invoke('github:sign-out'),
+  githubToken: (): Promise<string | null> => ipcRenderer.invoke('github:token'),
+  onGitHubAuthChanged: (cb: (user: GitHubUser | null) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, user: GitHubUser | null): void => cb(user)
+    ipcRenderer.on('github:auth-changed', listener)
+    return () => ipcRenderer.removeListener('github:auth-changed', listener)
+  },
   terminalCreate: (cwd?: string): Promise<string> => ipcRenderer.invoke('terminal:create', cwd),
   terminalWrite: (id: string, data: string): void => ipcRenderer.send('terminal:write', id, data),
   terminalResize: (id: string, cols: number, rows: number): void =>

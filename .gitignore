@@ -6,3 +6,7 @@ out
 *.log*
 .playwright-cli/
 pitch/
+.env
+.env.*
+!.env.example
+.wrangler/

@@ -18,6 +18,8 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "test": "vitest run",
     "test:watch": "vitest",
+    "party:dev": "wrangler dev --var REQUIRE_AUTH:false",
+    "party:deploy": "wrangler deploy",
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
     "build:harness": "node scripts/build-harness.mjs",
@@ -51,6 +53,7 @@
     "@types/node": "^22.19.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "@cloudflare/workers-types": "^4.20250101.0",
     "@vitejs/plugin-react": "^5.1.1",
     "electron": "^39.2.6",
     "electron-builder": "^26.0.12",
@@ -60,12 +63,13 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
-    "partykit": "^0.0.115",
+    "partyserver": "^0.0.74",
     "prettier": "^3.7.4",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "typescript": "^5.9.3",
     "vite": "^7.2.6",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "wrangler": "^4.40.0"
   }
 }

@@ -123,6 +123,14 @@ export interface GitInitResult {
   createdGitignore: boolean
 }
 
+export interface GitSyncResult {
+  remote: boolean
+  pushed: boolean
+  branch: string | null
+  conflict: boolean
+  error?: string
+}
+
 export interface GitIgnoreResult {
   // Patterns actually appended to .gitignore (ones already present are skipped).
   added: string[]
@@ -144,6 +152,24 @@ export interface RoomIdentity {
   roomId: string
   slug: string
   provider: 'github' | 'git'
+}
+
+export interface GitHubUser {
+  id: number
+  login: string
+  name: string | null
+  avatarUrl: string | null
+}
+
+export interface GitHubStatus {
+  // false when GITHUB_CLIENT_ID is unset — sign-in is unavailable.
+  configured: boolean
+  user: GitHubUser | null
+}
+
+export interface GitHubSignInResult {
+  userCode: string
+  verificationUri: string
 }
 
 export interface DiagramNavApi {
@@ -227,6 +253,7 @@ export interface DiagramNavApi {
   gitStagedDiff(rootPath: string): Promise<string>
   gitWorkingDiff(rootPath: string): Promise<string>
   gitFileDiff(rootPath: string, filePath: string): Promise<string>
+  gitPush(rootPath: string): Promise<GitSyncResult>
   gitCommit(rootPath: string, subject: string, body: string): Promise<string>
   gitCommitGroup(rootPath: string, paths: string[], subject: string, body: string): Promise<string>
   gitAddToGitignore(rootPath: string, patterns: string[]): Promise<GitIgnoreResult>
@@ -237,6 +264,13 @@ export interface DiagramNavApi {
   // Stable chat-room identity derived from the repo's origin remote, or null
   // when the workspace has no shared remote to key a room on.
   roomIdentity(rootPath: string): Promise<RoomIdentity | null>
+  // GitHub auth for chat. signIn starts the OAuth device flow and returns the
+  // code to display; completion arrives later via onGitHubAuthChanged.
+  githubStatus(): Promise<GitHubStatus>
+  githubSignIn(): Promise<GitHubSignInResult | { error: string }>
+  githubSignOut(): Promise<void>
+  githubToken(): Promise<string | null>
+  onGitHubAuthChanged(cb: (user: GitHubUser | null) => void): () => void
   terminalCreate(cwd?: string): Promise<string>
   terminalWrite(id: string, data: string): void
   terminalResize(id: string, cols: number, rows: number): void

@@ -11,6 +11,8 @@ export interface ChatUser {
   // POSIX-relative path of the diagram/file this user is currently viewing,
   // or null. Drives the "Sam is viewing architecture/auth.md" presence.
   viewing: string | null
+  // GitHub avatar URL when the room authenticated the user, else null/absent.
+  avatarUrl?: string | null
 }
 
 export interface ChatMessage {
@@ -26,11 +28,22 @@ export interface ChatMessage {
 
 // Client → server.
 export type ClientMessage =
+  // First frame when the room requires auth: a GitHub token plus the repo slug
+  // the room claims to be. The server verifies the token grants access to that
+  // repo and that hash(slug) matches the room before admitting the connection.
+  // Sent as a message (not a URL param) so the token never lands in edge logs.
+  | { type: 'auth'; token: string; slug: string }
   | { type: 'chat'; text: string }
   | { type: 'viewing'; path: string | null }
 
 // Server → client.
 export type ServerMessage =
+  // Auth accepted; the client may now treat the connection as ready. Only sent
+  // on rooms that require auth (open rooms send `init` straight away).
+  | { type: 'auth-ok' }
+  // Auth rejected (or required but not provided). The client should stop
+  // reconnecting and prompt the user to sign in.
+  | { type: 'error'; code: 'auth-required' | 'auth-failed'; message: string }
   // Full state on join: recent history + current roster.
   | { type: 'init'; messages: ChatMessage[]; users: ChatUser[] }
   | { type: 'message'; message: ChatMessage }
@@ -51,7 +64,13 @@ export function parseServerMessage(raw: string): ServerMessage | null {
   }
   if (typeof value !== 'object' || value === null) return null
   const msg = value as { type?: unknown }
-  if (msg.type === 'init' || msg.type === 'message' || msg.type === 'presence') {
+  if (
+    msg.type === 'init' ||
+    msg.type === 'message' ||
+    msg.type === 'presence' ||
+    msg.type === 'auth-ok' ||
+    msg.type === 'error'
+  ) {
     return value as ServerMessage
   }
   return null
@@ -66,6 +85,9 @@ export function parseClientMessage(raw: string): ClientMessage | null {
   }
   if (typeof value !== 'object' || value === null) return null
   const msg = value as Record<string, unknown>
+  if (msg.type === 'auth' && typeof msg.token === 'string' && typeof msg.slug === 'string') {
+    return { type: 'auth', token: msg.token, slug: msg.slug }
+  }
   if (msg.type === 'chat' && typeof msg.text === 'string') {
     return { type: 'chat', text: msg.text }
   }

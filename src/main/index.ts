@@ -32,6 +32,7 @@ import {
   gitStagedDiff,
   gitWorkingDiff,
   gitFileDiff,
+  gitPushCurrent,
   gitCommit,
   gitCommitGroup,
   gitAddToGitignore,
@@ -41,6 +42,15 @@ import {
   gitLog
 } from './git'
 import { getRoomIdentity } from './room'
+import {
+  getStatus as githubStatus,
+  getToken as githubToken,
+  isConfigured as githubConfigured,
+  setAuthChangeNotifier,
+  signOut as githubSignOut,
+  startDeviceAuth,
+  type GitHubUser
+} from './github-auth'
 import { agentsDocPath, readAgentsDoc, writeAgentsDoc, type AgentsScope } from './agents-doc'
 import {
   moveGitHubKanbanItem,
@@ -807,6 +817,10 @@ app.whenReady().then(async () => {
     return gitFileDiff(rootPath, filePath)
   })
 
+  ipcMain.handle('git:push', async (_event, rootPath: string) => {
+    return gitPushCurrent(rootPath)
+  })
+
   ipcMain.handle(
     'git:commit-group',
     async (_event, rootPath: string, paths: string[], subject: string, body: string) => {
@@ -841,6 +855,23 @@ app.whenReady().then(async () => {
   ipcMain.handle('room:identity', async (_event, rootPath: string) => {
     return getRoomIdentity(rootPath)
   })
+
+  // GitHub auth for chat. Sign-in approval happens asynchronously (device
+  // flow), so completion is pushed to the renderer via 'github:auth-changed'.
+  setAuthChangeNotifier((user: GitHubUser | null) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('github:auth-changed', user)
+    }
+  })
+  ipcMain.handle('github:status', () => githubStatus())
+  ipcMain.handle('github:sign-in', () => {
+    if (!githubConfigured()) {
+      return { error: 'GitHub sign-in is not configured (set GITHUB_CLIENT_ID).' }
+    }
+    return startDeviceAuth()
+  })
+  ipcMain.handle('github:sign-out', () => githubSignOut())
+  ipcMain.handle('github:token', () => githubToken())
 
   ipcMain.handle('terminal:create', (_event, cwd?: string) => {
     const id = String(++terminalIdCounter)

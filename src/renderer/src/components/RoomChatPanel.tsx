@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { useRoomChat } from '../chat/connection'
-import type { RoomIdentity } from '../../../preload/index.d'
+import type { GitHubStatus, RoomIdentity } from '../../../preload/index.d'
 
 const NAME_KEY = 'codeswim:chatName'
 
@@ -19,6 +19,11 @@ export function RoomChatPanel(): React.JSX.Element {
   const rootPath = state.rootPath
   const [identity, setIdentity] = useState<RoomIdentity | null>(null)
   const [identityLoaded, setIdentityLoaded] = useState(false)
+  // GitHub auth state. null = still loading.
+  const [github, setGithub] = useState<GitHubStatus | null>(null)
+  const [token, setToken] = useState<string | null>(null)
+  const [device, setDevice] = useState<{ userCode: string; verificationUri: string } | null>(null)
+  const [signInError, setSignInError] = useState<string | null>(null)
   const [name, setName] = useState(() => localStorage.getItem(NAME_KEY) ?? '')
   const [nameDraft, setNameDraft] = useState('')
   const [draft, setDraft] = useState('')
@@ -55,9 +60,54 @@ export function RoomChatPanel(): React.JSX.Element {
     }
   }, [rootPath])
 
-  // Only connect once we have both a room and a chosen name.
-  const roomId = name.trim() && identity ? identity.roomId : null
-  const { status, messages, users, send, setViewing } = useRoomChat(roomId, name.trim())
+  // Load GitHub auth status once and subscribe to sign-in/out changes (the
+  // device-flow approval lands asynchronously).
+  useEffect(() => {
+    let cancelled = false
+    void window.api.githubStatus().then((s) => {
+      if (!cancelled) setGithub(s)
+    })
+    const off = window.api.onGitHubAuthChanged((user) => {
+      setGithub((prev) => ({ configured: prev?.configured ?? true, user }))
+      if (user) setDevice(null)
+    })
+    return () => {
+      cancelled = true
+      off()
+    }
+  }, [])
+
+  const user = github?.user ?? null
+  const configured = github?.configured ?? false
+
+  // Fetch the access token whenever we're signed in (and clear it on sign-out).
+  useEffect(() => {
+    if (!user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setToken(null)
+      return
+    }
+    let cancelled = false
+    void window.api.githubToken().then((t) => {
+      if (!cancelled) setToken(t)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [user])
+
+  // Connection model:
+  //   configured + signed in  -> auth-gated, identity from GitHub
+  //   not configured          -> anonymous with a manual display name
+  //   configured + signed out  -> no connection (prompt sign-in)
+  const displayName = user ? user.name || user.login : name.trim()
+  const auth = useMemo(
+    () => (user && token && identity ? { slug: identity.slug, token } : null),
+    [user, token, identity]
+  )
+  const wantConnect = Boolean(identity && (user ? !!token : !configured && !!name.trim()))
+  const roomId = wantConnect && identity ? identity.roomId : null
+  const { status, messages, users, send, setViewing } = useRoomChat(roomId, displayName, auth)
 
   // Broadcast the currently-open file as presence so teammates see what
   // diagram we're looking at.
@@ -73,7 +123,14 @@ export function RoomChatPanel(): React.JSX.Element {
 
   const others = useMemo(() => users.filter((u) => u.viewing), [users])
 
-  if (!identityLoaded) {
+  const signIn = async (): Promise<void> => {
+    setSignInError(null)
+    const res = await window.api.githubSignIn()
+    if ('error' in res) setSignInError(res.error)
+    else setDevice(res)
+  }
+
+  if (!identityLoaded || github === null) {
     return <div className="chat-panel chat-empty">Loading…</div>
   }
 
@@ -93,7 +150,40 @@ export function RoomChatPanel(): React.JSX.Element {
     )
   }
 
-  if (!name.trim()) {
+  // Auth-gated: configured but not signed in.
+  if (configured && !user) {
+    return (
+      <div className="chat-panel chat-empty">
+        <div className="chat-signin">
+          <p>Sign in with GitHub to join the room for</p>
+          <p className="chat-room-name" title={identity.slug}>
+            {identity.slug}
+          </p>
+          {device ? (
+            <div className="chat-device">
+              <p className="chat-empty-hint">
+                Enter this code at{' '}
+                <a href={device.verificationUri} target="_blank" rel="noreferrer">
+                  {device.verificationUri.replace(/^https?:\/\//, '')}
+                </a>
+                :
+              </p>
+              <div className="chat-device-code">{device.userCode}</div>
+              <p className="chat-empty-hint">Waiting for authorization…</p>
+            </div>
+          ) : (
+            <button className="primary" type="button" onClick={() => void signIn()}>
+              Sign in with GitHub
+            </button>
+          )}
+          {signInError ? <p className="chat-error">{signInError}</p> : null}
+        </div>
+      </div>
+    )
+  }
+
+  // Anonymous fallback (GitHub not configured): pick a display name.
+  if (!configured && !name.trim()) {
     return (
       <div className="chat-panel chat-empty">
         <form
@@ -128,14 +218,35 @@ export function RoomChatPanel(): React.JSX.Element {
         <div className="chat-room-name" title={identity.slug}>
           {identity.slug}
         </div>
-        <div className={`chat-status chat-status-${status}`}>
-          {status === 'open'
-            ? `${users.length} online`
-            : status === 'connecting'
-              ? 'Connecting…'
-              : 'Offline'}
+        <div className="chat-header-right">
+          <div className={`chat-status chat-status-${status}`}>
+            {status === 'open'
+              ? `${users.length} online`
+              : status === 'connecting'
+                ? 'Connecting…'
+                : status === 'denied'
+                  ? 'Access denied'
+                  : 'Offline'}
+          </div>
+          {user ? (
+            <button
+              className="chat-signout"
+              type="button"
+              title={`Signed in as ${user.login} — sign out`}
+              onClick={() => void window.api.githubSignOut()}
+            >
+              {user.avatarUrl ? <img className="chat-avatar" src={user.avatarUrl} alt="" /> : null}
+              Sign out
+            </button>
+          ) : null}
         </div>
       </div>
+
+      {status === 'denied' ? (
+        <div className="chat-error chat-denied">
+          GitHub didn’t grant access to this repository’s room.
+        </div>
+      ) : null}
 
       {others.length > 0 ? (
         <div className="chat-presence">
@@ -146,6 +257,7 @@ export function RoomChatPanel(): React.JSX.Element {
               title={`${u.name} is viewing ${u.viewing}`}
               onClick={() => u.viewing && void navigateAbsolute(u.viewing, true)}
             >
+              {u.avatarUrl ? <img className="chat-avatar" src={u.avatarUrl} alt="" /> : null}
               <span className="chat-presence-name">{u.name}</span>
               <span className="chat-presence-file">{shortPath(u.viewing as string)}</span>
             </button>

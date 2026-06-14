@@ -170,6 +170,20 @@ export interface GitInitResult {
   createdGitignore: boolean
 }
 
+export interface GitSyncResult {
+  // Is there a remote (origin) to back up to at all?
+  remote: boolean
+  // Did we successfully push to it?
+  pushed: boolean
+  // Branch we operated on (null on a detached HEAD).
+  branch: string | null
+  // The pull-before-push hit a merge conflict; local commits are safe but the
+  // remote and local histories have diverged and need resolving.
+  conflict: boolean
+  // Plain message when we couldn't push (offline, auth, conflict, …).
+  error?: string
+}
+
 // Writes the default .gitignore only when the workspace has none — never
 // clobbers an existing one. Returns whether it created the file.
 export async function ensureGitignore(rootPath: string): Promise<boolean> {
@@ -233,6 +247,78 @@ export async function gitRemoteUrl(rootPath: string): Promise<string | null> {
 export async function gitStagedDiff(rootPath: string): Promise<string> {
   // --staged shows what `git commit` would record. No color, full context.
   return git(rootPath, ['diff', '--staged', '--no-color'])
+}
+
+// Current branch name, or null on a detached HEAD. `symbolic-ref --quiet` exits
+// non-zero when detached, which our git() wrapper throws on.
+async function currentBranch(rootPath: string): Promise<string | null> {
+  try {
+    const out = await git(rootPath, ['symbolic-ref', '--quiet', '--short', 'HEAD'])
+    return out.trim() || null
+  } catch {
+    return null
+  }
+}
+
+// Back the local commits up to the remote: pull (rebase, autostash) to fold in
+// anything new online, then push. Designed for the one-button Sync flow, so it
+// never throws — it returns a structured result the UI turns into plain language.
+// The caller has already committed, so the user's work is safe locally no matter
+// what happens here.
+export async function gitPushCurrent(rootPath: string): Promise<GitSyncResult> {
+  const branch = await currentBranch(rootPath)
+  const hasRemote = (await gitRemoteUrl(rootPath)) !== null
+  if (!hasRemote) {
+    return { remote: false, pushed: false, branch, conflict: false }
+  }
+  if (!branch) {
+    return {
+      remote: true,
+      pushed: false,
+      branch: null,
+      conflict: false,
+      error: 'Not on a branch (detached HEAD), so there’s nothing to back up.'
+    }
+  }
+
+  // Is this branch already tracking a remote one? If not, this is the first push.
+  let hasUpstream = true
+  try {
+    await git(rootPath, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'])
+  } catch {
+    hasUpstream = false
+  }
+
+  // Fold in remote changes first (only meaningful once we have an upstream).
+  // --autostash tucks away any leftover working-tree changes during the rebase;
+  // a real conflict aborts cleanly and is reported for a human/agent to resolve.
+  if (hasUpstream) {
+    try {
+      await git(rootPath, ['pull', '--rebase', '--autostash'])
+    } catch (err) {
+      await git(rootPath, ['rebase', '--abort']).catch(() => {})
+      return {
+        remote: true,
+        pushed: false,
+        branch,
+        conflict: true,
+        error: err instanceof Error ? err.message : String(err)
+      }
+    }
+  }
+
+  try {
+    await git(rootPath, hasUpstream ? ['push'] : ['push', '-u', 'origin', branch])
+  } catch (err) {
+    return {
+      remote: true,
+      pushed: false,
+      branch,
+      conflict: false,
+      error: err instanceof Error ? err.message : String(err)
+    }
+  }
+  return { remote: true, pushed: true, branch, conflict: false }
 }
 
 // The whole working picture for the Sync triage: every tracked change vs HEAD

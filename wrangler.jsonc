@@ -1,0 +1,19 @@
+{
+  // PartyServer worker for codeswim chat. Deploys to your own Cloudflare
+  // account's workers.dev subdomain (no custom domain): the resulting host is
+  //   codeswim.<your-subdomain>.workers.dev
+  // which is what VITE_PARTY_HOST should point at. See party/codeswim.ts.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "codeswim",
+  "main": "party/codeswim.ts",
+  "compatibility_date": "2025-01-01",
+  // Secure by default: the deployed worker requires GitHub auth + repo access
+  // before admitting a connection. Local dev opts out via
+  // `wrangler dev --var REQUIRE_AUTH:false` (see the party:dev npm script).
+  "vars": { "REQUIRE_AUTH": "true" },
+  "durable_objects": {
+    "bindings": [{ "name": "CodeswimRoom", "class_name": "CodeswimRoom" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["CodeswimRoom"] }],
+  "observability": { "enabled": true }
+}
