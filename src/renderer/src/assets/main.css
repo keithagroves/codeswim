@@ -559,9 +559,11 @@ button.secondary:hover {
   -webkit-app-region: drag;
 }
 
-/* Leave room for the macOS traffic-light buttons (titleBarStyle hiddenInset). */
+/* Small inset on macOS so the first tab clears the rightmost traffic-light
+ * button when the side panel is collapsed (the activity bar already sits under
+ * the lights, so we don't need the full ~78px of clearance here). */
 body.is-mac .header {
-  padding-left: 78px;
+  padding-left: 28px;
 }
 
 /* Controls inside the drag region must stay clickable, not drag the window. */
