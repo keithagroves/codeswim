@@ -87,14 +87,6 @@ function Header(): React.JSX.Element {
     <div className="header">
       <div className="workspace-view-switch" role="tablist" aria-label="Workspace view">
         <button
-          className={`tab-board ${state.workspaceView === 'kanban' ? 'is-active' : ''}`}
-          role="tab"
-          aria-selected={state.workspaceView === 'kanban'}
-          onClick={() => setWorkspaceView('kanban')}
-        >
-          Board
-        </button>
-        <button
           className={`tab-diagram ${state.workspaceView === 'navigator' ? 'is-active' : ''}`}
           role="tab"
           aria-selected={state.workspaceView === 'navigator'}
@@ -102,6 +94,14 @@ function Header(): React.JSX.Element {
           onClick={() => setWorkspaceView('navigator')}
         >
           Diagram
+        </button>
+        <button
+          className={`tab-board ${state.workspaceView === 'kanban' ? 'is-active' : ''}`}
+          role="tab"
+          aria-selected={state.workspaceView === 'kanban'}
+          onClick={() => setWorkspaceView('kanban')}
+        >
+          Board
         </button>
       </div>
       {inNavigator ? (
@@ -125,7 +125,7 @@ function Header(): React.JSX.Element {
           >
             ⌂
           </button>
-          <Breadcrumbs />
+          <div className="header-spacer" />
         </>
       ) : (
         <div className="workspace-heading">{rootName}</div>

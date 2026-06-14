@@ -223,9 +223,29 @@ export function GitPanel(): React.JSX.Element {
         setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
         return
       }
+      // The agent sometimes returns no usable groups (e.g. it lumped everything
+      // under "ignore", or named paths that didn't match). Never dead-end when
+      // there are real changes — fall back to a single catch-all commit the
+      // user can review and reword. Drop any path it flagged to ignore.
       if (plan.groups.length === 0) {
-        setPhase({ kind: 'error', message: 'The agent could not find anything to commit.' })
-        return
+        const ignored = new Set(plan.ignore.map((i) => i.pattern))
+        const remaining = changedPaths.filter((p) => !ignored.has(p))
+        if (remaining.length === 0) {
+          // Everything is ignore-flagged — offer just the ignore guardrails.
+          setPhase({ kind: 'plan', plan })
+          return
+        }
+        plan = {
+          ...plan,
+          obvious: false,
+          groups: [
+            {
+              subject: plan.summary || 'Update files',
+              body: plan.summary,
+              paths: remaining
+            }
+          ]
+        }
       }
 
       // 4. Obvious + safe → just commit. Otherwise let the user review.
@@ -456,6 +476,7 @@ function PlanReview({
   }
 
   const multi = plan.groups.length > 1
+  const hasGroups = plan.groups.length > 0
 
   return (
     <div className="git-plan">
@@ -478,24 +499,30 @@ function PlanReview({
         </div>
       ) : null}
 
-      <div className="git-plan-groups">
-        <div className="git-plan-groups-title">
-          {multi ? `${plan.groups.length} commits` : 'One commit'}
-        </div>
-        {plan.groups.map((g, idx) => (
-          <div key={idx} className="git-plan-card">
-            <div className="git-plan-card-subject">{g.subject}</div>
-            {g.body ? <div className="git-plan-card-body">{g.body}</div> : null}
-            <div className="git-plan-card-files">
-              {g.paths.map((p) => (
-                <span key={p} className="git-plan-card-file" title={p}>
-                  {p}
-                </span>
-              ))}
-            </div>
+      {hasGroups ? (
+        <div className="git-plan-groups">
+          <div className="git-plan-groups-title">
+            {multi ? `${plan.groups.length} commits` : 'One commit'}
           </div>
-        ))}
-      </div>
+          {plan.groups.map((g, idx) => (
+            <div key={idx} className="git-plan-card">
+              <div className="git-plan-card-subject">{g.subject}</div>
+              {g.body ? <div className="git-plan-card-body">{g.body}</div> : null}
+              <div className="git-plan-card-files">
+                {g.paths.map((p) => (
+                  <span key={p} className="git-plan-card-file" title={p}>
+                    {p}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="git-plan-summary">
+          Nothing here needs saving once the files above are ignored.
+        </p>
+      )}
 
       <div className="git-plan-adjust">
         <input
@@ -519,11 +546,13 @@ function PlanReview({
       </div>
 
       <div className="git-actions">
-        <button className="script-btn script-run" onClick={onCommit}>
-          {multi ? `Save all ${plan.groups.length}` : 'Save'}
-        </button>
+        {hasGroups ? (
+          <button className="script-btn script-run" onClick={onCommit}>
+            {multi ? `Save all ${plan.groups.length}` : 'Save'}
+          </button>
+        ) : null}
         <button className="script-btn" onClick={onCancel}>
-          Cancel
+          {hasGroups ? 'Cancel' : 'Close'}
         </button>
       </div>
     </div>

@@ -274,23 +274,40 @@ export async function gitWorkingDiff(rootPath: string): Promise<string> {
 // Commit exactly the given paths as one isolated commit: clear the index, stage
 // just this group (`add -A` so deletions and additions both land), then commit.
 // Sequential calls from the panel each produce a clean, single-purpose commit.
-// Drop any untracked path that git would refuse to `add` because it's ignored.
-// `git check-ignore` exits 0 and prints the ignored paths, exits 1 (which our
-// git() wrapper throws on) when none match, and — importantly — reports a
-// tracked-but-ignored path as NOT ignored, so those still stage correctly. A
-// stale plan can carry an untracked `dist/` the user just ignored; without this
-// the whole commit would abort.
-async function dropIgnoredPaths(rootPath: string, paths: string[]): Promise<string[]> {
-  if (paths.length === 0) return []
-  let ignoredOut: string
+// Which of these paths match the .gitignore rules, evaluated by RULE — not by
+// tracked status. `--no-index` is the key: plain `check-ignore` reports a
+// tracked file as not-ignored, but we need the rule view, because `git add`
+// refuses ANY ignored path (even a tracked, modified, or deleted one). So we
+// route ignored paths to removal instead of add. Returns a Set for O(1) lookup.
+async function ignoredByRule(rootPath: string, paths: string[]): Promise<Set<string>> {
+  if (paths.length === 0) return new Set()
+  let out: string
   try {
-    ignoredOut = await git(rootPath, ['check-ignore', '-z', '--', ...paths])
+    // NB: `-z` is rejected unless paired with `--stdin`, so we parse newline
+    // output instead — fine, since our paths come from git's own porcelain.
+    out = await git(rootPath, ['check-ignore', '--no-index', '--', ...paths])
   } catch {
-    // Exit 1 = nothing ignored (or check-ignore unavailable) — keep them all.
-    return paths
+    // Exit 1 = none ignored (our git() wrapper throws on non-zero). Treat any
+    // failure as "nothing ignored" so a missing check-ignore can't block a save.
+    return new Set()
   }
-  const ignored = new Set(ignoredOut.split('\0').filter((p) => p.length > 0))
-  return paths.filter((p) => !ignored.has(p))
+  return new Set(
+    out
+      .split(/\r?\n/)
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0)
+  )
+}
+
+// Whether the index has anything staged (vs HEAD, or the empty tree on a fresh
+// repo). `git diff --cached --quiet` exits non-zero exactly when there is.
+async function indexHasStagedChanges(rootPath: string): Promise<boolean> {
+  try {
+    await git(rootPath, ['diff', '--cached', '--quiet'])
+    return false
+  } catch {
+    return true
+  }
 }
 
 export async function gitCommitGroup(
@@ -302,12 +319,30 @@ export async function gitCommitGroup(
   const trimmedSubject = subject.trim()
   if (!trimmedSubject) throw new Error('commit subject is empty')
   if (paths.length === 0) throw new Error('no files in this commit group')
-  const stageable = await dropIgnoredPaths(rootPath, paths)
-  if (stageable.length === 0) {
-    throw new Error('Every file in this commit is ignored by .gitignore — nothing to save.')
-  }
+
   await gitUnstageAll(rootPath)
-  await git(rootPath, ['add', '-A', '--', ...stageable])
+
+  // Split the group: ignored paths can't be `git add`ed, so we stage them as
+  // removals (stop tracking) — `rm --cached --ignore-unmatch` no-ops on the
+  // ones that were never tracked. Everything else stages with `add -A`, which
+  // covers additions, edits, and deletions of non-ignored files.
+  const ignored = await ignoredByRule(rootPath, paths)
+  const addable = paths.filter((p) => !ignored.has(p))
+  const removable = paths.filter((p) => ignored.has(p))
+
+  if (addable.length > 0) {
+    await git(rootPath, ['add', '-A', '--', ...addable])
+  }
+  if (removable.length > 0) {
+    await git(rootPath, ['rm', '-r', '--cached', '--ignore-unmatch', '--', ...removable])
+  }
+
+  // If the whole group was ignored-and-untracked, nothing landed in the index.
+  // Bail with a friendly message rather than letting `git commit` error.
+  if (!(await indexHasStagedChanges(rootPath))) {
+    throw new Error('Nothing in this commit needs saving — those files are ignored.')
+  }
+
   const args = ['commit', '-m', trimmedSubject]
   if (body.trim()) args.push('-m', body)
   await git(rootPath, args)

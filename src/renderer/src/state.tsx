@@ -50,7 +50,7 @@ const DEFAULT_ACTIVITY_ORDER: Section[] = [
 
 const initialState: AppState = {
   rootPath: null,
-  workspaceView: 'kanban',
+  workspaceView: 'navigator',
   currentFile: null,
   currentDocumentPath: null,
   sourceExplanationExists: true,
