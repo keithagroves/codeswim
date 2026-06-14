@@ -168,11 +168,7 @@ export class CodeswimRoom extends Server<Env> {
   async onMessage(sender: Connection, raw: WSMessage): Promise<void> {
     if (typeof raw !== 'string') return
     const msg = parseClientMessage(raw)
-    if (!msg) {
-      console.log('[onMessage] unparseable frame:', raw.slice(0, 80))
-      return
-    }
-    console.log(`[onMessage] type=${msg.type} requireAuth=${this.requireAuth()} admitted=${this.users.has(sender.id)}`)
+    if (!msg) return
 
     if (msg.type === 'auth') {
       // Only meaningful while unauthenticated on an auth-gated room.
@@ -180,9 +176,7 @@ export class CodeswimRoom extends Server<Env> {
       let identity: GitHubIdentity | null = null
       try {
         const expected = await roomIdForSlug(msg.slug)
-        console.log(`[auth] slug=${msg.slug} expected=${expected} room=${this.name} match=${expected === this.name}`)
         identity = expected === this.name ? await verifyAccess(msg.token, msg.slug) : null
-        console.log(`[auth] verifyAccess -> ${identity ? identity.login : 'null'}`)
       } catch (err) {
         // A thrown verify (e.g. network) must not leave the client hanging —
         // log it and fall through to auth-failed.
