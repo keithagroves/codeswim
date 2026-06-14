@@ -8,17 +8,21 @@
 // The token is stored encrypted (Electron safeStorage) under userData and used
 // to (a) show who you are and (b) prove repo access to the chat worker.
 //
-// Configuration: set GITHUB_CLIENT_ID to the client id of a GitHub OAuth App
-// with "Device Flow" enabled. The client id is not a secret, so it can live in
-// the environment / be shipped with the app. Without it, sign-in is disabled
-// and the chat falls back to anonymous (only usable against a worker that
-// doesn't require auth).
+// Configuration: the client id of a GitHub OAuth App with "Device Flow"
+// enabled (not a secret, so it can live in .env / be shipped with the app).
+// Set it as MAIN_VITE_GITHUB_CLIENT_ID in .env (electron-vite injects it into
+// the main process) or GITHUB_CLIENT_ID in the shell env. Without it, sign-in
+// is disabled and chat falls back to anonymous (only usable against a worker
+// that doesn't require auth).
 
 import { app, safeStorage, shell } from 'electron'
 import { join } from 'path'
 import { promises as fs } from 'fs'
 
-const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID ?? ''
+const GITHUB_CLIENT_ID =
+  (import.meta.env as unknown as Record<string, string | undefined>).MAIN_VITE_GITHUB_CLIENT_ID ??
+  process.env.GITHUB_CLIENT_ID ??
+  ''
 // read:user for identity; repo so the worker can read private-repo metadata
 // when checking access. Public repos need no scope, but we can't know ahead of
 // time whether the user's repos are private.

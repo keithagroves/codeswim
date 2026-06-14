@@ -11,6 +11,10 @@
   // before admitting a connection. Local dev opts out via
   // `wrangler dev --var REQUIRE_AUTH:false` (see the party:dev npm script).
   "vars": { "REQUIRE_AUTH": "true" },
+  // Local `wrangler dev` port. Off Wrangler's usual 8787, which the
+  // chrome-bridge daemon occupies; keep in sync with the client default in
+  // src/renderer/src/chat/connection.ts.
+  "dev": { "port": 8788 },
   "durable_objects": {
     "bindings": [{ "name": "CodeswimRoom", "class_name": "CodeswimRoom" }]
   },

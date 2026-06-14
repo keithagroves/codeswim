@@ -19,8 +19,9 @@ import {
 
 // Host of the PartyServer worker. Defaults to the local `wrangler dev` server;
 // override with VITE_PARTY_HOST (e.g. "codeswim.<subdomain>.workers.dev") for
-// the deployed server.
-const PARTY_HOST = (import.meta.env.VITE_PARTY_HOST as string | undefined) ?? '127.0.0.1:8787'
+// the deployed server. Local default is 8788, not Wrangler's usual 8787 (the
+// chrome-bridge daemon occupies 8787); wrangler.jsonc pins dev to 8788 to match.
+const PARTY_HOST = (import.meta.env.VITE_PARTY_HOST as string | undefined) ?? '127.0.0.1:8788'
 
 export type ChatStatus = 'connecting' | 'open' | 'closed' | 'denied'
 
