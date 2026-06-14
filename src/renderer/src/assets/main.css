@@ -167,6 +167,14 @@ body {
   min-width: 0;
   position: relative;
   padding-top: 28px;
+  /* The empty top band (padding) is part of the window's drag handle, matching
+   * the activity bar and main header. The panel content opts back out below so
+   * its own headers/buttons stay clickable. */
+  -webkit-app-region: drag;
+}
+
+.side-panel > * {
+  -webkit-app-region: no-drag;
 }
 
 /* Drag handle on the right edge of the side panel. Visually invisible
