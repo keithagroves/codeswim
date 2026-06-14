@@ -2,11 +2,31 @@
   "version": 1,
   "title": "Codeswim Board",
   "columns": [
-    { "id": "backlog", "name": "Backlog", "color": "#8b8b96" },
-    { "id": "ready", "name": "Ready", "color": "#5b9cf5" },
-    { "id": "in-progress", "name": "In progress", "color": "#d9a73e" },
-    { "id": "review", "name": "Review", "color": "#b47aea" },
-    { "id": "done", "name": "Done", "color": "#3ecf8e" }
+    {
+      "id": "backlog",
+      "name": "Backlog",
+      "color": "#8b8b96"
+    },
+    {
+      "id": "ready",
+      "name": "Ready",
+      "color": "#5b9cf5"
+    },
+    {
+      "id": "in-progress",
+      "name": "In progress",
+      "color": "#d9a73e"
+    },
+    {
+      "id": "review",
+      "name": "Review",
+      "color": "#b47aea"
+    },
+    {
+      "id": "done",
+      "name": "Done",
+      "color": "#3ecf8e"
+    }
   ],
   "cards": [
     {
@@ -15,9 +35,26 @@
       "description": "Let the agent harness drive workspace search — query the renderer's search index or filesystem from agent prompts, parse results, and navigate to matching diagrams/code. Currently search is manual-only.",
       "columnId": "ready",
       "priority": "medium",
-      "labels": ["agent-harness", "search"],
+      "labels": [
+        "agent-harness",
+        "search"
+      ],
       "createdAt": 1749830000000,
       "updatedAt": 1749830000000
+    },
+    {
+      "id": "card-014",
+      "title": "Identify the second status indicator on the agent screen",
+      "description": "The agent screen (ChatPanel) shows a green dot saying READY (StatusBadge). There's a second colored ball nearby that isn't labeled — need to figure out what it represents. Candidates: the run-chip status-dot from ScriptControls (App.tsx:174) or the room-chat status dot. Once identified, either label it or remove it if redundant.",
+      "columnId": "ready",
+      "priority": "low",
+      "labels": [
+        "ui",
+        "investigate"
+      ],
+      "linkedPath": "src/renderer/src/components/ChatPanel.tsx",
+      "createdAt": 1780000000000,
+      "updatedAt": 1781417654839
     },
     {
       "id": "card-002",
@@ -25,7 +62,10 @@
       "description": "The AI agent should be the primary way users add cards to the kanban board — capture tasks from conversation and add them automatically.",
       "columnId": "backlog",
       "priority": "medium",
-      "labels": ["agent-harness", "board"],
+      "labels": [
+        "agent-harness",
+        "board"
+      ],
       "createdAt": 1749830000000,
       "updatedAt": 1749830000000
     },
@@ -35,7 +75,9 @@
       "description": "The app should support both light mode and dark mode themes.",
       "columnId": "backlog",
       "priority": "medium",
-      "labels": ["ui"],
+      "labels": [
+        "ui"
+      ],
       "createdAt": 1749830000000,
       "updatedAt": 1749830000000
     },
@@ -45,7 +87,9 @@
       "description": "The open-in-editor button shouldn't be in the app header; it should be a button in the viewer for the file.",
       "columnId": "backlog",
       "priority": "medium",
-      "labels": ["ui"],
+      "labels": [
+        "ui"
+      ],
       "createdAt": 1749830000000,
       "updatedAt": 1749830000000
     },
@@ -55,7 +99,9 @@
       "description": "When clicking a node related to specific code, navigate to that exact section (e.g. `# enemy-detection` anchor) rather than just the file.",
       "columnId": "backlog",
       "priority": "medium",
-      "labels": ["navigation"],
+      "labels": [
+        "navigation"
+      ],
       "createdAt": 1749830000000,
       "updatedAt": 1749830000000
     },
@@ -65,7 +111,9 @@
       "description": "When clicking refresh, files show 'loading' state indefinitely until clicked individually.",
       "columnId": "backlog",
       "priority": "high",
-      "labels": ["bug"],
+      "labels": [
+        "bug"
+      ],
       "createdAt": 1749830000000,
       "updatedAt": 1749830000000
     },
@@ -75,7 +123,9 @@
       "description": "The skill load and link buttons don't work at the workspace level.",
       "columnId": "backlog",
       "priority": "high",
-      "labels": ["bug"],
+      "labels": [
+        "bug"
+      ],
       "createdAt": 1749830000000,
       "updatedAt": 1749830000000
     },
@@ -85,7 +135,9 @@
       "description": "The agent should have an internal browser it can view and control to help debug and improve the app.",
       "columnId": "backlog",
       "priority": "medium",
-      "labels": ["feature"],
+      "labels": [
+        "feature"
+      ],
       "createdAt": 1749830000000,
       "updatedAt": 1749830000000
     },
@@ -95,7 +147,10 @@
       "description": "Codeswim should automatically create a kanban board project on GitHub for the repo.",
       "columnId": "backlog",
       "priority": "low",
-      "labels": ["feature", "github"],
+      "labels": [
+        "feature",
+        "github"
+      ],
       "createdAt": 1749830000000,
       "updatedAt": 1749830000000
     },
@@ -105,7 +160,9 @@
       "description": "Agent.md should be viewable from the skills menu in the app.",
       "columnId": "backlog",
       "priority": "medium",
-      "labels": ["ui"],
+      "labels": [
+        "ui"
+      ],
       "createdAt": 1749830000000,
       "updatedAt": 1749830000000
     },
@@ -115,7 +172,9 @@
       "description": "Stop using system.txt and use Agent.md instead. Needs discussion before updating.",
       "columnId": "backlog",
       "priority": "medium",
-      "labels": ["discussion"],
+      "labels": [
+        "discussion"
+      ],
       "createdAt": 1749830000000,
       "updatedAt": 1749830000000
     },
@@ -125,7 +184,10 @@
       "description": "Add ability to chat with teammates based on GitHub URL. Repo owner defines chat structure, admins, bans via a file. Requires a websocket server.",
       "columnId": "backlog",
       "priority": "low",
-      "labels": ["feature", "future"],
+      "labels": [
+        "feature",
+        "future"
+      ],
       "createdAt": 1749830000000,
       "updatedAt": 1749830000000
     },
@@ -135,9 +197,24 @@
       "description": "Add a kanban board view for tracking project progress within codeswim.",
       "columnId": "backlog",
       "priority": "low",
-      "labels": ["feature", "board", "future"],
+      "labels": [
+        "feature",
+        "board",
+        "future"
+      ],
       "createdAt": 1749830000000,
       "updatedAt": 1749830000000
+    },
+    {
+      "id": "card-015",
+      "title": "Add disable button for skills",
+      "description": "Add a toggle/button to disable a skill without deleting it, so the agent stops loading it as a tool. Currently skills can only be deleted or left as read-only. A disabled state would let users temporarily turn off skills they don't need for a given session.",
+      "columnId": "backlog",
+      "priority": "medium",
+      "labels": ["feature", "skills"],
+      "linkedPath": "src/renderer/src/components/SkillsView.tsx",
+      "createdAt": 1781494456000,
+      "updatedAt": 1781494456000
     }
   ]
 }

@@ -113,6 +113,26 @@ When the agent does the acting, you shift from **doer to supervisor**, and the s
 
 ---
 
+## Scaling the loop: parallel agents and the board
+
+The previous section described a single supervised loop. Parallelism is its natural extension — and the case most likely to break everything this philosophy protects. Naively, *N* agents means *N* live streams to watch: the exact attention-shredding we ban. The resolution is already in the tenets; it only needs stating for breadth.
+
+- **The board is View, not a new panel.** Work is planned on a kanban board, but the board is a *state View switches to* — summoned, judged, dismissed — not a permanent dock competing for attention. Switch, don't split.
+- **Cards are the compressed evaluation surface for parallel work.** Many agents working at once surface as cards moving across columns — a settled, glanceable status — not as a wall of terminals you hover over. You judge breadth at the resolution of a board; you do not spectate *N* inner loops.
+- **Each task still resolves to a checkpoint.** A finished task surfaces a settled artifact — a diff, a re-rendered diagram — for the same act-then-judge loop, one task at a time, *when you choose to look*. Parallelism widens the fan-out of work; it must not widen the number of things demanding your attention at once.
+
+The move is: **scale the loop, don't break it.** A supervisor can oversee many agents precisely *because* the board compresses their progress into something calm. Watching them all work would not be supervision — it would be the divided attention this whole philosophy exists to refuse.
+
+---
+
+## Agentic by construction
+
+codeswim assumes agents do the work, so the surfaces an agent needs are first-class, not bolted on. **Agent skills are managed as first-class objects** — composed, inspected, and dispatched the way files or scripts are. They are the vocabulary of what your agents can do; the human directs at the level of *skills and intent*, and the agent executes against them. An IDE for directing agents should treat the agent's capabilities as a primary material, not a hidden setting.
+
+And the artifact stays cheap. The diagrams are **plain markdown + mermaid — authored by the human, maintained by the agent** — not the output of a heavy, token-burning pass that re-derives a picture of the codebase on every view. A diagram is a few lines of text in the repo: diffable, versioned, free to render. This is minimalism as *economics* as well as attention — the cheapest representation that still carries the shape, kept by hand and by agent rather than synthesized at expense. A tool that must spend tokens to redraw the system every time has made the map costly, and a costly map gets consulted less.
+
+---
+
 ## Legibility: no invisible modes
 
 A surface that changes what it holds is, technically, a *mode* — and modes cause errors only when they are invisible. Two rules keep the cost near zero:
@@ -140,6 +160,9 @@ For strict adherence, the philosophy compresses to these:
 11. **Compress the evaluation surface.** Show the shape of a result at a glance before its full detail.
 12. **No invisible modes.** Every surface declares its current state; a working surface and a verdict surface must never be confused.
 13. **The switch is sacred.** Instant, single-gesture, with an obvious resulting state. If switching is heavy, the whole design fails.
+14. **Scale the loop, don't break it.** Parallel agents surface as cards on a board — a compressed status to judge — never as a wall of live streams to watch.
+15. **Agentic by construction.** Agents do the work; agent skills are first-class objects. The human directs at the level of skills and intent.
+16. **The artifact stays cheap.** Diagrams are plain, hand-and-agent-maintained markdown, not token-heavy generation — the cheapest representation that still carries the shape.
 
 ---
 

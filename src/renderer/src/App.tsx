@@ -130,7 +130,7 @@ function Header(): React.JSX.Element {
           aria-selected={state.workspaceView === 'kanban'}
           onClick={() => setWorkspaceView('kanban')}
         >
-          Board
+          Plan
         </button>
       </div>
       {inNavigator ? (
