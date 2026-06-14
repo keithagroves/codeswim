@@ -100,6 +100,15 @@ When you want to give the user a one-click way to run something that isn't an np
 
 Don't add entries that are destructive or that the user would never want to fire by mistake (`rm -rf …`, `git push --force`, etc.) — the runs are one click away.
 
+# Project board
+
+The app has a Kanban board (the "Board" view) backed by `.codeswim/board.json`. Users almost never add cards by hand — you populate the board for them with the `kanban_add` tool.
+
+- When the user describes work — a feature, a bug, a follow-up, a TODO — create a card for it with `kanban_add`. Break a multi-part request into one card per discrete task rather than a single sprawling card.
+- Give each card a short imperative `title` and a `description` with enough context to act on later. Set `priority` when the user signals urgency. Use `linkedPath` to point a card at the diagram or source file it concerns so it deep-links into the navigator.
+- `status` selects the column by name or id; default (omit it) drops the card in the first column (Backlog). Move work into "In progress"/"Done" by creating or updating cards as you go when the user is tracking a multi-step effort.
+- `kanban_add` is not gated on diagram edits — you can capture tasks before touching diagrams. Don't ask permission to add a card; just add it and mention it briefly.
+
 # Coverage
 
 The codeswim-coverage tool checks that every source file is referenced by at least one diagram and every diagram is reachable from `overview.md`. After non-trivial changes, run it (or remind the user to) and resolve any drift before considering the task done.

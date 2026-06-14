@@ -53,32 +53,16 @@ function SearchIcon(): React.JSX.Element {
   )
 }
 
-function SkillsIcon(): React.JSX.Element {
+function ToolsIcon(): React.JSX.Element {
+  // Wrench — the Tools section hosts skills, MCP servers, and other agent
+  // capabilities, so a generic tool glyph rather than the old skill book.
   return (
     <svg width="27" height="27" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
-        d="M6 4h10a3 3 0 0 1 3 3v13l-3-2-3 2-3-2-3 2V6a2 2 0 0 1-1.5-1.5"
+        d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-      <line
-        x1="9"
-        y1="9"
-        x2="15"
-        y2="9"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      <line
-        x1="9"
-        y1="12.5"
-        x2="13"
-        y2="12.5"
-        stroke="currentColor"
-        strokeWidth="1.5"
         strokeLinecap="round"
       />
     </svg>
@@ -96,7 +80,15 @@ function TerminalIcon(): React.JSX.Element {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <line x1="13" y1="15" x2="17" y2="15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <line
+        x1="13"
+        y1="15"
+        x2="17"
+        y2="15"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
     </svg>
   )
 }
@@ -108,12 +100,7 @@ function GitIcon(): React.JSX.Element {
       <circle cx="6" cy="6" r="2.5" stroke="currentColor" strokeWidth="1.5" />
       <circle cx="6" cy="18" r="2.5" stroke="currentColor" strokeWidth="1.5" />
       <circle cx="17" cy="12" r="2.5" stroke="currentColor" strokeWidth="1.5" />
-      <path
-        d="M6 8.5v7M6 12h8.5"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
+      <path d="M6 8.5v7M6 12h8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   )
 }
@@ -144,7 +131,7 @@ const ITEM_BY_KEY: Record<Section, Item> = {
   agent: { key: 'agent', label: 'Agent', icon: <ChatIcon /> },
   files: { key: 'files', label: 'Files', icon: <FolderIcon /> },
   search: { key: 'search', label: 'Search', icon: <SearchIcon /> },
-  skills: { key: 'skills', label: 'Skills', icon: <SkillsIcon /> },
+  tools: { key: 'tools', label: 'Tools', icon: <ToolsIcon /> },
   git: { key: 'git', label: 'Commit', icon: <GitIcon /> },
   terminal: { key: 'terminal', label: 'Terminal', icon: <TerminalIcon /> },
   chat: { key: 'chat', label: 'Chat', icon: <PeopleIcon /> }

@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "title": "Codeswim Board",
+  "columns": [
+    { "id": "backlog", "name": "Backlog", "color": "#8b8b96" },
+    { "id": "ready", "name": "Ready", "color": "#5b9cf5" },
+    { "id": "in-progress", "name": "In progress", "color": "#d9a73e" },
+    { "id": "review", "name": "Review", "color": "#b47aea" },
+    { "id": "done", "name": "Done", "color": "#3ecf8e" }
+  ],
+  "cards": [
+    {
+      "id": "card-001",
+      "title": "Make agent-directed searches",
+      "description": "Let the agent harness drive workspace search — query the renderer's search index or filesystem from agent prompts, parse results, and navigate to matching diagrams/code. Currently search is manual-only.",
+      "columnId": "ready",
+      "priority": "medium",
+      "labels": ["agent-harness", "search"],
+      "createdAt": 1749830000000,
+      "updatedAt": 1749830000000
+    }
+  ]
+}

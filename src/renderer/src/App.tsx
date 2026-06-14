@@ -3,9 +3,11 @@ import { ActivityBar } from './components/ActivityBar'
 import { Breadcrumbs } from './components/Breadcrumbs'
 import { ChatPanel } from './components/ChatPanel'
 import { DiagramView } from './components/DiagramView'
+import { DiffView } from './components/DiffView'
 import { FileTree } from './components/FileTree'
 import { GitPanel } from './components/GitPanel'
 import { KanbanView } from './components/KanbanView'
+import { McpView } from './components/McpView'
 import { ReadView } from './components/ReadView'
 import { ScriptControls } from './components/ScriptControls'
 import { ScriptOutput } from './components/ScriptOutput'
@@ -53,16 +55,36 @@ function SidePanel(): React.JSX.Element | null {
     widthRef.current = state.sidePanelWidth
   }, [state.sidePanelWidth])
 
-  if (state.activeSection === null) return null
+  // The terminal owns live pty processes, so it must survive section
+  // switches and panel collapse. We mount it lazily on first open and then
+  // keep it mounted, hiding it with display:none instead of unmounting.
+  // (A conditional unmount would fire its cleanup and kill the shell.)
+  const terminalOpened = useRef(false)
+  if (state.activeSection === 'terminal') terminalOpened.current = true
+
+  const collapsed = state.activeSection === null
+  // When collapsed we keep the container in the tree (display:none) so the
+  // background terminal stays alive; an unmount here would destroy it.
+  if (collapsed && !terminalOpened.current) return null
   return (
-    <div className="side-panel" style={{ width: state.sidePanelWidth }}>
+    <div
+      className="side-panel"
+      style={{ width: state.sidePanelWidth, display: collapsed ? 'none' : 'flex' }}
+    >
       {state.activeSection === 'files' ? <FileTree /> : null}
       {state.activeSection === 'agent' ? <ChatPanel /> : null}
       {state.activeSection === 'search' ? <SearchPanel /> : null}
-      {state.activeSection === 'skills' ? <SkillsPanel /> : null}
+      {state.activeSection === 'tools' ? <SkillsPanel /> : null}
       {state.activeSection === 'git' ? <GitPanel /> : null}
-      {state.activeSection === 'terminal' ? <TerminalPanel /> : null}
       {state.activeSection === 'chat' ? <RoomChatPanel /> : null}
+      {terminalOpened.current ? (
+        <div
+          className="terminal-host"
+          style={{ display: state.activeSection === 'terminal' ? 'flex' : 'none' }}
+        >
+          <TerminalPanel />
+        </div>
+      ) : null}
       <div
         className="side-panel-resizer"
         onMouseDown={onResizeStart}
@@ -71,6 +93,13 @@ function SidePanel(): React.JSX.Element | null {
       />
     </div>
   )
+}
+
+// A slim draggable strip standing in for the header on views that don't
+// render one (start screen, skills). Keeps the whole top of the app a window
+// drag handle — drag to move, double-click to zoom/maximize.
+function DragStrip(): React.JSX.Element {
+  return <div className="drag-strip" />
 }
 
 function Header(): React.JSX.Element {
@@ -93,7 +122,7 @@ function Header(): React.JSX.Element {
           disabled={!state.currentFile}
           onClick={() => setWorkspaceView('navigator')}
         >
-          Diagram
+          Explore
         </button>
         <button
           className={`tab-board ${state.workspaceView === 'kanban' ? 'is-active' : ''}`}
@@ -155,11 +184,16 @@ function Header(): React.JSX.Element {
 function Body(): React.JSX.Element {
   const { state } = useStore()
 
-  if (state.activeSection === 'skills') {
-    return <SkillsView />
+  if (state.activeSection === 'tools') {
+    return state.toolsTab === 'mcp' ? <McpView /> : <SkillsView />
   }
   if (state.view === 'output') {
     return <ScriptOutput />
+  }
+  // The diff viewer overrides the workspace surface — it's opened from the Sync
+  // panel and should show regardless of whether Explore or Board is active.
+  if (state.view === 'diff') {
+    return <DiffView />
   }
   if (state.workspaceView === 'kanban') {
     return <KanbanView />
@@ -260,11 +294,12 @@ function Shell(): React.JSX.Element {
   useTerminalShortcut()
 
   if (!state.rootPath) {
-    // Skills view works without a workspace open — global + built-in skills
+    // Tools view works without a workspace open — global + built-in skills
     // are still readable. Fall through to the regular layout in that case.
-    if (state.activeSection !== 'skills') {
+    if (state.activeSection !== 'tools') {
       return (
         <div className="app">
+          <DragStrip />
           <div className="main-row">
             <div className="content">
               <StartScreen />
@@ -280,6 +315,7 @@ function Shell(): React.JSX.Element {
           <ActivityBar />
           <SidePanel />
           <div className="main-column">
+            <DragStrip />
             <div className="content">
               <Body />
             </div>
@@ -296,7 +332,16 @@ function Shell(): React.JSX.Element {
         <ActivityBar />
         <SidePanel />
         <div className="main-column">
-          {state.activeSection === 'skills' ? null : <Header />}
+          {state.activeSection === 'tools' ? <DragStrip /> : <Header />}
+          {state.activeSection !== 'tools' &&
+          state.workspaceView === 'navigator' &&
+          state.view !== 'output' &&
+          state.view !== 'diff' &&
+          state.currentFile ? (
+            <div className="path-bar">
+              <Breadcrumbs />
+            </div>
+          ) : null}
           <div className="content">
             <Body />
           </div>

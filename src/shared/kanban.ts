@@ -67,6 +67,12 @@ export function createDefaultKanbanBoard(title = 'Project board'): KanbanBoard {
   }
 }
 
+export function makeCardId(): string {
+  const webCrypto = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto
+  if (webCrypto && typeof webCrypto.randomUUID === 'function') return webCrypto.randomUUID()
+  return `card-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }

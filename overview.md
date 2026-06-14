@@ -23,6 +23,8 @@ flowchart TD
     Commit --> Main
     Sidecar -.->|edits| FS
 
+    click User call navigate("./overview.md")
+    click FS call navigate("./overview.md")
     click Renderer call navigate("./architecture/renderer.md")
     click Preload call navigate("./architecture/preload.md")
     click Main call navigate("./architecture/main-process.md")
@@ -50,6 +52,7 @@ These files cut across subsystems and aren't owned by any one architecture doc:
 - [src/renderer/src/browser-stub.ts](src/renderer/src/browser-stub.ts) — no-op `window.api` for running the renderer outside Electron (Playwright, UI review).
 - `src/renderer/src/assets/main.css` — global styles.
 - `src/renderer/src/assets/codeswim.svg` — app logo.
+- [party/codeswim.ts](party/codeswim.ts) — party-mode easter egg (confetti, etc.).
 
 ## Testing
 
@@ -62,6 +65,8 @@ Vitest tests live next to the modules they cover:
 - [src/renderer/src/skill-frontmatter.test.ts](src/renderer/src/skill-frontmatter.test.ts) — covers the skill frontmatter helpers.
 - [src/renderer/src/ansi.test.ts](src/renderer/src/ansi.test.ts) — covers the ANSI/SGR terminal-output parser.
 - [src/renderer/src/commit/synthesize.test.ts](src/renderer/src/commit/synthesize.test.ts) — covers the commit-message synthesis prompt builder, parser, and trailers.
+- [src/renderer/src/commit/triage.test.ts](src/renderer/src/commit/triage.test.ts) — covers the triage prompt builder and sync-plan parser.
+- [src/harness/tool/kanban-add.test.ts](src/harness/tool/kanban-add.test.ts) — covers the kanban_add tool (board read, card append, write).
 
 ## Build & tooling
 
@@ -82,6 +87,8 @@ Vitest tests live next to the modules they cover:
 - [AGENTS.md](AGENTS.md) — guidance for AI agents working in this repo.
 - [CLAUDE.md](CLAUDE.md) — Claude Code project instructions (process layout, gotchas, "don'ts").
 - [todos.md](todos.md) — ongoing work notes.
+- [pitch/pitch-deck.md](pitch/pitch-deck.md) — pitch deck slide content (generated to .pptx via `pitch/generate.js`).
+- [pitch/generate.js](pitch/generate.js) — pitch deck .pptx generator.
 
 ## Example fixture
 

@@ -15,8 +15,8 @@ function buildGroups(list: SkillListResult, hasWorkspace: boolean): Group[] {
   return [
     {
       scope: 'builtin',
-      label: 'Built-in',
-      hint: 'Bundled prompts shipped with codeswim',
+      label: 'System prompts',
+      hint: 'Read-only prompts codeswim ships to drive the agent',
       skills: list.builtin
     },
     {
@@ -45,9 +45,7 @@ function loadCollapsed(): ReadonlySet<SkillScope> {
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return new Set()
     return new Set(
-      parsed.filter(
-        (v): v is SkillScope => v === 'workspace' || v === 'global' || v === 'builtin'
-      )
+      parsed.filter((v): v is SkillScope => v === 'workspace' || v === 'global' || v === 'builtin')
     )
   } catch {
     return new Set()
@@ -58,21 +56,17 @@ function loadCollapsed(): ReadonlySet<SkillScope> {
 const skillKey = (scope: SkillScope, name: string): string => `${scope}:${name}`
 
 export function SkillsPanel(): React.JSX.Element {
-  const { state, setCurrentSkill, toast } = useStore()
+  const { state, setCurrentSkill, setToolsTab, toast } = useStore()
+  const toolsTab = state.toolsTab
   const [list, setList] = useState<SkillListResult | null>(null)
   const [creatingIn, setCreatingIn] = useState<'global' | 'workspace' | null>(null)
   const [newName, setNewName] = useState('')
-  const [collapsedGroups, setCollapsedGroups] =
-    useState<ReadonlySet<SkillScope>>(loadCollapsed)
+  const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<SkillScope>>(loadCollapsed)
   // Skills the user has explicitly opened. Lazy-loaded file trees land in
   // `trees` once expanded; collapsing again leaves the cache intact so the
   // next open is instant.
-  const [expandedSkills, setExpandedSkills] = useState<ReadonlySet<string>>(
-    () => new Set()
-  )
-  const [trees, setTrees] = useState<
-    Record<string, SkillFileNode[] | 'loading' | undefined>
-  >({})
+  const [expandedSkills, setExpandedSkills] = useState<ReadonlySet<string>>(() => new Set())
+  const [trees, setTrees] = useState<Record<string, SkillFileNode[] | 'loading' | undefined>>({})
   // Subdirectories within a skill that the user has expanded.
   const [expandedDirs, setExpandedDirs] = useState<ReadonlySet<string>>(() => new Set())
 
@@ -137,8 +131,7 @@ export function SkillsPanel(): React.JSX.Element {
       if (!trees[key] && trees[key] !== 'loading') {
         void loadSkillTree(s.scope, s.name)
       }
-      const file =
-        s.scope === 'builtin' ? builtinFileNameFromTree(trees[key]) : SKILL_FILENAME
+      const file = s.scope === 'builtin' ? builtinFileNameFromTree(trees[key]) : SKILL_FILENAME
       setCurrentSkill({
         scope: s.scope,
         name: s.name,
@@ -246,128 +239,205 @@ agent should pick this up; use this body to explain *what* it should do.
   )
   const active = state.currentSkill
 
-  return (
-    <aside className="sidebar" aria-label="Skills">
-      <div className="sidebar-header">
-        <span className="sidebar-title">Skills</span>
-        <button className="sidebar-icon-btn" onClick={() => void refresh()} title="Refresh">
-          ↻
-        </button>
-      </div>
-      <div className="sidebar-body">
-        {list === null ? (
-          <div className="sidebar-empty">Loading…</div>
-        ) : (
-          groups.map((g) => {
-            const isGroupCollapsed = collapsedGroups.has(g.scope)
-            return (
-              <div key={g.scope} className="skills-group">
-                <div className="skills-group-header">
-                  <button
-                    type="button"
-                    className="skills-group-toggle"
-                    onClick={() => toggleGroupCollapsed(g.scope)}
-                    aria-expanded={!isGroupCollapsed}
-                    title={isGroupCollapsed ? `Expand ${g.label}` : `Collapse ${g.label}`}
-                  >
-                    <span className="skills-group-chevron">
-                      {isGroupCollapsed ? '▸' : '▾'}
-                    </span>
-                    <span className="skills-group-label">{g.label}</span>
-                    <span className="skills-group-count">{g.skills.length}</span>
-                  </button>
-                  {g.scope !== 'builtin' ? (
-                    <div className="skills-group-actions">
-                      <button
-                        className="sidebar-icon-btn"
-                        onClick={() =>
-                          void onLinkFolder(g.scope as 'global' | 'workspace')
-                        }
-                        title={`Link a folder of SKILL.md trees into ${g.label.toLowerCase()}`}
-                        disabled={g.scope === 'workspace' && !state.rootPath}
-                      >
-                        ⇲
-                      </button>
-                      <button
-                        className="sidebar-icon-btn"
-                        onClick={() =>
-                          setCreatingIn((prev) =>
-                            prev === g.scope ? null : (g.scope as 'global' | 'workspace')
-                          )
-                        }
-                        title={`New ${g.label.toLowerCase()} skill`}
-                        disabled={g.scope === 'workspace' && !state.rootPath}
-                      >
-                        +
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-                {isGroupCollapsed ? null : (
-                  <>
-                    {g.hint ? <div className="skills-group-hint">{g.hint}</div> : null}
-                    {creatingIn === g.scope ? (
-                      <div className="skills-create-row">
-                        <input
-                          autoFocus
-                          className="skills-create-input"
-                          placeholder="skill-name"
-                          value={newName}
-                          onChange={(e) => setNewName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter')
-                              void onCreate(g.scope as 'global' | 'workspace')
-                            else if (e.key === 'Escape') {
-                              setCreatingIn(null)
-                              setNewName('')
-                            }
-                          }}
-                        />
-                        <button
-                          className="skills-create-confirm"
-                          onClick={() => void onCreate(g.scope as 'global' | 'workspace')}
-                        >
-                          Create
-                        </button>
-                      </div>
-                    ) : null}
-                    {g.skills.length === 0 ? (
-                      <div className="skills-empty">
-                        {g.scope === 'workspace' && !state.rootPath
-                          ? '—'
-                          : g.scope === 'builtin'
-                            ? 'No built-ins available.'
-                            : 'None yet.'}
-                      </div>
-                    ) : (
-                      g.skills.map((s) => (
-                        <SkillRow
-                          key={`${s.scope}:${s.name}`}
-                          skill={s}
-                          isExpanded={expandedSkills.has(skillKey(s.scope, s.name))}
-                          tree={trees[skillKey(s.scope, s.name)]}
-                          expandedDirs={expandedDirs}
-                          active={active}
-                          onSkillClick={onSkillClick}
-                          onFileClick={onFileClick}
-                          onDirClick={onDirClick}
-                        />
-                      ))
-                    )}
-                  </>
-                )}
+  const openAgentsDoc = useCallback(
+    (scope: 'workspace' | 'global') => {
+      setCurrentSkill({
+        kind: 'agents',
+        scope,
+        name: scope === 'global' ? 'Global AGENTS.md' : 'AGENTS.md',
+        file: 'AGENTS.md'
+      })
+    },
+    [setCurrentSkill]
+  )
+  const isAgentsActive = (scope: 'workspace' | 'global'): boolean =>
+    active?.kind === 'agents' && active.scope === scope
+
+  const renderGroup = (g: Group): React.JSX.Element => {
+    const isGroupCollapsed = collapsedGroups.has(g.scope)
+    return (
+      <div key={g.scope} className="skills-group">
+        <div className="skills-group-header">
+          <button
+            type="button"
+            className="skills-group-toggle"
+            onClick={() => toggleGroupCollapsed(g.scope)}
+            aria-expanded={!isGroupCollapsed}
+            title={isGroupCollapsed ? `Expand ${g.label}` : `Collapse ${g.label}`}
+          >
+            <span className="skills-group-chevron">{isGroupCollapsed ? '▸' : '▾'}</span>
+            <span className="skills-group-label">{g.label}</span>
+            <span className="skills-group-count">{g.skills.length}</span>
+          </button>
+          {g.scope !== 'builtin' ? (
+            <div className="skills-group-actions">
+              <button
+                className="sidebar-icon-btn"
+                onClick={() => void onLinkFolder(g.scope as 'global' | 'workspace')}
+                title={`Link a folder of SKILL.md trees into ${g.label.toLowerCase()}`}
+                disabled={g.scope === 'workspace' && !state.rootPath}
+              >
+                ⇲
+              </button>
+              <button
+                className="sidebar-icon-btn"
+                onClick={() =>
+                  setCreatingIn((prev) =>
+                    prev === g.scope ? null : (g.scope as 'global' | 'workspace')
+                  )
+                }
+                title={`New ${g.label.toLowerCase()} skill`}
+                disabled={g.scope === 'workspace' && !state.rootPath}
+              >
+                +
+              </button>
+            </div>
+          ) : null}
+        </div>
+        {isGroupCollapsed ? null : (
+          <>
+            {g.hint ? <div className="skills-group-hint">{g.hint}</div> : null}
+            {creatingIn === g.scope ? (
+              <div className="skills-create-row">
+                <input
+                  autoFocus
+                  className="skills-create-input"
+                  placeholder="skill-name"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void onCreate(g.scope as 'global' | 'workspace')
+                    else if (e.key === 'Escape') {
+                      setCreatingIn(null)
+                      setNewName('')
+                    }
+                  }}
+                />
+                <button
+                  className="skills-create-confirm"
+                  onClick={() => void onCreate(g.scope as 'global' | 'workspace')}
+                >
+                  Create
+                </button>
               </div>
-            )
-          })
+            ) : null}
+            {g.skills.length === 0 ? (
+              <div className="skills-empty">
+                {g.scope === 'workspace' && !state.rootPath
+                  ? '—'
+                  : g.scope === 'builtin'
+                    ? 'No system prompts available.'
+                    : 'None yet.'}
+              </div>
+            ) : (
+              g.skills.map((s) => (
+                <SkillRow
+                  key={`${s.scope}:${s.name}`}
+                  skill={s}
+                  isExpanded={expandedSkills.has(skillKey(s.scope, s.name))}
+                  tree={trees[skillKey(s.scope, s.name)]}
+                  expandedDirs={expandedDirs}
+                  active={active}
+                  onSkillClick={onSkillClick}
+                  onFileClick={onFileClick}
+                  onDirClick={onDirClick}
+                />
+              ))
+            )}
+          </>
         )}
       </div>
+    )
+  }
+
+  const agentsRow = (scope: 'workspace' | 'global', disabled: boolean): React.JSX.Element => (
+    <button
+      type="button"
+      className={`tree-row skills-row tools-agents-row ${isAgentsActive(scope) ? 'current' : ''}`}
+      onClick={() => openAgentsDoc(scope)}
+      disabled={disabled}
+      title={`${scope === 'global' ? 'Global' : 'Workspace'} agent instructions (AGENTS.md)`}
+    >
+      <span className="tree-icon">≡</span>
+      <span className="tree-name">AGENTS.md</span>
+      <span className="skills-badge">{scope}</span>
+    </button>
+  )
+
+  const skillGroups = groups.filter((g) => g.scope !== 'builtin')
+  const systemPrompts = groups.find((g) => g.scope === 'builtin')
+
+  return (
+    <aside className="sidebar" aria-label="Tools">
+      <div className="sidebar-header">
+        <span className="sidebar-title">Tools</span>
+        {toolsTab !== 'mcp' ? (
+          <button className="sidebar-icon-btn" onClick={() => void refresh()} title="Refresh">
+            ↻
+          </button>
+        ) : null}
+      </div>
+      <div className="tools-tabs" role="tablist" aria-label="Tool types">
+        <button
+          role="tab"
+          aria-selected={toolsTab === 'skills'}
+          className={`tools-tab ${toolsTab === 'skills' ? 'is-active' : ''}`}
+          onClick={() => setToolsTab('skills')}
+        >
+          Skills
+        </button>
+        <button
+          role="tab"
+          aria-selected={toolsTab === 'mcp'}
+          className={`tools-tab ${toolsTab === 'mcp' ? 'is-active' : ''}`}
+          onClick={() => setToolsTab('mcp')}
+        >
+          MCP
+        </button>
+        <button
+          role="tab"
+          aria-selected={toolsTab === 'context'}
+          className={`tools-tab ${toolsTab === 'context' ? 'is-active' : ''}`}
+          onClick={() => setToolsTab('context')}
+        >
+          Context
+        </button>
+      </div>
+      {toolsTab === 'mcp' ? (
+        <div className="sidebar-body">
+          <div className="tools-mcp-empty">
+            <div className="tools-mcp-title">MCP servers</div>
+            <p>
+              Connect Model Context Protocol servers to give the agent extra tools and data sources.
+            </p>
+            <p className="tools-mcp-soon">Configuration is coming soon.</p>
+          </div>
+        </div>
+      ) : toolsTab === 'context' ? (
+        <div className="sidebar-body">
+          <div className="tools-section-label">Agent instructions</div>
+          {agentsRow('workspace', !state.rootPath)}
+          {agentsRow('global', false)}
+          {list === null ? (
+            <div className="sidebar-empty">Loading…</div>
+          ) : systemPrompts ? (
+            renderGroup(systemPrompts)
+          ) : null}
+        </div>
+      ) : (
+        <div className="sidebar-body">
+          {list === null ? (
+            <div className="sidebar-empty">Loading…</div>
+          ) : (
+            skillGroups.map(renderGroup)
+          )}
+        </div>
+      )}
     </aside>
   )
 }
 
-function builtinFileNameFromTree(
-  tree: SkillFileNode[] | 'loading' | undefined
-): string {
+function builtinFileNameFromTree(tree: SkillFileNode[] | 'loading' | undefined): string {
   if (!tree || tree === 'loading') return SKILL_FILENAME
   const first = tree.find((n) => n.kind === 'file')
   return first?.path ?? SKILL_FILENAME
@@ -378,14 +448,12 @@ interface SkillRowProps {
   isExpanded: boolean
   tree: SkillFileNode[] | 'loading' | undefined
   expandedDirs: ReadonlySet<string>
-  active:
-    | {
-        scope: 'global' | 'workspace' | 'builtin'
-        name: string
-        linkTarget?: string
-        file?: string
-      }
-    | null
+  active: {
+    scope: 'global' | 'workspace' | 'builtin'
+    name: string
+    linkTarget?: string
+    file?: string
+  } | null
   onSkillClick: (skill: SkillSummary) => void
   onFileClick: (skill: SkillSummary, filePath: string) => void
   onDirClick: (scope: SkillScope, name: string, dirPath: string) => void
@@ -411,7 +479,9 @@ function SkillRow({
         type="button"
         className={`tree-row skills-row ${isCurrent ? 'current' : ''}`}
         onClick={() => onSkillClick(skill)}
-        title={skill.linkTarget ? `linked from ${skill.linkTarget}` : skill.description || skill.name}
+        title={
+          skill.linkTarget ? `linked from ${skill.linkTarget}` : skill.description || skill.name
+        }
       >
         <span className="tree-icon">{isExpanded ? '▾' : '▸'}</span>
         <span className="tree-name">{skill.name}</span>

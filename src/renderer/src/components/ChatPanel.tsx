@@ -20,6 +20,19 @@ function isDiagramEditMetadata(value: unknown): value is DiagramEditMetadata {
   )
 }
 
+interface KanbanAddMetadata {
+  title: string
+  columnName: string
+  priority?: string
+  linkedPath?: string | null
+}
+
+function isKanbanAddMetadata(value: unknown): value is KanbanAddMetadata {
+  if (!value || typeof value !== 'object') return false
+  const m = value as Record<string, unknown>
+  return typeof m.title === 'string' && typeof m.columnName === 'string'
+}
+
 function StatusBadge(): React.JSX.Element {
   const { state } = useStore()
   const { chatStatus, chatError } = state
@@ -48,7 +61,7 @@ function PartView({
   part: ChatMessagePart
   role: 'user' | 'assistant'
 }): React.JSX.Element {
-  const { navigateAbsolute } = useStore()
+  const { navigateAbsolute, setWorkspaceView } = useStore()
   if (part.kind === 'text') {
     if (role === 'assistant') {
       return (
@@ -87,6 +100,28 @@ function PartView({
             title={`Open ${meta.file}`}
           >
             {meta.kind === 'created' ? '＋ created' : '✎ replaced'} {meta.file}
+          </button>
+        ) : null}
+      </div>
+    )
+  }
+  if (part.kind === 'tool' && part.tool === 'kanban_add') {
+    const meta = isKanbanAddMetadata(part.metadata) ? part.metadata : null
+    return (
+      <div className="chat-tool chat-tool-kanban">
+        <div className="chat-tool-row">
+          <span className="chat-tool-name">kanban_add</span>
+          <span className={`chat-tool-status chat-tool-status-${part.status ?? 'running'}`}>
+            {part.status ?? 'running'}
+          </span>
+        </div>
+        {meta ? (
+          <button
+            className="chat-tool-link"
+            onClick={() => setWorkspaceView('kanban')}
+            title="Open the board"
+          >
+            ⊞ {meta.title} → {meta.columnName}
           </button>
         ) : null}
       </div>

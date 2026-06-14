@@ -1,0 +1,13 @@
+Add a card to the project board (the Kanban view), persisted to `.codeswim/board.json`.
+
+Use this to capture work the user describes — features, bugs, follow-ups, TODOs — so it shows up on the board instead of living only in chat. Users rarely add cards by hand; prefer creating one whenever a discrete unit of work is identified. The board view updates live.
+
+Arguments:
+- `title` (required) — short imperative summary, e.g. "Add rate limiting to the auth endpoint".
+- `description` — optional details, acceptance criteria, or context.
+- `status` — target column by name or id (e.g. "Backlog", "Ready", "in-progress"). Defaults to the first column (usually Backlog) when omitted.
+- `priority` — `low`, `medium`, or `high`. Defaults to `medium`.
+- `labels` — optional list of short tags, e.g. ["frontend", "bug"].
+- `linkedPath` — optional POSIX path (relative to workspace root) of the diagram or source file this card is about, so the card deep-links into the navigator.
+
+Create one card per discrete task. Break a large request into several cards rather than one sprawling card. This tool is not gated on diagram edits.

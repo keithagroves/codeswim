@@ -30,6 +30,7 @@ import {
   type SessionInfo,
   type StoreApi,
   type Toast,
+  type ToolsTab,
   type TreeNode,
   type View,
   type WorkspaceView
@@ -42,7 +43,7 @@ const DEFAULT_ACTIVITY_ORDER: Section[] = [
   'agent',
   'files',
   'search',
-  'skills',
+  'tools',
   'git',
   'terminal',
   'chat'
@@ -62,12 +63,16 @@ const initialState: AppState = {
   runs: [],
   runningScript: null,
   prevView: null,
+  diffPath: null,
+  diffContent: null,
+  diffLoading: false,
   tree: null,
   activeSection: 'agent',
   lastActiveSection: 'agent',
   sidePanelWidth: 320,
   activityOrder: [...DEFAULT_ACTIVITY_ORDER],
   currentSkill: null,
+  toolsTab: 'skills',
   chatStatus: 'idle',
   chatError: null,
   chatMessages: [],
@@ -110,6 +115,9 @@ type Action =
   | { type: 'script-exited'; name: string; code: number | null; signal: string | null }
   | { type: 'show-output' }
   | { type: 'hide-output' }
+  | { type: 'show-diff'; path: string }
+  | { type: 'set-diff-content'; path: string; content: string }
+  | { type: 'hide-diff' }
   | { type: 'set-tree'; tree: TreeNode[] }
   | { type: 'toggle-sidebar' }
   | {
@@ -128,12 +136,14 @@ type Action =
   | {
       type: 'set-current-skill'
       skill: {
+        kind?: 'skill' | 'agents'
         scope: 'global' | 'workspace' | 'builtin'
         name: string
         linkTarget?: string
         file?: string
       } | null
     }
+  | { type: 'set-tools-tab'; tab: ToolsTab }
   | { type: 'set-pending-question'; question: PendingQuestion | null }
   | { type: 'set-workspace-view'; view: WorkspaceView }
   | { type: 'chat-status'; status: ChatStatus; error?: string | null }
@@ -242,6 +252,32 @@ function reducer(state: AppState, action: Action): AppState {
         state.prevView ?? (state.currentFile ? fileViewFor(state.currentFile) : 'diagram')
       return { ...state, view: target, prevView: null }
     }
+    case 'show-diff': {
+      // Remember the file view to return to (unless we're already showing a
+      // transient view — output/diff — in which case keep the saved one).
+      const transient = state.view === 'output' || state.view === 'diff'
+      const prevView = transient ? state.prevView : (state.view as FileView)
+      return {
+        ...state,
+        view: 'diff',
+        prevView,
+        diffPath: action.path,
+        diffContent: null,
+        diffLoading: true
+      }
+    }
+    case 'set-diff-content': {
+      // A newer request may have superseded this one; only apply if the path
+      // still matches what the user is viewing.
+      if (state.diffPath !== action.path) return state
+      return { ...state, diffContent: action.content, diffLoading: false }
+    }
+    case 'hide-diff': {
+      if (state.view !== 'diff') return state
+      const target: View =
+        state.prevView ?? (state.currentFile ? fileViewFor(state.currentFile) : 'diagram')
+      return { ...state, view: target, prevView: null, diffPath: null, diffContent: null }
+    }
     case 'set-tree':
       return { ...state, tree: action.tree }
     case 'toggle-sidebar': {
@@ -287,14 +323,18 @@ function reducer(state: AppState, action: Action): AppState {
     }
     case 'set-current-skill':
       return { ...state, currentSkill: action.skill }
+    case 'set-tools-tab':
+      return { ...state, toolsTab: action.tab }
     case 'set-pending-question':
       return { ...state, pendingQuestion: action.question }
     case 'set-workspace-view': {
-      const view =
-        state.view === 'output'
-          ? (state.prevView ?? (state.currentFile ? fileViewFor(state.currentFile) : 'diagram'))
-          : state.view
-      return { ...state, workspaceView: action.view, view, prevView: null }
+      // Switching tabs leaves any transient main-panel view (output/diff) and
+      // lands back on a file view.
+      const transient = state.view === 'output' || state.view === 'diff'
+      const view = transient
+        ? (state.prevView ?? (state.currentFile ? fileViewFor(state.currentFile) : 'diagram'))
+        : state.view
+      return { ...state, workspaceView: action.view, view, prevView: null, diffPath: null }
     }
     case 'chat-status':
       return { ...state, chatStatus: action.status, chatError: action.error ?? null }
@@ -640,6 +680,7 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
   const setCurrentSkill = useCallback(
     (
       skill: {
+        kind?: 'skill' | 'agents'
         scope: 'global' | 'workspace' | 'builtin'
         name: string
         linkTarget?: string
@@ -648,6 +689,7 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
     ) => dispatch({ type: 'set-current-skill', skill }),
     []
   )
+  const setToolsTab = useCallback((tab: ToolsTab) => dispatch({ type: 'set-tools-tab', tab }), [])
   const toggleChatSettings = useCallback(() => dispatch({ type: 'chat-toggle-settings' }), [])
 
   const fetchProviderMethods = useCallback(async (): Promise<ProviderAuthMap> => {
@@ -990,6 +1032,24 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
     return window.api.gitAddToGitignore(root, patterns)
   }, [])
 
+  const showFileDiff = useCallback(async (path: string): Promise<void> => {
+    const root = stateRef.current.rootPath
+    if (!root) return
+    // Switch the main panel to the diff view immediately (loading), then fill it
+    // in once git returns. The reducer ignores stale results whose path no
+    // longer matches, so rapid clicks resolve to the last one selected.
+    dispatch({ type: 'show-diff', path })
+    try {
+      const content = await window.api.gitFileDiff(root, path)
+      dispatch({ type: 'set-diff-content', path, content })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      dispatch({ type: 'set-diff-content', path, content: `Could not load the diff:\n${msg}` })
+    }
+  }, [])
+
+  const hideDiff = useCallback(() => dispatch({ type: 'hide-diff' }), [])
+
   const reload = useCallback(async () => {
     if (!state.rootPath || !state.currentFile) return
     const result = await readFileSafe(state.rootPath, state.currentFile)
@@ -1180,7 +1240,9 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
       if (stored) {
         const parsed = JSON.parse(stored)
         if (Array.isArray(parsed)) {
-          dispatch({ type: 'set-activity-order', order: parsed })
+          // Migrate the legacy 'skills' section key to 'tools'.
+          const migrated = parsed.map((k) => (k === 'skills' ? 'tools' : k))
+          dispatch({ type: 'set-activity-order', order: migrated })
         }
       }
     } catch {
@@ -1234,7 +1296,10 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
       planSync,
       commitGroup,
       addToGitignore,
+      showFileDiff,
+      hideDiff,
       setCurrentSkill,
+      setToolsTab,
       answerQuestion,
       rejectQuestion
     }),
@@ -1275,7 +1340,10 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
       planSync,
       commitGroup,
       addToGitignore,
+      showFileDiff,
+      hideDiff,
       setCurrentSkill,
+      setToolsTab,
       answerQuestion,
       rejectQuestion
     ]

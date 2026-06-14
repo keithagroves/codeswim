@@ -25,6 +25,11 @@ flowchart TD
     Report --> Prompt[buildSyncPrompt]
     Prompt -.->|chat sendMessage| Agent((Agent))
 
+    click Renderer call navigate("../overview.md")
+    click Filter call navigate("../src/renderer/src/coverage/run.ts")
+    click ReadMD call navigate("../src/renderer/src/coverage/run.ts")
+    click Report call navigate("../src/renderer/src/coverage/coverage.ts")
+    click Prompt call navigate("../src/renderer/src/coverage/run.ts")
     click Run call navigate("../src/renderer/src/coverage/run.ts")
     click Analyze call navigate("../src/renderer/src/coverage/coverage.ts")
     click Lint call navigate("../src/renderer/src/coverage/mermaid-lint.ts")

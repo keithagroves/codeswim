@@ -21,8 +21,9 @@ export function SkillsView(): React.JSX.Element {
   const [viewMode, setViewMode] = useState<'rendered' | 'raw'>('rendered')
   const loadId = useRef(0)
 
+  const isAgents = current?.kind === 'agents'
   const isReadOnly = current?.scope === 'builtin'
-  const isLinked = !!current?.linkTarget
+  const isLinked = !isAgents && !!current?.linkTarget
   const dirty = content !== original
   const renderable = isMarkdownPath(selectedPath) && !binary
 
@@ -41,6 +42,19 @@ export function SkillsView(): React.JSX.Element {
     setLoading(true)
     void (async () => {
       try {
+        if (current.kind === 'agents') {
+          const scope = current.scope === 'global' ? 'global' : 'workspace'
+          const result = await window.api.agentsDocRead(scope, state.rootPath)
+          if (loadId.current !== id) return
+          setBinary(false)
+          setFileSize(result.size)
+          setContent(result.content)
+          setOriginal(result.content)
+          // A missing AGENTS.md opens straight into the editor so the user
+          // can start writing; an existing one renders first.
+          setViewMode(result.exists ? 'rendered' : 'raw')
+          return
+        }
         const result = await window.api.readSkillFile(
           current.scope,
           current.name,
@@ -72,13 +86,18 @@ export function SkillsView(): React.JSX.Element {
     if (!current || isReadOnly || binary) return
     setSaving(true)
     try {
-      await window.api.writeSkillFile(
-        current.scope,
-        current.name,
-        selectedPath,
-        content,
-        state.rootPath
-      )
+      if (current.kind === 'agents') {
+        const scope = current.scope === 'global' ? 'global' : 'workspace'
+        await window.api.agentsDocWrite(scope, content, state.rootPath)
+      } else {
+        await window.api.writeSkillFile(
+          current.scope,
+          current.name,
+          selectedPath,
+          content,
+          state.rootPath
+        )
+      }
       setOriginal(content)
       toast(`Saved ${selectedPath}`, 'info')
     } catch (err) {
@@ -98,12 +117,17 @@ export function SkillsView(): React.JSX.Element {
       if (!ok) return
     }
     try {
-      await window.api.openSkillInEditor(
-        current.scope,
-        current.name,
-        state.rootPath,
-        selectedPath
-      )
+      if (current.kind === 'agents') {
+        const scope = current.scope === 'global' ? 'global' : 'workspace'
+        await window.api.agentsDocOpenInEditor(scope, state.rootPath)
+      } else {
+        await window.api.openSkillInEditor(
+          current.scope,
+          current.name,
+          state.rootPath,
+          selectedPath
+        )
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       toast(`Could not open in editor: ${msg}`, 'error')
@@ -135,24 +159,23 @@ export function SkillsView(): React.JSX.Element {
   if (!current) {
     return (
       <div className="skills-empty-state">
-        <h2>Skills</h2>
+        <h2>Tools</h2>
         <p>
-          Skills are markdown prompts the agent can pick up. Pick one from the panel to
-          expand it and view its files, or create a new one.
+          Tools are capabilities the agent can pick up. Pick one from the panel to view or edit it.
+          The tabs split them by kind:
         </p>
         <ul className="skills-help-list">
           <li>
-            <strong>Built-in</strong> — the prompts codeswim ships (system prompt and
-            MDD coverage notes). Read-only; here so you can see what the agent is
-            told by default.
+            <strong>Skills</strong> — markdown prompts the agent reaches for. Workspace skills live
+            in <code>.agents/skills/</code> in the current folder; global skills in{' '}
+            <code>~/.agents/skills/</code>, shared across every workspace.
           </li>
           <li>
-            <strong>Workspace</strong> — stored in
-            <code> .agents/skills/</code> inside the current folder.
+            <strong>MCP</strong> — Model Context Protocol servers (coming soon).
           </li>
           <li>
-            <strong>Global</strong> — stored in <code>~/.agents/skills/</code>; shared
-            across every workspace.
+            <strong>Context</strong> — the agent instructions (<code>AGENTS.md</code>, local and
+            global) and the read-only system prompts codeswim ships.
           </li>
         </ul>
       </div>
@@ -163,12 +186,19 @@ export function SkillsView(): React.JSX.Element {
     <div className="skills-view">
       <div className="skills-view-header">
         <div className="skills-view-title">
-          <span className={`skills-scope skills-scope-${current.scope}`}>
-            {current.scope}
-          </span>
-          <span className="skills-view-name">{current.name}</span>
-          <span className="skills-view-sep">/</span>
-          <code className="skills-view-file">{selectedPath}</code>
+          {isAgents ? (
+            <>
+              <span className={`skills-scope skills-scope-${current.scope}`}>{current.scope}</span>
+              <code className="skills-view-file">AGENTS.md</code>
+            </>
+          ) : (
+            <>
+              <span className={`skills-scope skills-scope-${current.scope}`}>{current.scope}</span>
+              <span className="skills-view-name">{current.name}</span>
+              <span className="skills-view-sep">/</span>
+              <code className="skills-view-file">{selectedPath}</code>
+            </>
+          )}
           {isReadOnly ? <span className="skills-badge">read-only</span> : null}
           {isLinked ? (
             <span
@@ -181,17 +211,13 @@ export function SkillsView(): React.JSX.Element {
           {dirty && !isReadOnly && !binary ? (
             <span className="skills-dirty-dot" title="Unsaved" />
           ) : null}
-          {fileSize > 0 ? (
-            <span className="skills-file-size">{formatBytes(fileSize)}</span>
-          ) : null}
+          {fileSize > 0 ? <span className="skills-file-size">{formatBytes(fileSize)}</span> : null}
         </div>
         <div className="skills-view-actions">
           {renderable ? (
             <button
               className="secondary"
-              onClick={() =>
-                setViewMode((prev) => (prev === 'rendered' ? 'raw' : 'rendered'))
-              }
+              onClick={() => setViewMode((prev) => (prev === 'rendered' ? 'raw' : 'rendered'))}
               title={viewMode === 'rendered' ? 'Edit raw markdown' : 'Show rendered view'}
             >
               {viewMode === 'rendered' ? (isReadOnly ? 'View raw' : 'Edit') : 'Done'}
@@ -213,9 +239,11 @@ export function SkillsView(): React.JSX.Element {
               >
                 {saving ? 'Saving…' : 'Save'}
               </button>
-              <button className="secondary" onClick={() => void onDelete()} disabled={saving}>
-                {isLinked ? 'Unlink' : 'Delete'}
-              </button>
+              {!isAgents ? (
+                <button className="secondary" onClick={() => void onDelete()} disabled={saving}>
+                  {isLinked ? 'Unlink' : 'Delete'}
+                </button>
+              ) : null}
             </>
           ) : null}
           <button className="secondary" onClick={() => setCurrentSkill(null)}>
@@ -225,8 +253,8 @@ export function SkillsView(): React.JSX.Element {
       </div>
       {isLinked ? (
         <div className="skills-link-banner">
-          Linked from <code>{current.linkTarget}</code>. Edits write through the symlink
-          to the original file.
+          Linked from <code>{current.linkTarget}</code>. Edits write through the symlink to the
+          original file.
         </div>
       ) : null}
       {loading ? (

@@ -18,6 +18,7 @@ flowchart LR
     Types[preload/index.d.ts<br/>DiagramNavApi] -.->|compile-time| Renderer
     Types -.->|compile-time| Bridge
 
+    click Renderer call navigate("../overview.md")
     click Bridge call navigate("../src/preload/index.ts")
     click Types call navigate("../src/preload/index.d.ts")
     click Main call navigate("./main-process.md")

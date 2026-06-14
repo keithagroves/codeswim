@@ -77,6 +77,14 @@ export interface SkillFileContent {
   size: number
 }
 
+export type AgentsScope = 'workspace' | 'global'
+
+export interface AgentsDocContent {
+  content: string
+  exists: boolean
+  size: number
+}
+
 export interface SkillSummary {
   scope: SkillScope
   name: string
@@ -210,9 +218,15 @@ export interface DiagramNavApi {
     content: string,
     rootPath: string | null
   ): Promise<void>
+  // AGENTS.md (workspace root or global ~/.agents), surfaced and edited from
+  // the Tools → Context tab.
+  agentsDocRead(scope: AgentsScope, rootPath: string | null): Promise<AgentsDocContent>
+  agentsDocWrite(scope: AgentsScope, content: string, rootPath: string | null): Promise<void>
+  agentsDocOpenInEditor(scope: AgentsScope, rootPath: string | null): Promise<void>
   gitStatus(rootPath: string): Promise<GitStatus>
   gitStagedDiff(rootPath: string): Promise<string>
   gitWorkingDiff(rootPath: string): Promise<string>
+  gitFileDiff(rootPath: string, filePath: string): Promise<string>
   gitCommit(rootPath: string, subject: string, body: string): Promise<string>
   gitCommitGroup(rootPath: string, paths: string[], subject: string, body: string): Promise<string>
   gitAddToGitignore(rootPath: string, patterns: string[]): Promise<GitIgnoreResult>

@@ -8,7 +8,7 @@ Application certificate** and **notarized** by Apple.
 This is the one-time guide for whoever has the Apple Developer account doing the
 signed build. The project is already configured (hardened runtime + entitlements
 in [electron-builder.yml](electron-builder.yml) and
-[build/entitlements.mac.plist](build/entitlements.mac.plist)); you only supply
+build/entitlements.mac.plist); you only supply
 the certificate and notarization credentials.
 
 ## What you need
@@ -68,7 +68,7 @@ xcrun stapler validate "dist/mac/codeswim.app"      # → "The validate action w
 ## Doing it in CI instead (optional, later)
 
 To sign on GitHub Actions rather than a laptop, add these repo secrets and an env
-block to the macOS job in [.github/workflows/release.yml](.github/workflows/release.yml):
+block to the macOS job in .github/workflows/release.yml:
 
 - `CSC_LINK` — base64 of the exported `.p12` (`base64 -i cert.p12 | pbcopy`)
 - `CSC_KEY_PASSWORD` — the `.p12` export password

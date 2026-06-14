@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import type { GitStatus, GitCommitEntry } from '../../../preload/index.d'
 import { runCoverage } from '../coverage/run'
@@ -82,7 +82,8 @@ function flattenChanges(git: GitStatus): SimpleChange[] {
 }
 
 export function GitPanel(): React.JSX.Element {
-  const { state, toast, planSync, commitGroup, addToGitignore, syncDiagrams } = useStore()
+  const { state, toast, planSync, commitGroup, addToGitignore, syncDiagrams, showFileDiff } =
+    useStore()
   const root = state.rootPath
   const [git, setGit] = useState<GitStatus | null>(null)
   const [statusError, setStatusError] = useState<string | null>(null)
@@ -92,6 +93,8 @@ export function GitPanel(): React.JSX.Element {
   const [historyError, setHistoryError] = useState<string | null>(null)
   // Bumped after a successful commit so the History tab reloads next time.
   const [historyNonce, setHistoryNonce] = useState(0)
+  // Row buttons, indexed alongside the changes list, so Up/Down can move focus.
+  const rowRefs = useRef<Array<HTMLButtonElement | null>>([])
 
   const refreshStatus = useCallback(async () => {
     if (!root) return
@@ -388,14 +391,43 @@ export function GitPanel(): React.JSX.Element {
               {changes.length === 0 ? (
                 <div className="sidebar-empty">Everything’s saved — nothing to sync.</div>
               ) : (
-                <ul className="git-file-list">
-                  {changes.map((c) => (
-                    <li key={c.path} className="git-file-row" title={c.path}>
-                      <span className={`git-file-badge git-verb-${c.verb}`}>{c.verb[0]}</span>
-                      <span className="git-file-path">{c.path}</span>
-                      <span className="git-file-kind">{c.verb}</span>
-                    </li>
-                  ))}
+                <ul
+                  className="git-file-list"
+                  onKeyDown={(e) => {
+                    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+                    e.preventDefault()
+                    // Move relative to the focused row, falling back to the file
+                    // whose diff is currently open.
+                    const focused = rowRefs.current.findIndex((el) => el === document.activeElement)
+                    const current =
+                      focused >= 0 ? focused : changes.findIndex((c) => c.path === state.diffPath)
+                    const delta = e.key === 'ArrowDown' ? 1 : -1
+                    const next = Math.min(changes.length - 1, Math.max(0, current + delta))
+                    if (next === current || !changes[next]) return
+                    rowRefs.current[next]?.focus()
+                    void showFileDiff(changes[next].path)
+                  }}
+                >
+                  {changes.map((c, idx) => {
+                    const active = state.view === 'diff' && state.diffPath === c.path
+                    return (
+                      <li key={c.path}>
+                        <button
+                          type="button"
+                          ref={(el) => {
+                            rowRefs.current[idx] = el
+                          }}
+                          className={`git-file-row ${active ? 'is-active' : ''}`}
+                          title={`${c.path} — click to view changes`}
+                          onClick={() => void showFileDiff(c.path)}
+                        >
+                          <span className={`git-file-badge git-verb-${c.verb}`}>{c.verb[0]}</span>
+                          <span className="git-file-path">{c.path}</span>
+                          <span className="git-file-kind">{c.verb}</span>
+                        </button>
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
             </section>

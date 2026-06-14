@@ -271,6 +271,46 @@ export async function gitWorkingDiff(rootPath: string): Promise<string> {
   }
 }
 
+// The diff for a single path, for the main-panel diff viewer. Shows the working
+// state vs the last commit (staged + unstaged together), so what the user sees
+// matches what Sync would save. Untracked files are shown as full additions via
+// the same intent-to-add trick as gitWorkingDiff, undone afterward. Falls back
+// to the empty tree on a repo with no commits yet.
+export async function gitFileDiff(rootPath: string, filePath: string): Promise<string> {
+  let hasHead = true
+  try {
+    await git(rootPath, ['rev-parse', '--verify', 'HEAD'])
+  } catch {
+    hasHead = false
+  }
+  const base = hasHead ? 'HEAD' : '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
+
+  // Untracked files don't appear in `git diff HEAD`; record intent-to-add so the
+  // new file reads as an addition, then undo it (this is a read-only view).
+  let tracked = true
+  try {
+    await git(rootPath, ['ls-files', '--error-unmatch', '--', filePath])
+  } catch {
+    tracked = false
+  }
+  let markedIntent = false
+  if (!tracked) {
+    try {
+      await git(rootPath, ['add', '-N', '--', filePath])
+      markedIntent = true
+    } catch {
+      // Ignored or otherwise unaddable — nothing to show as a tracked diff.
+    }
+  }
+  try {
+    return await git(rootPath, ['diff', base, '--no-color', '--', filePath])
+  } finally {
+    if (markedIntent) {
+      await git(rootPath, ['reset', '--quiet', '--', filePath]).catch(() => {})
+    }
+  }
+}
+
 // Commit exactly the given paths as one isolated commit: clear the index, stage
 // just this group (`add -A` so deletions and additions both land), then commit.
 // Sequential calls from the panel each produce a clean, single-purpose commit.

@@ -11,7 +11,9 @@ the `@opencode-ai/sdk` client. The plugin registers a `diagram_edit` tool
 and gates `write`/`edit`/`apply_patch` behind a per-session check — the
 agent has to touch a diagram before it can touch code. That's the
 mechanical enforcement of the MDD rules; the system prompt and
-`mdd-fixes.md` carry the soft guidance.
+`mdd-fixes.md` carry the soft guidance. The plugin also registers a
+`kanban_add` tool so the agent can drop tasks onto the project board
+(`.codeswim/board.json`) — the board is agent-populated, not hand-curated.
 
 ```mermaid
 flowchart LR
@@ -22,20 +24,33 @@ flowchart LR
     Sidecar[sidecar.ts] --> Main
     Server --> Plugin[plugin.ts]
     Plugin --> Tool[diagram_edit]
+    Plugin --> Kanban[kanban_add]
     Plugin --> Gate[session-gate.ts]
     Gate -.->|blocks until<br/>diagram edited| Mutating[write / edit /<br/>apply_patch]
     Plugin --> System[prompt/system.txt]
     Plugin --> Fixes[prompt/mdd-fixes.md]
     Tool --> ToolImpl[tool/diagram-edit.ts]
     Tool --> ToolDesc[tool/diagram-edit.txt]
+    Kanban --> KanbanImpl[tool/kanban-add.ts]
+    Kanban --> KanbanBoard[(.codeswim/board.json)]
 
+    click User call navigate("../overview.md")
     click Chat call navigate("../src/renderer/src/components/ChatPanel.tsx")
     click Client call navigate("../src/renderer/src/agent.ts")
+    click Server call navigate("../src/harness/plugin.ts")
+    click Main call navigate("../architecture/main-process.md")
     click Sidecar call navigate("../src/main/sidecar.ts")
     click Plugin call navigate("../src/harness/plugin.ts")
+    click Tool call navigate("../src/harness/tool/diagram-edit.ts")
     click Gate call navigate("../src/harness/session-gate.ts")
-    click ToolImpl call navigate("../src/harness/tool/diagram-edit.ts")
+    click System call navigate("../src/harness/prompt/system.txt")
     click Fixes call navigate("../src/harness/prompt/mdd-fixes.md")
+    click ToolImpl call navigate("../src/harness/tool/diagram-edit.ts")
+    click ToolDesc call navigate("../src/harness/tool/diagram-edit.txt")
+    click Kanban call navigate("../src/harness/tool/kanban-add.ts")
+    click KanbanImpl call navigate("../src/harness/tool/kanban-add.ts")
+    click KanbanBoard call navigate("../src/main/kanban.ts")
+    click Mutating call navigate("../overview.md")
 ```
 
 ## Notes
@@ -52,7 +67,13 @@ flowchart LR
 - [src/harness/session-gate.ts](../src/harness/session-gate.ts) — per-session "has a diagram been edited yet?" state used by the gate.
 - [src/harness/tool/diagram-edit.ts](../src/harness/tool/diagram-edit.ts) — pure implementation of the `diagram_edit` tool (frontmatter check, mermaid block check, file write).
 - `src/harness/tool/diagram-edit.txt` — tool description shown to the model.
+- [src/harness/tool/kanban-add.ts](../src/harness/tool/kanban-add.ts) — pure implementation of the `kanban_add` tool (reads/normalizes `.codeswim/board.json`, appends a card, writes it back). Reuses the shared kanban normalizer so the agent and UI write identical board files.
+- `src/harness/tool/kanban-add.txt` — `kanban_add` tool description (reference; the live description is inlined in `plugin.ts`).
 - `src/harness/prompt/system.txt` — system prompt that teaches the diagrams-first loop.
 - [src/harness/prompt/mdd-fixes.md](../src/harness/prompt/mdd-fixes.md) — additional MDD repair guidance the agent loads when fixing drift.
 - [src/renderer/src/agent.ts](../src/renderer/src/agent.ts) — renderer-side session-aware SDK wrapper.
 - [src/renderer/src/components/ChatPanel.tsx](../src/renderer/src/components/ChatPanel.tsx) — the chat UI itself.
+
+### Testing
+
+- [src/harness/tool/kanban-add.test.ts](../src/harness/tool/kanban-add.test.ts) — covers the kanban_add tool implementation.

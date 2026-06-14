@@ -1,3 +1,9 @@
+- the ai should be the main way you add cards to your kanban board.
+
+
+- I should have a light mode and a dark mode.
+
+
 - open in editor shouldn't be part of the header of the program that should be a button in the viewer for the file. 
 
 - When you click on a specific node that has to do with some specific code in a file, it should take you to the specific part of the file. e.g. if the node is related to logic on whether the entity is an enemy it should take you to that if statement or section.  We can probably you the `# enemy-detection` or whatever markdown feature is best.
@@ -14,6 +20,9 @@
 
 
 - add a internal browser like codex. The agent should be able to view and control this browser to help debug and improve. 
+
+- codeswim should just create a kanban board project on github for you.
+
 
 
 - Agent.md should be viewable in the skills menu.

@@ -31,6 +31,7 @@ import {
   gitStatus,
   gitStagedDiff,
   gitWorkingDiff,
+  gitFileDiff,
   gitCommit,
   gitCommitGroup,
   gitAddToGitignore,
@@ -40,6 +41,7 @@ import {
   gitLog
 } from './git'
 import { getRoomIdentity } from './room'
+import { agentsDocPath, readAgentsDoc, writeAgentsDoc, type AgentsScope } from './agents-doc'
 import {
   moveGitHubKanbanItem,
   readKanbanBoard,
@@ -773,6 +775,22 @@ app.whenReady().then(async () => {
     }
   )
 
+  ipcMain.handle('agents:read', async (_event, scope: AgentsScope, rootPath: string | null) => {
+    return readAgentsDoc(scope, rootPath)
+  })
+
+  ipcMain.handle(
+    'agents:write',
+    async (_event, scope: AgentsScope, content: string, rootPath: string | null) => {
+      await writeAgentsDoc(scope, content, rootPath)
+    }
+  )
+
+  ipcMain.handle('agents:open', async (_event, scope: AgentsScope, rootPath: string | null) => {
+    const err = await shell.openPath(agentsDocPath(scope, rootPath))
+    if (err) throw new Error(err)
+  })
+
   ipcMain.handle('git:status', async (_event, rootPath: string) => {
     return gitStatus(rootPath)
   })
@@ -783,6 +801,10 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('git:working-diff', async (_event, rootPath: string) => {
     return gitWorkingDiff(rootPath)
+  })
+
+  ipcMain.handle('git:file-diff', async (_event, rootPath: string, filePath: string) => {
+    return gitFileDiff(rootPath, filePath)
   })
 
   ipcMain.handle(

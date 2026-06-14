@@ -8,7 +8,7 @@ The renderer owns everything the user sees. A single reducer in
 `state.tsx` holds the workspace root, current file, view mode, and
 breadcrumb stack; components consume it via `useStore()`. The chrome
 (activity bar, file tree, breadcrumbs, side panels) wraps a view switch
-that picks between diagram, code, output, and skills views based on what
+that picks between diagram, read, output, and skills views based on what
 the user navigated to. Mermaid is rendered with `securityLevel: 'loose'`
 so that `click ... call navigate(...)` in user diagrams can invoke
 `window.navigate` and push onto the breadcrumb stack.
@@ -26,7 +26,6 @@ flowchart TD
     AppRoot --> Toasts
     AppRoot --> View{view}
     View -->|diagram| Diagram[DiagramView]
-    View -->|code| Code[CodeView]
     View -->|read| Read[ReadView]
     View -->|output| Output[ScriptOutput]
     View -->|skills| SkillsV[SkillsView]
@@ -45,7 +44,6 @@ flowchart TD
     click Parse call navigate("../src/renderer/src/parse.ts")
     click PathUtil call navigate("../src/renderer/src/path-utils.ts")
     click Diagram call navigate("../src/renderer/src/components/DiagramView.tsx")
-    click Code call navigate("../src/renderer/src/components/CodeView.tsx")
     click Read call navigate("../src/renderer/src/components/ReadView.tsx")
     click Output call navigate("../src/renderer/src/components/ScriptOutput.tsx")
     click SkillsV call navigate("../src/renderer/src/components/SkillsView.tsx")
@@ -87,12 +85,20 @@ flowchart TD
 - [Breadcrumbs.tsx](../src/renderer/src/components/Breadcrumbs.tsx) — navigation stack as crumbs.
 - [DiagramView.tsx](../src/renderer/src/components/DiagramView.tsx) — renders one mermaid block and wires `window.navigate`.
 - [MermaidErrorBanner.tsx](../src/renderer/src/components/MermaidErrorBanner.tsx) — surfaces parse/render failures inline.
-- [CodeView.tsx](../src/renderer/src/components/CodeView.tsx) — CodeMirror viewer for source files.
-- [ReadView.tsx](../src/renderer/src/components/ReadView.tsx) — prose-mode markdown viewer for diagram pages.
+- [ReadView.tsx](../src/renderer/src/components/ReadView.tsx) — renders diagrams, markdown prose, and source files (merged from the removed CodeView).
 - [MarkdownProse.tsx](../src/renderer/src/components/MarkdownProse.tsx) — markdown renderer used inside read view and skills view.
 - [SearchPanel.tsx](../src/renderer/src/components/SearchPanel.tsx) — workspace search.
 - [SkillsPanel.tsx](../src/renderer/src/components/SkillsPanel.tsx) — left-rail list of available skills.
 - [SkillsView.tsx](../src/renderer/src/components/SkillsView.tsx) — full-pane skill markdown viewer.
 - [ScriptControls.tsx](../src/renderer/src/components/ScriptControls.tsx) — npm script dropdown + run/stop.
 - [ScriptOutput.tsx](../src/renderer/src/components/ScriptOutput.tsx) — stdout/stderr stream for the running script.
+- [DiffView.tsx](../src/renderer/src/components/DiffView.tsx) — side-by-side diff viewer for synced diagram changes.
+- [KanbanView.tsx](../src/renderer/src/components/KanbanView.tsx) — board view for the workspace kanban.
+- [McpView.tsx](../src/renderer/src/components/McpView.tsx) — MCP tools tab inside the Tools side panel.
+- [TerminalPanel.tsx](../src/renderer/src/components/TerminalPanel.tsx) — terminal emulator panel (Ctrl+` toggle).
 - [Toasts.tsx](../src/renderer/src/components/Toasts.tsx) — transient notifications.
+
+### Chat & collaboration
+
+- [connection.ts](../src/renderer/src/chat/connection.ts) — WebSocket chat connection and `useRoomChat` hook.
+- [RoomChatPanel.tsx](../src/renderer/src/components/RoomChatPanel.tsx) — per-room chat side panel.

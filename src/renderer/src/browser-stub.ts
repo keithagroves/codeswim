@@ -348,6 +348,9 @@ The companion document belongs at \`${documentPath}\`.
     listSkillFiles: async () => [],
     readSkillFile: async () => ({ binary: false, content: '', size: 0 }),
     writeSkillFile: notInBrowser<void>('writeSkillFile'),
+    agentsDocRead: async () => ({ content: '', exists: false, size: 0 }),
+    agentsDocWrite: notInBrowser<void>('agentsDocWrite'),
+    agentsDocOpenInEditor: notInBrowser<void>('agentsDocOpenInEditor'),
     gitStatus: async () => ({
       isRepo: true,
       branch: null,
@@ -358,6 +361,7 @@ The companion document belongs at \`${documentPath}\`.
     }),
     gitStagedDiff: async () => '',
     gitWorkingDiff: async () => '',
+    gitFileDiff: async () => '',
     gitCommit: notInBrowser<string>('gitCommit'),
     gitCommitGroup: notInBrowser<string>('gitCommitGroup'),
     gitAddToGitignore: notInBrowser<{ added: string[]; untracked: string[] }>('gitAddToGitignore'),

@@ -83,6 +83,15 @@ body {
   min-height: 0;
 }
 
+/* Stand-in drag handle for header-less views (start screen, skills). Keeps
+ * the top of every view movable; double-click zooms/maximizes on macOS. */
+.drag-strip {
+  flex-shrink: 0;
+  height: 32px;
+  background: var(--bg);
+  -webkit-app-region: drag;
+}
+
 /* Activity bar — narrow icon strip at the very left, like VS Code.
  * Always visible; clicking an icon switches the active SidePanel section. */
 .activity-bar {
@@ -320,6 +329,76 @@ body.is-resizing {
   color: var(--text);
 }
 
+/* Sub-tabs of the Tools section (Skills / MCP). */
+.tools-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.tools-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 8px;
+  border-radius: 5px;
+}
+
+.tools-tab:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.tools-tab.is-active {
+  background: var(--accent-tint);
+  color: var(--text);
+}
+
+/* Pinned AGENTS.md rows in the Context tab. */
+.tools-agents-row .tree-icon {
+  color: var(--accent);
+}
+
+.tools-agents-row:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Section label separating Agent instructions from System prompts. */
+.tools-section-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-weight: 600;
+  padding: 8px 12px 4px;
+}
+
+.tools-mcp-empty {
+  padding: 16px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.tools-mcp-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.tools-mcp-soon {
+  margin-top: 8px;
+  font-style: italic;
+}
+
 .sidebar-body {
   flex: 1;
   overflow: auto;
@@ -466,6 +545,25 @@ button.secondary:hover {
   background: var(--bg-muted);
   flex-shrink: 0;
   min-height: 48px;
+  /* Frameless window: the header is the drag handle. Dragging moves the
+   * window; double-clicking it triggers the OS zoom/maximize. Interactive
+   * controls opt back out via .no-drag below. */
+  -webkit-app-region: drag;
+}
+
+/* Leave room for the macOS traffic-light buttons (titleBarStyle hiddenInset). */
+body.is-mac .header {
+  padding-left: 78px;
+}
+
+/* Controls inside the drag region must stay clickable, not drag the window. */
+.header button,
+.header input,
+.header select,
+.header a,
+.header .workspace-view-switch,
+.header .header-actions {
+  -webkit-app-region: no-drag;
 }
 
 .workspace-view-switch {
@@ -592,10 +690,35 @@ button.secondary:hover {
   user-select: none;
 }
 
+.header-spacer {
+  flex: 1;
+  min-width: 0;
+}
+
 .header-actions {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+}
+
+/* VS Code-style breadcrumb path bar: a thin strip under the header showing
+ * the current file's path, above the file viewer. */
+.path-bar {
+  display: flex;
+  align-items: center;
+  padding: 4px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  flex-shrink: 0;
+  min-height: 28px;
+}
+
+.path-bar .breadcrumbs {
+  font-size: 12px;
+}
+
+.path-bar .breadcrumb {
+  font-size: 12px;
 }
 
 /* Main column — vertical stack of Header + Content. Sits to the right of
@@ -1897,6 +2020,11 @@ button.secondary:hover {
 .chat-tool-diagram {
   border-color: var(--warning-border);
   background: var(--warning-bg);
+}
+
+.chat-tool-kanban {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 .chat-input-row {
@@ -3397,6 +3525,24 @@ body.is-panning .diagram-canvas-wrap {
   align-items: center;
   gap: 8px;
   font-size: 12.5px;
+  /* Now a button: clicking opens the file's diff in the main panel. */
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  padding: 3px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.git-file-row:hover {
+  background: var(--bg-raised);
+}
+
+.git-file-row.is-active {
+  background: var(--accent-tint);
 }
 
 .git-file-badge {
@@ -3433,6 +3579,86 @@ body.is-panning .diagram-canvas-wrap {
   gap: 8px;
   flex-wrap: wrap;
   margin-top: 8px;
+}
+
+/* Main-panel diff viewer (Sync → click a changed file). */
+.diff-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg);
+}
+
+.diff-view-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-muted);
+  flex-shrink: 0;
+}
+
+.diff-view-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.diff-view-body {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+.diff-view-empty {
+  padding: 24px 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.diff-view-pre {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+.diff-line {
+  padding: 0 16px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.diff-line-meta {
+  color: var(--text-muted);
+  background: var(--bg-muted);
+}
+
+.diff-line-hunk {
+  color: var(--accent);
+  background: var(--accent-tint);
+}
+
+.diff-line-add {
+  color: #b5f0c9;
+  background: rgba(120, 220, 170, 0.12);
+}
+
+.diff-line-del {
+  color: #f5b7bd;
+  background: rgba(240, 110, 120, 0.12);
+}
+
+.diff-line-context {
+  color: var(--text);
 }
 
 .git-working {
@@ -3730,6 +3956,14 @@ body.is-panning .diagram-canvas-wrap {
 }
 
 /* Terminal panel — outer wrapper fills the side panel */
+/* Persistent host so the terminal survives section switches (kept mounted,
+ * hidden with display:none). Fills the side panel like the other panels. */
+.terminal-host {
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
 .terminal-panel-outer {
   flex: 1;
   min-height: 0;

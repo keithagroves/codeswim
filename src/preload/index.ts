@@ -78,6 +78,14 @@ export interface SkillFileContent {
   size: number
 }
 
+export type AgentsScope = 'workspace' | 'global'
+
+export interface AgentsDocContent {
+  content: string
+  exists: boolean
+  size: number
+}
+
 export interface SkillSummary {
   scope: SkillScope
   name: string
@@ -271,11 +279,19 @@ const api = {
     rootPath: string | null
   ): Promise<void> =>
     ipcRenderer.invoke('skills:write-file', scope, name, relPath, content, rootPath),
+  agentsDocRead: (scope: AgentsScope, rootPath: string | null): Promise<AgentsDocContent> =>
+    ipcRenderer.invoke('agents:read', scope, rootPath),
+  agentsDocWrite: (scope: AgentsScope, content: string, rootPath: string | null): Promise<void> =>
+    ipcRenderer.invoke('agents:write', scope, content, rootPath),
+  agentsDocOpenInEditor: (scope: AgentsScope, rootPath: string | null): Promise<void> =>
+    ipcRenderer.invoke('agents:open', scope, rootPath),
   gitStatus: (rootPath: string): Promise<GitStatus> => ipcRenderer.invoke('git:status', rootPath),
   gitStagedDiff: (rootPath: string): Promise<string> =>
     ipcRenderer.invoke('git:staged-diff', rootPath),
   gitWorkingDiff: (rootPath: string): Promise<string> =>
     ipcRenderer.invoke('git:working-diff', rootPath),
+  gitFileDiff: (rootPath: string, filePath: string): Promise<string> =>
+    ipcRenderer.invoke('git:file-diff', rootPath, filePath),
   gitCommit: (rootPath: string, subject: string, body: string): Promise<string> =>
     ipcRenderer.invoke('git:commit', rootPath, subject, body),
   gitCommitGroup: (

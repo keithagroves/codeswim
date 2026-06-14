@@ -7,12 +7,16 @@ import type { GitIgnoreResult } from '../../preload/index.d'
 export type { PendingQuestion } from './agent'
 export type { CommitMessage } from './commit/synthesize'
 
-export type View = 'diagram' | 'read' | 'output'
+export type View = 'diagram' | 'read' | 'output' | 'diff'
 export type FileView = 'diagram' | 'read'
 export type WorkspaceView = 'kanban' | 'navigator'
 // Activity-bar / side-panel sections, in no particular order. The user's
 // preferred order lives in AppState.activityOrder.
-export type Section = 'agent' | 'files' | 'search' | 'skills' | 'git' | 'terminal' | 'chat'
+export type Section = 'agent' | 'files' | 'search' | 'tools' | 'git' | 'terminal' | 'chat'
+// Sub-tabs within the Tools section. 'skills' lists user skills; 'mcp' is the
+// MCP-servers surface; 'context' holds the agent instructions (local + global
+// AGENTS.md) and the built-in system prompts.
+export type ToolsTab = 'skills' | 'mcp' | 'context'
 
 export interface Toast {
   id: number
@@ -84,8 +88,14 @@ export interface AppState {
   toasts: Toast[]
   runs: RunEntry[]
   runningScript: RunningScript | null
-  // The view we should return to when the user closes the output panel.
+  // The view we should return to when the user closes the output/diff panel.
   prevView: FileView | null
+  // Main-panel diff viewer (Sync → click a changed file). diffPath is the repo-
+  // relative path being shown; diffContent is the raw unified diff (null while
+  // loading, '' when there's nothing to show).
+  diffPath: string | null
+  diffContent: string | null
+  diffLoading: boolean
   tree: TreeNode[] | null
   // Side-panel layout. ActivityBar lives at the very left and stays
   // visible; SidePanel sits to its right and shows whichever section is
@@ -100,12 +110,17 @@ export interface AppState {
   // User-controlled order of activity-bar sections (drag-to-reorder).
   // Persisted to localStorage.
   activityOrder: Section[]
+  // Which sub-tab of the Tools section is active (skills vs MCP).
+  toolsTab: ToolsTab
   // Selected skill in the Skills view (null = nothing picked yet).
   // linkTarget is set when the skill directory is a symlink, so the view
   // can show where it came from and adjust delete messaging. `file` is the
   // POSIX-relative path of the file currently being viewed inside the
-  // skill — defaults to SKILL.md when omitted.
+  // skill — defaults to SKILL.md when omitted. `kind: 'agents'` flags the
+  // workspace AGENTS.md, which loads/saves through the agents-doc IPC
+  // instead of the per-skill file IPC.
   currentSkill: {
+    kind?: 'skill' | 'agents'
     scope: 'global' | 'workspace' | 'builtin'
     name: string
     linkTarget?: string
@@ -150,12 +165,14 @@ export interface StoreApi {
   setActivityOrder(order: Section[]): void
   setCurrentSkill(
     skill: {
+      kind?: 'skill' | 'agents'
       scope: 'global' | 'workspace' | 'builtin'
       name: string
       linkTarget?: string
       file?: string
     } | null
   ): void
+  setToolsTab(tab: ToolsTab): void
   answerQuestion(requestID: string, answers: string[][]): Promise<void>
   rejectQuestion(requestID: string): Promise<void>
   toggleChatSettings(): void
@@ -182,6 +199,10 @@ export interface StoreApi {
   commitGroup(paths: string[], subject: string, body: string): Promise<string>
   // Appends patterns to .gitignore and stops tracking anything already tracked.
   addToGitignore(patterns: string[]): Promise<GitIgnoreResult>
+  // Loads a single file's working-tree diff and shows it in the main panel.
+  showFileDiff(path: string): Promise<void>
+  // Closes the main-panel diff viewer, returning to the previous view.
+  hideDiff(): void
 }
 
 export const StoreContext = createContext<StoreApi | null>(null)

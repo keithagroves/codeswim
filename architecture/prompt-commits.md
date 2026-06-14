@@ -141,6 +141,7 @@ flowchart TD
     click Bar call navigate("../src/renderer/src/components/ActivityBar.tsx")
     click Panel call navigate("../src/renderer/src/components/GitPanel.tsx")
     click GitMod call navigate("../src/main/git.ts")
+    click Repo call navigate("./main-process.md")
     click Cov call navigate("../src/renderer/src/coverage/run.ts")
     click Agent call navigate("../src/renderer/src/agent.ts")
     click Prompt call navigate("../src/renderer/src/commit/synthesize.ts")
@@ -250,3 +251,5 @@ see "Browsing history" above.
 - [src/main/git.ts](../src/main/git.ts) — `git` operations via safe `execFile` (status, staged diff, commit).
 - [src/renderer/src/components/GitPanel.tsx](../src/renderer/src/components/GitPanel.tsx) — the Commit side-panel and its compose → block → review → commit state machine.
 - [src/renderer/src/commit/synthesize.ts](../src/renderer/src/commit/synthesize.ts) — synthesis prompt builder, reply parser, and provenance trailers.
+- [src/renderer/src/commit/triage.ts](../src/renderer/src/commit/triage.ts) — triage prompt builder and sync-plan parser for commit-time drift resolution.
+- [src/renderer/src/commit/triage.test.ts](../src/renderer/src/commit/triage.test.ts) — covers the triage prompt builder and plan parser.
