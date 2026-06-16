@@ -972,6 +972,52 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
     void sendChat(buildSyncPrompt(report))
   }, [sendChat, toast])
 
+  const reviewPullRequest = useCallback(
+    async (pr: {
+      number: number
+      title: string
+      author: string | null
+      baseRef: string
+      headRef: string
+      url: string
+    }) => {
+      const root = stateRef.current.rootPath
+      if (!root) {
+        toast('Open a folder first.', 'error')
+        return
+      }
+      // Pull the diff in main so the review works even without `gh` set up. If
+      // it's unavailable we still send the prompt and tell the agent to fetch
+      // it. Very large diffs are capped so the prompt stays manageable.
+      let diffBlock: string
+      try {
+        const result = await window.api.pullRequestDiff(root, pr.number)
+        if (result.status === 'ok' && result.diff.trim()) {
+          const MAX = 120_000
+          const truncated = result.diff.length > MAX
+          const body = truncated ? result.diff.slice(0, MAX) : result.diff
+          diffBlock = `Here is the unified diff${
+            truncated ? ' (truncated — fetch the rest with `gh pr diff` if you need it)' : ''
+          }:\n\n\`\`\`diff\n${body}\n\`\`\``
+        } else {
+          diffBlock = `I couldn't fetch the diff automatically. Use \`gh pr diff ${pr.number}\` or git to inspect the changes at ${pr.url}.`
+        }
+      } catch {
+        diffBlock = `I couldn't fetch the diff automatically. Use \`gh pr diff ${pr.number}\` or git to inspect the changes at ${pr.url}.`
+      }
+
+      dispatch({ type: 'set-active-section', section: 'agent' })
+      await sendChat(`Review pull request #${pr.number} — "${pr.title}"${
+        pr.author ? ` by ${pr.author}` : ''
+      } (\`${pr.headRef}\` → \`${pr.baseRef}\`).
+
+${diffBlock}
+
+Inspect the changes for correctness bugs, security issues, and whether they keep the project's diagrams aligned with the code. Call out specific problems with file references and concrete fixes; if it looks good, say so briefly. This is a review only — don't edit any files.`)
+    },
+    [sendChat, toast]
+  )
+
   const synthesizeCommitMessage = useCallback(
     async (diff: string): Promise<CommitMessage> => {
       const root = stateRef.current.rootPath
@@ -1298,6 +1344,7 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
       addToGitignore,
       showFileDiff,
       hideDiff,
+      reviewPullRequest,
       setCurrentSkill,
       setToolsTab,
       answerQuestion,
@@ -1342,6 +1389,7 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
       addToGitignore,
       showFileDiff,
       hideDiff,
+      reviewPullRequest,
       setCurrentSkill,
       setToolsTab,
       answerQuestion,

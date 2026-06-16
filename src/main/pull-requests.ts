@@ -156,6 +156,39 @@ export async function listPullRequests(
   return { status: 'ok', slug, pulls: data.map(toPullRequest) }
 }
 
+export interface PullRequestDiff {
+  status: 'ok' | 'no-auth' | 'not-github' | 'error'
+  diff: string
+  message?: string
+}
+
+// Fetch a PR's unified diff. GitHub returns the raw diff when asked with the
+// `.diff` media type on the pull endpoint. We fetch it in main (rather than
+// leaning on the agent's shell) so the review works without `gh` configured.
+export async function pullRequestDiff(rootPath: string, number: number): Promise<PullRequestDiff> {
+  const repo = await resolveRepo(rootPath)
+  if (!repo) return { status: 'not-github', diff: '' }
+  const { ownerRepo, token } = repo
+
+  const headers = ghHeaders(token)
+  headers.Accept = 'application/vnd.github.v3.diff'
+
+  const url = `https://api.github.com/repos/${ownerRepo}/pulls/${number}`
+  let res: Response
+  try {
+    res = await fetch(url, { headers })
+  } catch (err) {
+    return { status: 'error', diff: '', message: err instanceof Error ? err.message : String(err) }
+  }
+  if (res.status === 401 || res.status === 403) {
+    return { status: token ? 'error' : 'no-auth', diff: '' }
+  }
+  if (!res.ok) {
+    return { status: 'error', diff: '', message: `GitHub returned ${res.status}` }
+  }
+  return { status: 'ok', diff: await res.text() }
+}
+
 // Merge a pull request via the GitHub API. Requires a token with write access
 // to the repo. GitHub enforces mergeability (conflicts, required checks, branch
 // protection) server-side; we surface its refusal as 'blocked' with the

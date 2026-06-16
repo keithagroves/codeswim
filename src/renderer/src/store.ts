@@ -2,7 +2,7 @@ import { createContext, useContext } from 'react'
 import type { PendingQuestion } from './agent'
 import type { CommitMessage } from './commit/synthesize'
 import type { SyncPlan } from './commit/triage'
-import type { GitIgnoreResult } from '../../preload/index.d'
+import type { GitIgnoreResult, PullRequest } from '../../preload/index.d'
 
 export type { PendingQuestion } from './agent'
 export type { CommitMessage } from './commit/synthesize'
@@ -203,6 +203,9 @@ export interface StoreApi {
   showFileDiff(path: string): Promise<void>
   // Closes the main-panel diff viewer, returning to the previous view.
   hideDiff(): void
+  // Opens the agent panel and asks it to review the given pull request,
+  // handing it the PR's diff so it can inspect the changes.
+  reviewPullRequest(pr: PullRequest): Promise<void>
 }
 
 export const StoreContext = createContext<StoreApi | null>(null)

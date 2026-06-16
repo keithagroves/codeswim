@@ -377,6 +377,7 @@ The companion document belongs at \`${documentPath}\`.
     githubToken: async () => null,
     listPullRequests: async () => ({ status: 'not-github' as const, slug: null, pulls: [] }),
     mergePullRequest: async () => ({ status: 'not-github' as const }),
+    pullRequestDiff: async () => ({ status: 'not-github' as const, diff: '' }),
     onGitHubAuthChanged: () => () => {},
     terminalCreate: notInBrowser<string>('terminalCreate'),
     terminalWrite: () => {},

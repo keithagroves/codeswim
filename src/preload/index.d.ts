@@ -207,6 +207,12 @@ export interface MergeResult {
   message?: string
 }
 
+export interface PullRequestDiff {
+  status: 'ok' | 'no-auth' | 'not-github' | 'error'
+  diff: string
+  message?: string
+}
+
 export interface DiagramNavApi {
   pickFolder(): Promise<string | null>
   readFile(absPath: string): Promise<string>
@@ -307,6 +313,7 @@ export interface DiagramNavApi {
   githubToken(): Promise<string | null>
   listPullRequests(rootPath: string, state?: 'open' | 'closed' | 'all'): Promise<PullRequestList>
   mergePullRequest(rootPath: string, number: number, method?: MergeMethod): Promise<MergeResult>
+  pullRequestDiff(rootPath: string, number: number): Promise<PullRequestDiff>
   onGitHubAuthChanged(cb: (user: GitHubUser | null) => void): () => void
   terminalCreate(cwd?: string): Promise<string>
   terminalWrite(id: string, data: string): void

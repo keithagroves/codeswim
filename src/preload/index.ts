@@ -199,6 +199,12 @@ export interface MergeResult {
   message?: string
 }
 
+export interface PullRequestDiff {
+  status: 'ok' | 'no-auth' | 'not-github' | 'error'
+  diff: string
+  message?: string
+}
+
 const api = {
   pickFolder: (): Promise<string | null> => ipcRenderer.invoke('pick-folder'),
   readFile: (absPath: string): Promise<string> => ipcRenderer.invoke('read-file', absPath),
@@ -380,6 +386,8 @@ const api = {
     method?: MergeMethod
   ): Promise<MergeResult> =>
     ipcRenderer.invoke('github:merge-pull-request', rootPath, number, method),
+  pullRequestDiff: (rootPath: string, number: number): Promise<PullRequestDiff> =>
+    ipcRenderer.invoke('github:pull-request-diff', rootPath, number),
   onGitHubAuthChanged: (cb: (user: GitHubUser | null) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, user: GitHubUser | null): void => cb(user)
     ipcRenderer.on('github:auth-changed', listener)

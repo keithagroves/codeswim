@@ -42,7 +42,12 @@ import {
   gitLog
 } from './git'
 import { getRoomIdentity } from './room'
-import { listPullRequests, mergePullRequest, type MergeMethod } from './pull-requests'
+import {
+  listPullRequests,
+  mergePullRequest,
+  pullRequestDiff,
+  type MergeMethod
+} from './pull-requests'
 import {
   getStatus as githubStatus,
   getToken as githubToken,
@@ -882,6 +887,9 @@ app.whenReady().then(async () => {
     'github:merge-pull-request',
     (_event, rootPath: string, number: number, method?: MergeMethod) =>
       mergePullRequest(rootPath, number, method)
+  )
+  ipcMain.handle('github:pull-request-diff', (_event, rootPath: string, number: number) =>
+    pullRequestDiff(rootPath, number)
   )
 
   ipcMain.handle('terminal:create', (_event, cwd?: string) => {

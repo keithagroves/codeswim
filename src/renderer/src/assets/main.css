@@ -4717,3 +4717,26 @@ body.is-panning .diagram-canvas-wrap {
   color: var(--error-text);
   font-size: 11px;
 }
+
+.pr-row-actions {
+  gap: 6px;
+}
+
+.pr-review-btn {
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-raised);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pr-review-btn:hover {
+  border-color: color-mix(in srgb, var(--pastel-periwinkle) 55%, var(--border));
+  background: color-mix(in srgb, var(--pastel-periwinkle) 14%, var(--bg-raised));
+}

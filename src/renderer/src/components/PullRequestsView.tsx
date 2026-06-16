@@ -180,7 +180,7 @@ function PullRequestRow({
   pr: PullRequest
   onMerged: () => void
 }): React.JSX.Element {
-  const { state, toast } = useStore()
+  const { state, toast, reviewPullRequest } = useStore()
   const root = state.rootPath
   const [merge, setMerge] = useState<MergeState>({ kind: 'idle' })
   const [method, setMethod] = useState<MergeMethod>('merge')
@@ -236,24 +236,34 @@ function PullRequestRow({
           </div>
         </button>
 
-        {canMerge ? (
-          <div className="pr-row-actions">
-            {merge.kind === 'idle' || merge.kind === 'error' ? (
-              <button
-                type="button"
-                className="pr-merge-btn"
-                onClick={() => setMerge({ kind: 'confirming' })}
-              >
-                Merge
-              </button>
-            ) : null}
-            {merge.kind === 'merging' ? (
-              <button type="button" className="pr-merge-btn" disabled>
-                Merging…
-              </button>
-            ) : null}
-          </div>
-        ) : null}
+        <div className="pr-row-actions">
+          <button
+            type="button"
+            className="pr-review-btn"
+            title="Open the agent and have it review this PR"
+            onClick={() => void reviewPullRequest(pr)}
+          >
+            Review
+          </button>
+          {canMerge ? (
+            <>
+              {merge.kind === 'idle' || merge.kind === 'error' ? (
+                <button
+                  type="button"
+                  className="pr-merge-btn"
+                  onClick={() => setMerge({ kind: 'confirming' })}
+                >
+                  Merge
+                </button>
+              ) : null}
+              {merge.kind === 'merging' ? (
+                <button type="button" className="pr-merge-btn" disabled>
+                  Merging…
+                </button>
+              ) : null}
+            </>
+          ) : null}
+        </div>
       </div>
 
       {merge.kind === 'confirming' ? (
