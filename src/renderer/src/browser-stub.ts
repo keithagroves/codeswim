@@ -375,6 +375,8 @@ The companion document belongs at \`${documentPath}\`.
     githubSignIn: async () => ({ error: 'GitHub sign-in is unavailable in the browser.' }),
     githubSignOut: async () => {},
     githubToken: async () => null,
+    listPullRequests: async () => ({ status: 'not-github' as const, slug: null, pulls: [] }),
+    mergePullRequest: async () => ({ status: 'not-github' as const }),
     onGitHubAuthChanged: () => () => {},
     terminalCreate: notInBrowser<string>('terminalCreate'),
     terminalWrite: () => {},

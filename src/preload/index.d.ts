@@ -172,6 +172,41 @@ export interface GitHubSignInResult {
   verificationUri: string
 }
 
+export interface PullRequest {
+  number: number
+  title: string
+  state: 'open' | 'closed'
+  draft: boolean
+  url: string
+  author: string | null
+  authorAvatarUrl: string | null
+  createdAt: string
+  updatedAt: string
+  baseRef: string
+  headRef: string
+  comments: number
+}
+
+export interface PullRequestList {
+  // 'ok' with the PRs, or a reason the list is empty/unavailable:
+  // 'not-github' (no GitHub remote), 'no-auth' (private/rate-limited and not
+  // signed in), or 'error' with a message.
+  status: 'ok' | 'not-github' | 'no-auth' | 'error'
+  slug: string | null
+  pulls: PullRequest[]
+  error?: string
+}
+
+export type MergeMethod = 'merge' | 'squash' | 'rebase'
+
+export interface MergeResult {
+  // 'merged' on success; 'blocked' when GitHub refuses (conflicts, failing
+  // checks, branch protection); 'no-auth' without write access; 'not-github'
+  // for a non-GitHub remote; 'error' for transport/unknown failures.
+  status: 'merged' | 'blocked' | 'no-auth' | 'not-github' | 'error'
+  message?: string
+}
+
 export interface DiagramNavApi {
   pickFolder(): Promise<string | null>
   readFile(absPath: string): Promise<string>
@@ -270,6 +305,8 @@ export interface DiagramNavApi {
   githubSignIn(): Promise<GitHubSignInResult | { error: string }>
   githubSignOut(): Promise<void>
   githubToken(): Promise<string | null>
+  listPullRequests(rootPath: string, state?: 'open' | 'closed' | 'all'): Promise<PullRequestList>
+  mergePullRequest(rootPath: string, number: number, method?: MergeMethod): Promise<MergeResult>
   onGitHubAuthChanged(cb: (user: GitHubUser | null) => void): () => void
   terminalCreate(cwd?: string): Promise<string>
   terminalWrite(id: string, data: string): void

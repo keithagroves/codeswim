@@ -170,6 +170,35 @@ export interface GitIgnoreResult {
   untracked: string[]
 }
 
+export interface PullRequest {
+  number: number
+  title: string
+  state: 'open' | 'closed'
+  draft: boolean
+  url: string
+  author: string | null
+  authorAvatarUrl: string | null
+  createdAt: string
+  updatedAt: string
+  baseRef: string
+  headRef: string
+  comments: number
+}
+
+export interface PullRequestList {
+  status: 'ok' | 'not-github' | 'no-auth' | 'error'
+  slug: string | null
+  pulls: PullRequest[]
+  error?: string
+}
+
+export type MergeMethod = 'merge' | 'squash' | 'rebase'
+
+export interface MergeResult {
+  status: 'merged' | 'blocked' | 'no-auth' | 'not-github' | 'error'
+  message?: string
+}
+
 const api = {
   pickFolder: (): Promise<string | null> => ipcRenderer.invoke('pick-folder'),
   readFile: (absPath: string): Promise<string> => ipcRenderer.invoke('read-file', absPath),
@@ -341,6 +370,16 @@ const api = {
     ipcRenderer.invoke('github:sign-in'),
   githubSignOut: (): Promise<void> => ipcRenderer.invoke('github:sign-out'),
   githubToken: (): Promise<string | null> => ipcRenderer.invoke('github:token'),
+  listPullRequests: (
+    rootPath: string,
+    state?: 'open' | 'closed' | 'all'
+  ): Promise<PullRequestList> => ipcRenderer.invoke('github:pull-requests', rootPath, state),
+  mergePullRequest: (
+    rootPath: string,
+    number: number,
+    method?: MergeMethod
+  ): Promise<MergeResult> =>
+    ipcRenderer.invoke('github:merge-pull-request', rootPath, number, method),
   onGitHubAuthChanged: (cb: (user: GitHubUser | null) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, user: GitHubUser | null): void => cb(user)
     ipcRenderer.on('github:auth-changed', listener)

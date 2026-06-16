@@ -50,6 +50,7 @@ flowchart TD
 - [src/main/index.ts](../src/main/index.ts) — process entry, BrowserWindow, every IPC handler, chokidar watcher, npm script runner.
 - [src/main/skills.ts](../src/main/skills.ts) — discovers global + workspace SKILL.md files and exposes a read API to the renderer.
 - [src/main/kanban.ts](../src/main/kanban.ts) — Kanban board read/write and GitHub issue sync.
+- [src/main/pull-requests.ts](../src/main/pull-requests.ts) — GitHub pull request listing and merging via the API.
 - [src/main/room.ts](../src/main/room.ts) — room identity management for chat.
 - [src/main/source-explanations.ts](../src/main/source-explanations.ts) — companion explanation path resolution and read.
 - [src/main/agents-doc.ts](../src/main/agents-doc.ts) — reads and writes AGENTS.md files (workspace scope and global ~/.agents/ scope).

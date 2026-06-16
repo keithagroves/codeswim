@@ -95,6 +95,7 @@ flowchart TD
 - [DiffView.tsx](../src/renderer/src/components/DiffView.tsx) — side-by-side diff viewer for synced diagram changes.
 - [KanbanView.tsx](../src/renderer/src/components/KanbanView.tsx) — board view for the workspace kanban.
 - [McpView.tsx](../src/renderer/src/components/McpView.tsx) — MCP tools tab inside the Tools side panel.
+- [PullRequestsView.tsx](../src/renderer/src/components/PullRequestsView.tsx) — pull request listing, filtering, and inline merge flow.
 - [TerminalPanel.tsx](../src/renderer/src/components/TerminalPanel.tsx) — terminal emulator panel (Ctrl+` toggle).
 - [Toasts.tsx](../src/renderer/src/components/Toasts.tsx) — transient notifications.
 

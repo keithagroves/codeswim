@@ -9,7 +9,7 @@ export type { CommitMessage } from './commit/synthesize'
 
 export type View = 'diagram' | 'read' | 'output' | 'diff'
 export type FileView = 'diagram' | 'read'
-export type WorkspaceView = 'kanban' | 'navigator'
+export type WorkspaceView = 'kanban' | 'navigator' | 'pulls'
 // Activity-bar / side-panel sections, in no particular order. The user's
 // preferred order lives in AppState.activityOrder.
 export type Section = 'agent' | 'files' | 'search' | 'tools' | 'git' | 'terminal' | 'chat'

@@ -42,6 +42,7 @@ import {
   gitLog
 } from './git'
 import { getRoomIdentity } from './room'
+import { listPullRequests, mergePullRequest, type MergeMethod } from './pull-requests'
 import {
   getStatus as githubStatus,
   getToken as githubToken,
@@ -872,6 +873,16 @@ app.whenReady().then(async () => {
   })
   ipcMain.handle('github:sign-out', () => githubSignOut())
   ipcMain.handle('github:token', () => githubToken())
+  ipcMain.handle(
+    'github:pull-requests',
+    (_event, rootPath: string, state?: 'open' | 'closed' | 'all') =>
+      listPullRequests(rootPath, state)
+  )
+  ipcMain.handle(
+    'github:merge-pull-request',
+    (_event, rootPath: string, number: number, method?: MergeMethod) =>
+      mergePullRequest(rootPath, number, method)
+  )
 
   ipcMain.handle('terminal:create', (_event, cwd?: string) => {
     const id = String(++terminalIdCounter)
