@@ -8,6 +8,7 @@ import {
   parseTarget,
   relativeToRoot,
   resolveRelative,
+  resolveWorkspacePath,
   toPosix
 } from './path-utils'
 
@@ -189,5 +190,62 @@ describe('parseTarget', () => {
       path: './foo.ts',
       range: { start: 3, end: 4 }
     })
+  })
+})
+
+describe('resolveWorkspacePath', () => {
+  const files = [
+    'overview.md',
+    'architecture/http-routes.md',
+    'architecture/services.md',
+    'flows/generate-flow.md',
+    '.codeswim/explanations/src/services/sandbox.ts.md',
+    'src/services/sandbox.ts',
+    'src/services/screener/orchestrator.ts'
+  ]
+
+  it('matches an exact root-relative path', () => {
+    expect(resolveWorkspacePath('overview.md', files)).toBe('overview.md')
+  })
+
+  it('matches a bare filename via its unique basename', () => {
+    expect(resolveWorkspacePath('http-routes.md', files)).toBe('architecture/http-routes.md')
+  })
+
+  it('matches a folder-prefixed path the root does not carry (basename fallback)', () => {
+    // The agent wrote "server/overview.md" but the workspace root is server/.
+    expect(resolveWorkspacePath('server/overview.md', files)).toBe('overview.md')
+  })
+
+  it('matches an explanation doc by its path suffix', () => {
+    expect(resolveWorkspacePath('src/services/sandbox.ts.md', files)).toBe(
+      '.codeswim/explanations/src/services/sandbox.ts.md'
+    )
+  })
+
+  it('resolves a source file token (navigation maps it to its explanation)', () => {
+    expect(resolveWorkspacePath('orchestrator.ts', files)).toBe(
+      'src/services/screener/orchestrator.ts'
+    )
+  })
+
+  it('strips a leading ./ and a trailing slash', () => {
+    expect(resolveWorkspacePath('./overview.md', files)).toBe('overview.md')
+    expect(resolveWorkspacePath('architecture/', files)).toBeNull() // directory → no file
+  })
+
+  it('returns null for a bare word with no separator or extension', () => {
+    expect(resolveWorkspacePath('runCrossBeamFlow', files)).toBeNull()
+  })
+
+  it('returns null when nothing matches', () => {
+    expect(resolveWorkspacePath('does/not/exist.md', files)).toBeNull()
+  })
+
+  it('returns null when a basename is ambiguous', () => {
+    const dupes = ['frontend/overview.md', 'server/overview.md']
+    expect(resolveWorkspacePath('overview.md', dupes)).toBeNull()
+    // …but an exact path still wins over the ambiguity.
+    expect(resolveWorkspacePath('server/overview.md', dupes)).toBe('server/overview.md')
   })
 })

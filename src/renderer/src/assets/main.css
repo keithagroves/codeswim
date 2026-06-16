@@ -1327,6 +1327,21 @@ body.is-mac .header {
   font-size: 0.9em;
 }
 
+/* Inline code that resolves to a real workspace file (chat). The anchor wraps
+   the <code> so it keeps its monospace chip while reading as a link. */
+.diagram-prose a.prose-code-link {
+  text-decoration: none;
+}
+
+.diagram-prose a.prose-code-link code {
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.diagram-prose a.prose-code-link:hover code {
+  text-decoration: underline;
+}
+
 .diagram-prose pre {
   overflow: auto;
   padding: 12px;
