@@ -14,6 +14,11 @@ interface MarkdownProseProps {
   // Default 2 → `# Foo` becomes h3, `## Foo` becomes h4 (the previous compact
   // behavior). Use 0 to render headings at their natural levels (h1, h2, …).
   headingOffset?: number
+  // Optional: map an inline-code token to a real workspace file. When set,
+  // code that resolves to a file is rendered as a clickable link (via
+  // onNavigate); a token that doesn't resolve stays plain inline code. Used by
+  // the chat panel so file paths the agent mentions are navigable.
+  resolvePath?: (raw: string) => string | null
 }
 
 function isFence(line: string): boolean {
@@ -106,7 +111,11 @@ function isExternalLink(target: string): boolean {
   return /^(?:[a-z][a-z0-9+.-]*:|#)/i.test(target)
 }
 
-function renderInline(text: string, onNavigate: (target: string) => void): ReactNode[] {
+function renderInline(
+  text: string,
+  onNavigate: (target: string) => void,
+  resolvePath?: (raw: string) => string | null
+): ReactNode[] {
   const nodes: ReactNode[] = []
   const pattern = /(`([^`]+)`|\*\*([^*]+)\*\*|\[([^\]]+)\]\(([^)]+)\))/g
   let lastIndex = 0
@@ -116,7 +125,28 @@ function renderInline(text: string, onNavigate: (target: string) => void): React
     if (match.index > lastIndex) nodes.push(text.slice(lastIndex, match.index))
 
     if (match[2]) {
-      nodes.push(<code key={nodes.length}>{match[2]}</code>)
+      // Inline code. When a resolver is supplied (chat), code that names a real
+      // workspace file becomes a navigable link; everything else stays plain.
+      const codeText = match[2]
+      const resolved = resolvePath?.(codeText) ?? null
+      if (resolved) {
+        nodes.push(
+          <a
+            key={nodes.length}
+            className="prose-code-link"
+            href={resolved}
+            title={`Open ${resolved}`}
+            onClick={(event: MouseEvent<HTMLAnchorElement>) => {
+              event.preventDefault()
+              onNavigate(resolved)
+            }}
+          >
+            <code>{codeText}</code>
+          </a>
+        )
+      } else {
+        nodes.push(<code key={nodes.length}>{codeText}</code>)
+      }
     } else if (match[3]) {
       nodes.push(<strong key={nodes.length}>{match[3]}</strong>)
     } else if (match[4] && match[5]) {
@@ -149,7 +179,8 @@ function headingTag(level: number, offset: number): 'h1' | 'h2' | 'h3' | 'h4' | 
 export function MarkdownProse({
   source,
   onNavigate,
-  headingOffset = 2
+  headingOffset = 2,
+  resolvePath
 }: MarkdownProseProps): React.JSX.Element {
   const blocks = parseBlocks(source)
 
@@ -159,15 +190,15 @@ export function MarkdownProse({
         switch (block.kind) {
           case 'heading': {
             const Tag = headingTag(block.level, headingOffset)
-            return <Tag key={index}>{renderInline(block.text, onNavigate)}</Tag>
+            return <Tag key={index}>{renderInline(block.text, onNavigate, resolvePath)}</Tag>
           }
           case 'paragraph':
-            return <p key={index}>{renderInline(block.text, onNavigate)}</p>
+            return <p key={index}>{renderInline(block.text, onNavigate, resolvePath)}</p>
           case 'unordered-list':
             return (
               <ul key={index}>
                 {block.items.map((item, itemIndex) => (
-                  <li key={itemIndex}>{renderInline(item, onNavigate)}</li>
+                  <li key={itemIndex}>{renderInline(item, onNavigate, resolvePath)}</li>
                 ))}
               </ul>
             )
@@ -175,7 +206,7 @@ export function MarkdownProse({
             return (
               <ol key={index}>
                 {block.items.map((item, itemIndex) => (
-                  <li key={itemIndex}>{renderInline(item, onNavigate)}</li>
+                  <li key={itemIndex}>{renderInline(item, onNavigate, resolvePath)}</li>
                 ))}
               </ol>
             )

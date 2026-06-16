@@ -63,6 +63,37 @@ export function relativeToRoot(rootPath: string, absPath: string): string | null
   return abs.slice(root.length + 1)
 }
 
+// Resolve a loose, agent-typed path token (e.g. one mentioned in chat prose)
+// to a real workspace file. Agent output is inconsistent — it may write a
+// root-relative path ("server/overview.md"), a bare filename ("http-routes.md"),
+// or an explanation-doc path ("src/foo.ts.md"). We match against the known file
+// list so only real files ever become links; a miss stays plain text rather
+// than a dead link:
+//   1. exact match on the normalized path
+//   2. unique suffix match (the token is a trailing path slice of one file)
+//   3. unique basename match (exactly one file shares the leaf name)
+// More than one match at a tier is ambiguous → null; we never guess between
+// files. Tokens with neither a separator nor an extension (e.g. an identifier
+// like `runFlow`) are rejected up front so ordinary inline code stays unlinked.
+export function resolveWorkspacePath(raw: string, files: string[]): string | null {
+  const trimmed = raw.trim().replace(/\/+$/, '') // drop trailing slash (directories)
+  if (!trimmed) return null
+  const candidate = normalize(trimmed.replace(/^\.\//, ''))
+  if (!candidate || candidate.startsWith('..')) return null
+  if (!candidate.includes('/') && !candidate.includes('.')) return null
+
+  if (files.includes(candidate)) return candidate
+
+  const suffix = '/' + candidate
+  const suffixMatches = files.filter((f) => f.endsWith(suffix))
+  if (suffixMatches.length === 1) return suffixMatches[0]
+  if (suffixMatches.length > 1) return null
+
+  const leaf = basename(candidate)
+  const baseMatches = files.filter((f) => basename(f) === leaf)
+  return baseMatches.length === 1 ? baseMatches[0] : null
+}
+
 export interface LineRange {
   start: number // 1-indexed, inclusive
   end: number // 1-indexed, inclusive

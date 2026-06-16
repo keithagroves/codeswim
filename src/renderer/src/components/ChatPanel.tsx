@@ -1,7 +1,25 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { MarkdownProse } from './MarkdownProse'
-import type { ChatMessage, ChatMessagePart } from '../store'
+import { resolveWorkspacePath } from '../path-utils'
+import type { ChatMessage, ChatMessagePart, TreeNode } from '../store'
+
+type PathResolver = (raw: string) => string | null
+
+// Flatten the file tree to a list of root-relative file paths for path
+// resolution (directories are dropped — only files are navigable targets).
+function flattenTreeFiles(tree: TreeNode[] | null): string[] {
+  if (!tree) return []
+  const out: string[] = []
+  const walk = (nodes: TreeNode[]): void => {
+    for (const node of nodes) {
+      if (node.kind === 'file') out.push(node.path)
+      else if (node.children) walk(node.children)
+    }
+  }
+  walk(tree)
+  return out
+}
 
 interface DiagramEditMetadata {
   kind: 'created' | 'replaced'
@@ -56,10 +74,12 @@ function StatusBadge(): React.JSX.Element {
 
 function PartView({
   part,
-  role
+  role,
+  resolvePath
 }: {
   part: ChatMessagePart
   role: 'user' | 'assistant'
+  resolvePath: PathResolver
 }): React.JSX.Element {
   const { navigateAbsolute, setWorkspaceView } = useStore()
   if (part.kind === 'text') {
@@ -69,6 +89,7 @@ function PartView({
           <MarkdownProse
             source={part.text ?? ''}
             onNavigate={(target) => void navigateAbsolute(target, true)}
+            resolvePath={resolvePath}
           />
         </div>
       )
@@ -316,13 +337,19 @@ function ProviderSetup({ onCancel }: { onCancel?: () => void } = {}): React.JSX.
   )
 }
 
-function MessageView({ message }: { message: ChatMessage }): React.JSX.Element {
+function MessageView({
+  message,
+  resolvePath
+}: {
+  message: ChatMessage
+  resolvePath: PathResolver
+}): React.JSX.Element {
   return (
     <div className={`chat-message chat-message-${message.role}`}>
       <div className="chat-message-role">{message.role === 'user' ? 'You' : 'Agent'}</div>
       <div className="chat-message-body">
         {message.parts.map((part, i) => (
-          <PartView key={part.id ?? i} part={part} role={message.role} />
+          <PartView key={part.id ?? i} part={part} role={message.role} resolvePath={resolvePath} />
         ))}
       </div>
     </div>
@@ -554,6 +581,12 @@ export function ChatPanel(): React.JSX.Element {
   const listRef = useRef<HTMLDivElement | null>(null)
   const sending = state.chatStatus === 'thinking' || state.chatStatus === 'connecting'
   const hasPendingQuestion = !!state.pendingQuestion
+  // Resolver for path-like inline code in agent messages. Rebuilt only when the
+  // file tree changes; a token that names a real file becomes a clickable link.
+  const resolvePath = useMemo<PathResolver>(() => {
+    const files = flattenTreeFiles(state.tree)
+    return (raw: string) => resolveWorkspacePath(raw, files)
+  }, [state.tree])
   const lastMessage = state.chatMessages[state.chatMessages.length - 1]
   const hasStreamingAssistant =
     sending && lastMessage?.role === 'assistant' && lastMessage.parts.length > 0
@@ -612,7 +645,9 @@ export function ChatPanel(): React.JSX.Element {
               : 'Open a folder to start chatting with the agent.'}
           </div>
         ) : (
-          state.chatMessages.map((m) => <MessageView key={m.id} message={m} />)
+          state.chatMessages.map((m) => (
+            <MessageView key={m.id} message={m} resolvePath={resolvePath} />
+          ))
         )}
         {sending && !hasStreamingAssistant ? (
           <div className="chat-message chat-message-assistant chat-message-pending">
