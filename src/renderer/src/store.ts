@@ -7,9 +7,18 @@ import type { GitIgnoreResult, PullRequest } from '../../preload/index.d'
 export type { PendingQuestion } from './agent'
 export type { CommitMessage } from './commit/synthesize'
 
+// Label used for a PR's diff in the main-panel diff viewer. Doubles as the
+// dedup key (compared against state.diffPath to highlight the active row);
+// numbers are unique, so this is stable. Lives here rather than in the panel
+// component so both the panel and the store can import it without tripping the
+// fast-refresh only-components rule.
+export function prDiffLabel(pr: { number: number; title: string }): string {
+  return `#${pr.number} · ${pr.title}`
+}
+
 export type View = 'diagram' | 'read' | 'output' | 'diff'
 export type FileView = 'diagram' | 'read'
-export type WorkspaceView = 'kanban' | 'navigator' | 'pulls'
+export type WorkspaceView = 'kanban' | 'navigator'
 // Activity-bar / side-panel sections, in no particular order. The user's
 // preferred order lives in AppState.activityOrder.
 export type Section =
@@ -18,6 +27,7 @@ export type Section =
   | 'search'
   | 'tools'
   | 'git'
+  | 'pulls'
   | 'terminal'
   | 'claude'
   | 'chat'
@@ -214,6 +224,8 @@ export interface StoreApi {
   // Opens the agent panel and asks it to review the given pull request,
   // handing it the PR's diff so it can inspect the changes.
   reviewPullRequest(pr: PullRequest): Promise<void>
+  // Loads a pull request's full diff and shows it in the main panel.
+  showPullRequestDiff(pr: PullRequest): Promise<void>
 }
 
 export const StoreContext = createContext<StoreApi | null>(null)

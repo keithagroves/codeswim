@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useStore } from '../store'
+import { prDiffLabel, useStore } from '../store'
 import type { MergeMethod, PullRequest, PullRequestList } from '../../../preload/index.d'
 
 type Filter = 'open' | 'closed' | 'all'
@@ -22,7 +22,7 @@ function relTime(iso: string): string {
   return `${Math.floor(mo / 12)}y ago`
 }
 
-export function PullRequestsView(): React.JSX.Element {
+export function PullRequestsPanel(): React.JSX.Element {
   const { state } = useStore()
   const root = state.rootPath
   const [filter, setFilter] = useState<Filter>('open')
@@ -61,39 +61,54 @@ export function PullRequestsView(): React.JSX.Element {
     }
   }, [root, filter, nonce])
 
+  if (!root) {
+    return (
+      <aside className="pr-panel" aria-label="Pull requests">
+        <div className="git-panel-header">
+          <span className="sidebar-title">Pull requests</span>
+        </div>
+        <div className="sidebar-empty">Open a folder to see pull requests.</div>
+      </aside>
+    )
+  }
+
   const pulls = result?.pulls ?? []
 
   return (
-    <div className="pr-view">
-      <div className="pr-toolbar">
-        <div className="pr-title-block">
-          <div className="pr-title-row">
-            <h1>Pull requests</h1>
-            {loading ? <span className="pr-save-state">Loading…</span> : null}
-          </div>
-          {result?.slug ? <div className="pr-subtitle">{result.slug}</div> : null}
-        </div>
-        <div className="pr-toolbar-actions">
-          <div className="pr-filter" role="tablist" aria-label="Pull request state">
-            {(['open', 'closed', 'all'] as Filter[]).map((f) => (
-              <button
-                key={f}
-                role="tab"
-                aria-selected={filter === f}
-                className={`pr-filter-btn ${filter === f ? 'is-active' : ''}`}
-                onClick={() => setFilter(f)}
-              >
-                {f[0].toUpperCase() + f.slice(1)}
-              </button>
-            ))}
-          </div>
-          <button className="secondary" onClick={refresh} disabled={loading}>
-            Refresh
-          </button>
-        </div>
+    <aside className="pr-panel" aria-label="Pull requests">
+      <div className="git-panel-header">
+        <span className="sidebar-title">Pull requests</span>
+        {result?.slug ? (
+          <span className="git-branch" title={result.slug}>
+            {result.slug.replace(/^github\.com\//, '')}
+          </span>
+        ) : null}
+        <button
+          className="sidebar-icon-btn"
+          onClick={refresh}
+          disabled={loading}
+          title="Refresh"
+          aria-label="Refresh"
+        >
+          ↻
+        </button>
       </div>
 
-      <div className="pr-body">
+      <div className="pr-filter" role="tablist" aria-label="Pull request state">
+        {(['open', 'closed', 'all'] as Filter[]).map((f) => (
+          <button
+            key={f}
+            role="tab"
+            aria-selected={filter === f}
+            className={`pr-filter-btn ${filter === f ? 'is-active' : ''}`}
+            onClick={() => setFilter(f)}
+          >
+            {f[0].toUpperCase() + f.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      <div className="pr-panel-body">
         <PullRequestsContent
           loading={loading}
           result={result}
@@ -102,7 +117,7 @@ export function PullRequestsView(): React.JSX.Element {
           onMerged={refresh}
         />
       </div>
-    </div>
+    </aside>
   )
 }
 
@@ -120,11 +135,11 @@ function PullRequestsContent({
   onMerged: () => void
 }): React.JSX.Element {
   if (!result && loading) {
-    return <div className="pr-message">Loading pull requests…</div>
+    return <div className="sidebar-empty">Loading pull requests…</div>
   }
   if (result?.status === 'not-github') {
     return (
-      <div className="pr-message">
+      <div className="sidebar-empty">
         This workspace isn’t connected to a GitHub repository, so there are no pull requests to
         show.
       </div>
@@ -132,20 +147,18 @@ function PullRequestsContent({
   }
   if (result?.status === 'no-auth') {
     return (
-      <div className="pr-message">
-        Sign in to GitHub to see pull requests for this repository. Open the chat panel’s settings
-        to connect your account.
+      <div className="sidebar-empty">
+        Sign in to GitHub to see pull requests. Open the chat panel’s settings to connect your
+        account.
       </div>
     )
   }
   if (result?.status === 'error') {
-    return (
-      <div className="pr-message pr-message-error">Couldn’t load pull requests: {result.error}</div>
-    )
+    return <div className="git-error">Couldn’t load pull requests: {result.error}</div>
   }
   if (pulls.length === 0) {
     return (
-      <div className="pr-message">
+      <div className="sidebar-empty">
         No {filter === 'all' ? '' : filter} pull requests{filter === 'all' ? '' : ' right now'}.
       </div>
     )
@@ -180,7 +193,7 @@ function PullRequestRow({
   pr: PullRequest
   onMerged: () => void
 }): React.JSX.Element {
-  const { state, toast, reviewPullRequest } = useStore()
+  const { state, toast, reviewPullRequest, showPullRequestDiff } = useStore()
   const root = state.rootPath
   const [merge, setMerge] = useState<MergeState>({ kind: 'idle' })
   const [method, setMethod] = useState<MergeMethod>('merge')
@@ -188,6 +201,8 @@ function PullRequestRow({
   // Only open, non-draft PRs are mergeable from here; GitHub would reject the
   // rest anyway, so we don't offer the button.
   const canMerge = pr.state === 'open' && !pr.draft
+  // Row is "active" when its diff is the one showing in the main panel.
+  const active = state.view === 'diff' && state.diffPath === prDiffLabel(pr)
 
   const doMerge = useCallback(async () => {
     if (!root) return
@@ -210,60 +225,66 @@ function PullRequestRow({
 
   return (
     <li className="pr-row">
-      <div className="pr-row-inner">
+      <button
+        type="button"
+        className={`pr-row-btn ${active ? 'is-active' : ''}`}
+        title={`${pr.title} — view diff`}
+        onClick={() => void showPullRequestDiff(pr)}
+      >
+        <span className={`pr-state pr-state-${stateLabel}`} aria-label={stateLabel}>
+          {stateLabel === 'closed' ? '⊘' : stateLabel === 'draft' ? '◷' : '⇡'}
+        </span>
+        <div className="pr-row-main">
+          <div className="pr-row-title">
+            <span className="pr-row-titletext">{pr.title}</span>
+            <span className="pr-row-number">#{pr.number}</span>
+          </div>
+          <div className="pr-row-meta">
+            {pr.author ? <span className="pr-row-author">{pr.author}</span> : null}
+            <span title={pr.updatedAt}>updated {relTime(pr.updatedAt)}</span>
+            <span className="pr-row-branch" title={`${pr.headRef} → ${pr.baseRef}`}>
+              {pr.headRef} → {pr.baseRef}
+            </span>
+            {pr.comments > 0 ? <span className="pr-row-comments">💬 {pr.comments}</span> : null}
+          </div>
+        </div>
+      </button>
+
+      <div className="pr-row-actions">
         <button
           type="button"
-          className="pr-row-btn"
-          title={`${pr.title} — open on GitHub`}
+          className="pr-action-btn"
+          title="Open the agent and have it review this PR"
+          onClick={() => void reviewPullRequest(pr)}
+        >
+          Review
+        </button>
+        <button
+          type="button"
+          className="pr-action-btn"
+          title="Open this pull request on GitHub"
           onClick={() => window.open(pr.url, '_blank')}
         >
-          <span className={`pr-state pr-state-${stateLabel}`} aria-label={stateLabel}>
-            {stateLabel === 'closed' ? '⊘' : stateLabel === 'draft' ? '◷' : '⇡'}
-          </span>
-          <div className="pr-row-main">
-            <div className="pr-row-title">
-              <span className="pr-row-titletext">{pr.title}</span>
-              <span className="pr-row-number">#{pr.number}</span>
-            </div>
-            <div className="pr-row-meta">
-              {pr.author ? <span className="pr-row-author">{pr.author}</span> : null}
-              <span title={pr.updatedAt}>updated {relTime(pr.updatedAt)}</span>
-              <span className="pr-row-branch" title={`${pr.headRef} → ${pr.baseRef}`}>
-                {pr.headRef} → {pr.baseRef}
-              </span>
-              {pr.comments > 0 ? <span className="pr-row-comments">💬 {pr.comments}</span> : null}
-            </div>
-          </div>
+          GitHub ↗
         </button>
-
-        <div className="pr-row-actions">
-          <button
-            type="button"
-            className="pr-review-btn"
-            title="Open the agent and have it review this PR"
-            onClick={() => void reviewPullRequest(pr)}
-          >
-            Review
-          </button>
-          {canMerge ? (
-            <>
-              {merge.kind === 'idle' || merge.kind === 'error' ? (
-                <button
-                  type="button"
-                  className="pr-merge-btn"
-                  onClick={() => setMerge({ kind: 'confirming' })}
-                >
-                  Merge
-                </button>
-              ) : null}
-              {merge.kind === 'merging' ? (
-                <button type="button" className="pr-merge-btn" disabled>
-                  Merging…
-                </button>
-              ) : null}
-            </>
-          ) : null}
-        </div>
+        {canMerge ? (
+          <>
+            {merge.kind === 'idle' || merge.kind === 'error' ? (
+              <button
+                type="button"
+                className="pr-action-btn pr-merge-btn"
+                onClick={() => setMerge({ kind: 'confirming' })}
+              >
+                Merge
+              </button>
+            ) : null}
+            {merge.kind === 'merging' ? (
+              <button type="button" className="pr-action-btn pr-merge-btn" disabled>
+                Merging…
+              </button>
+            ) : null}
+          </>
+        ) : null}
       </div>
 
       {merge.kind === 'confirming' ? (
@@ -283,16 +304,22 @@ function PullRequestRow({
               </option>
             ))}
           </select>
-          <button type="button" className="pr-merge-btn pr-merge-go" onClick={() => void doMerge()}>
-            Confirm merge
-          </button>
-          <button
-            type="button"
-            className="pr-merge-cancel"
-            onClick={() => setMerge({ kind: 'idle' })}
-          >
-            Cancel
-          </button>
+          <div className="pr-merge-confirm-actions">
+            <button
+              type="button"
+              className="pr-action-btn pr-merge-go"
+              onClick={() => void doMerge()}
+            >
+              Confirm merge
+            </button>
+            <button
+              type="button"
+              className="pr-action-btn pr-merge-cancel"
+              onClick={() => setMerge({ kind: 'idle' })}
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       ) : null}
 

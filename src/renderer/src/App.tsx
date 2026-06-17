@@ -8,7 +8,7 @@ import { FileTree } from './components/FileTree'
 import { GitPanel } from './components/GitPanel'
 import { KanbanView } from './components/KanbanView'
 import { McpView } from './components/McpView'
-import { PullRequestsView } from './components/PullRequestsView'
+import { PullRequestsPanel } from './components/PullRequestsPanel'
 import { ReadView } from './components/ReadView'
 import { ScriptControls } from './components/ScriptControls'
 import { ScriptOutput } from './components/ScriptOutput'
@@ -81,6 +81,7 @@ function SidePanel(): React.JSX.Element | null {
       {state.activeSection === 'search' ? <SearchPanel /> : null}
       {state.activeSection === 'tools' ? <SkillsPanel /> : null}
       {state.activeSection === 'git' ? <GitPanel /> : null}
+      {state.activeSection === 'pulls' ? <PullRequestsPanel /> : null}
       {state.activeSection === 'chat' ? <RoomChatPanel /> : null}
       {terminalOpened.current ? (
         <div
@@ -144,14 +145,6 @@ function Header(): React.JSX.Element {
           onClick={() => setWorkspaceView('kanban')}
         >
           Plan
-        </button>
-        <button
-          className={`tab-pulls ${state.workspaceView === 'pulls' ? 'is-active' : ''}`}
-          role="tab"
-          aria-selected={state.workspaceView === 'pulls'}
-          onClick={() => setWorkspaceView('pulls')}
-        >
-          Review
         </button>
       </div>
       {inNavigator ? (
@@ -218,9 +211,6 @@ function Body(): React.JSX.Element {
   }
   if (state.workspaceView === 'kanban') {
     return <KanbanView />
-  }
-  if (state.workspaceView === 'pulls') {
-    return <PullRequestsView />
   }
   if (!state.currentFile || state.fileContents === null) {
     return (

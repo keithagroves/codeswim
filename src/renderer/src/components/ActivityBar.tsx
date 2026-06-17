@@ -121,6 +121,26 @@ function GitIcon(): React.JSX.Element {
   )
 }
 
+function PullRequestIcon(): React.JSX.Element {
+  // Git pull-request glyph: a source branch tapping into a target line with an
+  // arrowhead, distinct from the Commit section's commit-graph icon.
+  return (
+    <svg width="27" height="27" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="6" cy="6" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="6" cy="18" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="18" cy="18" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M6 8.5v7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path
+        d="M18 15.5V11a2 2 0 0 0-2-2h-4m0 0 2.2-2.2M12 9l2.2 2.2"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 function PeopleIcon(): React.JSX.Element {
   // Two figures — distinct from the agent's single chat bubble; this is the
   // "chat with other people on this project" section.
@@ -149,6 +169,7 @@ const ITEM_BY_KEY: Record<Section, Item> = {
   search: { key: 'search', label: 'Search', icon: <SearchIcon /> },
   tools: { key: 'tools', label: 'Tools', icon: <ToolsIcon /> },
   git: { key: 'git', label: 'Commit', icon: <GitIcon /> },
+  pulls: { key: 'pulls', label: 'Pull requests', icon: <PullRequestIcon /> },
   terminal: { key: 'terminal', label: 'Terminal', icon: <TerminalIcon /> },
   claude: { key: 'claude', label: 'Claude Code', icon: <ClaudeIcon /> },
   chat: { key: 'chat', label: 'Chat', icon: <PeopleIcon /> }

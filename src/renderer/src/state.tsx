@@ -17,7 +17,9 @@ import {
 } from './commit/synthesize'
 import { buildTriagePrompt, parseSyncPlan, type SyncPlan } from './commit/triage'
 import { extname, parseTarget, relativeToRoot, resolveRelative, toPosix } from './path-utils'
+import type { PullRequest } from '../../preload/index.d'
 import {
+  prDiffLabel,
   StoreContext,
   type AppState,
   type ChatMessage,
@@ -45,6 +47,7 @@ const DEFAULT_ACTIVITY_ORDER: Section[] = [
   'search',
   'tools',
   'git',
+  'pulls',
   'terminal',
   'claude',
   'chat'
@@ -1019,6 +1022,35 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
     [sendChat, toast]
   )
 
+  const showPullRequestDiff = useCallback(async (pr: PullRequest): Promise<void> => {
+    const root = stateRef.current.rootPath
+    if (!root) return
+    // Reuse the main-panel diff viewer (the same one git file diffs use). The
+    // label doubles as the dedup key: the reducer drops stale results whose
+    // path no longer matches, so rapid PR clicks resolve to the last one.
+    const label = prDiffLabel(pr)
+    dispatch({ type: 'show-diff', path: label })
+    try {
+      const result = await window.api.pullRequestDiff(root, pr.number)
+      const content =
+        result.status === 'ok'
+          ? result.diff
+          : result.status === 'no-auth'
+            ? 'Sign in to GitHub to view this pull request’s diff.'
+            : result.status === 'not-github'
+              ? 'This workspace isn’t connected to a GitHub repository.'
+              : `Could not load the diff:\n${result.message ?? 'unknown error'}`
+      dispatch({ type: 'set-diff-content', path: label, content })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      dispatch({
+        type: 'set-diff-content',
+        path: label,
+        content: `Could not load the diff:\n${msg}`
+      })
+    }
+  }, [])
+
   const synthesizeCommitMessage = useCallback(
     async (diff: string): Promise<CommitMessage> => {
       const root = stateRef.current.rootPath
@@ -1346,6 +1378,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       showFileDiff,
       hideDiff,
       reviewPullRequest,
+      showPullRequestDiff,
       setCurrentSkill,
       setToolsTab,
       answerQuestion,
@@ -1391,6 +1424,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       showFileDiff,
       hideDiff,
       reviewPullRequest,
+      showPullRequestDiff,
       setCurrentSkill,
       setToolsTab,
       answerQuestion,
