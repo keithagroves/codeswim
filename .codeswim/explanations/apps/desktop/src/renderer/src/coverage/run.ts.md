@@ -15,7 +15,7 @@ Wraps the pure `analyzeCoverage` function ([`coverage.ts`](./coverage.ts.md)) wi
 - Pass non-markdown file paths into the analyzer with empty content — the analyzer only needs their path to exist in the file set.
 - Filter out common non-architectural basenames (`LICENSE`, `CHANGELOG.md`, `.gitignore`, lockfiles, config dotfiles) so they never appear in the coverage report.
 - Call `analyzeCoverage` and return its report.
-- Format a report into a self-contained Markdown prompt (`buildSyncPrompt`) that teaches the agent what drift exists (broken links, orphan diagrams, uncovered sources, mermaid issues) and lets it pick the right fix per item, since the [system prompt](../../../../../src/harness/prompt/system.txt) and [`mdd-fixes.md`](../../mdd-fixes.md) already encode the repair rules.
+- Format a report into a self-contained Markdown prompt (`buildSyncPrompt`) that teaches the agent what drift exists (broken links, orphan diagrams, uncovered sources, mermaid issues) and lets it pick the right fix per item, since the [system prompt](../../../../../packages/harness/src/prompt/system.txt) and [`mdd-fixes.md`](../../mdd-fixes.md) already encode the repair rules.
 
 ## Inputs and outputs
 

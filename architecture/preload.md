@@ -19,15 +19,15 @@ flowchart LR
     Types -.->|compile-time| Bridge
 
     click Renderer call navigate("../overview.md")
-    click Bridge call navigate("../src/preload/index.ts")
-    click Types call navigate("../src/preload/index.d.ts")
+    click Bridge call navigate("../apps/desktop/src/preload/index.ts")
+    click Types call navigate("../packages/contract/src/api.ts")
     click Main call navigate("./main-process.md")
 ```
 
 ## Notes
 
 - The IPC contract is the `DiagramNavApi` interface in
-  [index.d.ts](../src/preload/index.d.ts). Adding a method requires
+  [index.d.ts](../packages/contract/src/api.ts). Adding a method requires
   touching all three processes — preload exposes it, main handles it,
   renderer calls it.
 - The bridge also wires event subscriptions (`onFileChanged`,
@@ -36,5 +36,5 @@ flowchart LR
 
 ## Source
 
-- [src/preload/index.ts](../src/preload/index.ts) — the actual `contextBridge.exposeInMainWorld` call and all IPC forwarders.
-- [src/preload/index.d.ts](../src/preload/index.d.ts) — types for `window.api`, IPC payloads, and the event subscription signatures.
+- [apps/desktop/src/preload/index.ts](../apps/desktop/src/preload/index.ts) — the actual `contextBridge.exposeInMainWorld` call and all IPC forwarders.
+- [packages/contract/src/api.ts](../packages/contract/src/api.ts) — types for `window.api`, IPC payloads, and the event subscription signatures.

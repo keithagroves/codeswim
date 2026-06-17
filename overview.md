@@ -46,34 +46,34 @@ flowchart TD
 
 These files cut across subsystems and aren't owned by any one architecture doc:
 
-- `src/renderer/index.html` — renderer entry HTML; sets the CSP that mermaid loose-mode needs.
-- [src/renderer/src/main.tsx](src/renderer/src/main.tsx) — React mount point.
-- [src/renderer/src/env.d.ts](src/renderer/src/env.d.ts) — Vite client + `window.api` type augmentation for the renderer.
-- [src/renderer/src/browser-stub.ts](src/renderer/src/browser-stub.ts) — no-op `window.api` for running the renderer outside Electron (Playwright, UI review).
-- `src/renderer/src/assets/main.css` — global styles.
-- `src/renderer/src/assets/codeswim.svg` — app logo.
+- `apps/desktop/src/renderer/index.html` — renderer entry HTML; sets the CSP that mermaid loose-mode needs.
+- [apps/desktop/src/renderer/src/main.tsx](apps/desktop/src/renderer/src/main.tsx) — React mount point.
+- [apps/desktop/src/renderer/src/env.d.ts](apps/desktop/src/renderer/src/env.d.ts) — Vite client + `window.api` type augmentation for the renderer.
+- [apps/desktop/src/renderer/src/browser-stub.ts](apps/desktop/src/renderer/src/browser-stub.ts) — no-op `window.api` for running the renderer outside Electron (Playwright, UI review).
+- `apps/desktop/src/renderer/src/assets/main.css` — global styles.
+- `apps/desktop/src/renderer/src/assets/codeswim.svg` — app logo.
 - [party/codeswim.ts](party/codeswim.ts) — party-mode easter egg (confetti, etc.).
 
 ## Testing
 
 Vitest tests live next to the modules they cover:
 
-- [src/main/skills.test.ts](src/main/skills.test.ts) — covers the main-process skills indexer.
-- [src/main/git.test.ts](src/main/git.test.ts) — covers the git status/branch porcelain parsers.
-- [src/renderer/src/parse.test.ts](src/renderer/src/parse.test.ts) — covers the markdown/mermaid parser.
-- [src/renderer/src/path-utils.test.ts](src/renderer/src/path-utils.test.ts) — covers relative path resolution.
-- [src/renderer/src/skill-frontmatter.test.ts](src/renderer/src/skill-frontmatter.test.ts) — covers the skill frontmatter helpers.
-- [src/renderer/src/ansi.test.ts](src/renderer/src/ansi.test.ts) — covers the ANSI/SGR terminal-output parser.
-- [src/renderer/src/commit/synthesize.test.ts](src/renderer/src/commit/synthesize.test.ts) — covers the commit-message synthesis prompt builder, parser, and trailers.
-- [src/renderer/src/commit/triage.test.ts](src/renderer/src/commit/triage.test.ts) — covers the triage prompt builder and sync-plan parser.
-- [src/harness/tool/kanban-add.test.ts](src/harness/tool/kanban-add.test.ts) — covers the kanban_add tool (board read, card append, write).
+- [packages/domain-skills/src/skills.test.ts](packages/domain-skills/src/skills.test.ts) — covers the main-process skills indexer.
+- [packages/domain-git/src/git.test.ts](packages/domain-git/src/git.test.ts) — covers the git status/branch porcelain parsers.
+- [apps/desktop/src/renderer/src/parse.test.ts](apps/desktop/src/renderer/src/parse.test.ts) — covers the markdown/mermaid parser.
+- [apps/desktop/src/renderer/src/path-utils.test.ts](apps/desktop/src/renderer/src/path-utils.test.ts) — covers relative path resolution.
+- [apps/desktop/src/renderer/src/skill-frontmatter.test.ts](apps/desktop/src/renderer/src/skill-frontmatter.test.ts) — covers the skill frontmatter helpers.
+- [apps/desktop/src/renderer/src/ansi.test.ts](apps/desktop/src/renderer/src/ansi.test.ts) — covers the ANSI/SGR terminal-output parser.
+- [packages/commit/src/synthesize.test.ts](packages/commit/src/synthesize.test.ts) — covers the commit-message synthesis prompt builder, parser, and trailers.
+- [packages/commit/src/triage.test.ts](packages/commit/src/triage.test.ts) — covers the triage prompt builder and sync-plan parser.
+- [packages/harness/src/tool/kanban-add.test.ts](packages/harness/src/tool/kanban-add.test.ts) — covers the kanban_add tool (board read, card append, write).
 
 ## Build & tooling
 
-- [electron.vite.config.ts](electron.vite.config.ts) — electron-vite config for main, preload, and renderer bundles.
-- [vitest.config.ts](vitest.config.ts) — vitest config (jsdom for the renderer-side tests).
+- [apps/desktop/electron.vite.config.ts](apps/desktop/electron.vite.config.ts) — electron-vite config for main, preload, and renderer bundles.
+- [apps/desktop/vitest.config.ts](apps/desktop/vitest.config.ts) — vitest config (jsdom for the renderer-side tests).
 - [eslint.config.mjs](eslint.config.mjs) — flat-config ESLint setup.
-- [scripts/build-harness.mjs](scripts/build-harness.mjs) — esbuild step that bundles `src/harness/` into `out/harness/` so the sidecar can load it as a single `file://` plugin.
+- [apps/desktop/scripts/build-harness.mjs](apps/desktop/scripts/build-harness.mjs) — esbuild step that bundles `packages/harness/src/` into `out/harness/` so the sidecar can load it as a single `file://` plugin.
 - [scripts/probe-skills.mjs](scripts/probe-skills.mjs) — dev helper that prints the skill index the main process would see.
 - [scripts/smoke-link-folder.mjs](scripts/smoke-link-folder.mjs) — smoke test that drives `pick-folder` end-to-end.
 - [scripts/test-events.mjs](scripts/test-events.mjs) — dev helper for exercising the watcher's `file-changed` / `tree-changed` events.

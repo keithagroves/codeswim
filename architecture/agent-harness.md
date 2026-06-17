@@ -35,21 +35,21 @@ flowchart LR
     Kanban --> KanbanBoard[(.codeswim/board.json)]
 
     click User call navigate("../overview.md")
-    click Chat call navigate("../src/renderer/src/components/ChatPanel.tsx")
-    click Client call navigate("../src/renderer/src/agent.ts")
-    click Server call navigate("../src/harness/plugin.ts")
+    click Chat call navigate("../apps/desktop/src/renderer/src/components/ChatPanel.tsx")
+    click Client call navigate("../apps/desktop/src/renderer/src/agent.ts")
+    click Server call navigate("../packages/harness/src/plugin.ts")
     click Main call navigate("../architecture/main-process.md")
-    click Sidecar call navigate("../src/main/sidecar.ts")
-    click Plugin call navigate("../src/harness/plugin.ts")
-    click Tool call navigate("../src/harness/tool/diagram-edit.ts")
-    click Gate call navigate("../src/harness/session-gate.ts")
-    click System call navigate("../src/harness/prompt/system.txt")
-    click Fixes call navigate("../src/harness/prompt/mdd-fixes.md")
-    click ToolImpl call navigate("../src/harness/tool/diagram-edit.ts")
-    click ToolDesc call navigate("../src/harness/tool/diagram-edit.txt")
-    click Kanban call navigate("../src/harness/tool/kanban-add.ts")
-    click KanbanImpl call navigate("../src/harness/tool/kanban-add.ts")
-    click KanbanBoard call navigate("../src/main/kanban.ts")
+    click Sidecar call navigate("../apps/desktop/src/main/sidecar.ts")
+    click Plugin call navigate("../packages/harness/src/plugin.ts")
+    click Tool call navigate("../packages/harness/src/tool/diagram-edit.ts")
+    click Gate call navigate("../packages/harness/src/session-gate.ts")
+    click System call navigate("../packages/harness/src/prompt/system.txt")
+    click Fixes call navigate("../packages/harness/src/prompt/mdd-fixes.md")
+    click ToolImpl call navigate("../packages/harness/src/tool/diagram-edit.ts")
+    click ToolDesc call navigate("../packages/harness/src/tool/diagram-edit.txt")
+    click Kanban call navigate("../packages/harness/src/tool/kanban-add.ts")
+    click KanbanImpl call navigate("../packages/harness/src/tool/kanban-add.ts")
+    click KanbanBoard call navigate("../packages/domain-kanban/src/kanban.ts")
     click Mutating call navigate("../overview.md")
 ```
 
@@ -62,18 +62,18 @@ flowchart LR
 
 ## Source
 
-- [src/main/sidecar.ts](../src/main/sidecar.ts) — spawns and supervises the `opencode serve` subprocess.
-- [src/harness/plugin.ts](../src/harness/plugin.ts) — opencode plugin entry; registers `diagram_edit` and the tool-call gate hook.
-- [src/harness/session-gate.ts](../src/harness/session-gate.ts) — per-session "has a diagram been edited yet?" state used by the gate.
-- [src/harness/tool/diagram-edit.ts](../src/harness/tool/diagram-edit.ts) — pure implementation of the `diagram_edit` tool (frontmatter check, mermaid block check, file write).
-- `src/harness/tool/diagram-edit.txt` — tool description shown to the model.
-- [src/harness/tool/kanban-add.ts](../src/harness/tool/kanban-add.ts) — pure implementation of the `kanban_add` tool (reads/normalizes `.codeswim/board.json`, appends a card, writes it back). Reuses the shared kanban normalizer so the agent and UI write identical board files.
-- `src/harness/tool/kanban-add.txt` — `kanban_add` tool description (reference; the live description is inlined in `plugin.ts`).
-- `src/harness/prompt/system.txt` — system prompt that teaches the diagrams-first loop.
-- [src/harness/prompt/mdd-fixes.md](../src/harness/prompt/mdd-fixes.md) — additional MDD repair guidance the agent loads when fixing drift.
-- [src/renderer/src/agent.ts](../src/renderer/src/agent.ts) — renderer-side session-aware SDK wrapper.
-- [src/renderer/src/components/ChatPanel.tsx](../src/renderer/src/components/ChatPanel.tsx) — the chat UI itself.
+- [apps/desktop/src/main/sidecar.ts](../apps/desktop/src/main/sidecar.ts) — spawns and supervises the `opencode serve` subprocess.
+- [packages/harness/src/plugin.ts](../packages/harness/src/plugin.ts) — opencode plugin entry; registers `diagram_edit` and the tool-call gate hook.
+- [packages/harness/src/session-gate.ts](../packages/harness/src/session-gate.ts) — per-session "has a diagram been edited yet?" state used by the gate.
+- [packages/harness/src/tool/diagram-edit.ts](../packages/harness/src/tool/diagram-edit.ts) — pure implementation of the `diagram_edit` tool (frontmatter check, mermaid block check, file write).
+- `packages/harness/src/tool/diagram-edit.txt` — tool description shown to the model.
+- [packages/harness/src/tool/kanban-add.ts](../packages/harness/src/tool/kanban-add.ts) — pure implementation of the `kanban_add` tool (reads/normalizes `.codeswim/board.json`, appends a card, writes it back). Reuses the shared kanban normalizer so the agent and UI write identical board files.
+- `packages/harness/src/tool/kanban-add.txt` — `kanban_add` tool description (reference; the live description is inlined in `plugin.ts`).
+- `packages/harness/src/prompt/system.txt` — system prompt that teaches the diagrams-first loop.
+- [packages/harness/src/prompt/mdd-fixes.md](../packages/harness/src/prompt/mdd-fixes.md) — additional MDD repair guidance the agent loads when fixing drift.
+- [apps/desktop/src/renderer/src/agent.ts](../apps/desktop/src/renderer/src/agent.ts) — renderer-side session-aware SDK wrapper.
+- [apps/desktop/src/renderer/src/components/ChatPanel.tsx](../apps/desktop/src/renderer/src/components/ChatPanel.tsx) — the chat UI itself.
 
 ### Testing
 
-- [src/harness/tool/kanban-add.test.ts](../src/harness/tool/kanban-add.test.ts) — covers the kanban_add tool implementation.
+- [packages/harness/src/tool/kanban-add.test.ts](../packages/harness/src/tool/kanban-add.test.ts) — covers the kanban_add tool implementation.

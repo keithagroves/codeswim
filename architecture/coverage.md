@@ -26,13 +26,13 @@ flowchart TD
     Prompt -.->|chat sendMessage| Agent((Agent))
 
     click Renderer call navigate("../overview.md")
-    click Filter call navigate("../src/renderer/src/coverage/run.ts")
-    click ReadMD call navigate("../src/renderer/src/coverage/run.ts")
-    click Report call navigate("../src/renderer/src/coverage/coverage.ts")
-    click Prompt call navigate("../src/renderer/src/coverage/run.ts")
-    click Run call navigate("../src/renderer/src/coverage/run.ts")
-    click Analyze call navigate("../src/renderer/src/coverage/coverage.ts")
-    click Lint call navigate("../src/renderer/src/coverage/mermaid-lint.ts")
+    click Filter call navigate("../apps/desktop/src/renderer/src/coverage/run.ts")
+    click ReadMD call navigate("../apps/desktop/src/renderer/src/coverage/run.ts")
+    click Report call navigate("../packages/coverage/src/coverage.ts")
+    click Prompt call navigate("../apps/desktop/src/renderer/src/coverage/run.ts")
+    click Run call navigate("../apps/desktop/src/renderer/src/coverage/run.ts")
+    click Analyze call navigate("../packages/coverage/src/coverage.ts")
+    click Lint call navigate("../packages/coverage/src/mermaid-lint.ts")
     click Main call navigate("./main-process.md")
     click Agent call navigate("./agent-harness.md")
 ```
@@ -42,10 +42,10 @@ flowchart TD
 - Coverage runs in the renderer, not as a standalone CLI — it leans on the existing `listTree` and `readFile` IPC instead of duplicating filesystem code in a Node script.
 - `coverage.ts` is pure: it takes `FileInfo[]` (path + content) and returns a report. That makes it trivially testable and reusable from anywhere.
 - Non-markdown files are passed in with empty content; only diagrams need their text read.
-- `buildSyncPrompt` deliberately doesn't prescribe fixes — the system prompt at `src/harness/prompt/system.txt` and [mdd-fixes.md](../src/harness/prompt/mdd-fixes.md) already encode the MDD rules, so the prompt just enumerates the drift and lets the agent pick the right fix per item.
+- `buildSyncPrompt` deliberately doesn't prescribe fixes — the system prompt at `packages/harness/src/prompt/system.txt` and [mdd-fixes.md](../packages/harness/src/prompt/mdd-fixes.md) already encode the MDD rules, so the prompt just enumerates the drift and lets the agent pick the right fix per item.
 
 ## Source
 
-- [src/renderer/src/coverage/run.ts](../src/renderer/src/coverage/run.ts) — workspace walker, file filter, prompt formatter.
-- [src/renderer/src/coverage/coverage.ts](../src/renderer/src/coverage/coverage.ts) — the pure `analyzeCoverage` function and report types.
-- [src/renderer/src/coverage/mermaid-lint.ts](../src/renderer/src/coverage/mermaid-lint.ts) — mermaid block syntax linting used inside the analyzer.
+- [apps/desktop/src/renderer/src/coverage/run.ts](../apps/desktop/src/renderer/src/coverage/run.ts) — workspace walker, file filter, prompt formatter.
+- [packages/coverage/src/coverage.ts](../packages/coverage/src/coverage.ts) — the pure `analyzeCoverage` function and report types.
+- [packages/coverage/src/mermaid-lint.ts](../packages/coverage/src/mermaid-lint.ts) — mermaid block syntax linting used inside the analyzer.

@@ -9,7 +9,7 @@ tags: [git, commits, plan, mdd]
 > the commit message from the staged diff, lets the user edit it, and
 > commits. Phase 2 (session enrichment + regex secret-scrub pre-pass) is
 > still pending. One deviation from the original plan: the synthesis
-> *prompt* is built in a renderer module ([commit/synthesize.ts](../src/renderer/src/commit/synthesize.ts)),
+> *prompt* is built in a renderer module ([commit/synthesize.ts](../packages/commit/src/synthesize.ts)),
 > mirroring `buildSyncPrompt`, rather than a `commit-synthesis.txt` harness
 > file — it is a per-commit user prompt, not a system prompt.
 
@@ -138,13 +138,13 @@ flowchart TD
     GitMod --> Repo[(git repo<br/>workspace root)]
     Cov -.->|block on drift| Panel
 
-    click Bar call navigate("../src/renderer/src/components/ActivityBar.tsx")
-    click Panel call navigate("../src/renderer/src/components/GitPanel.tsx")
-    click GitMod call navigate("../src/main/git.ts")
+    click Bar call navigate("../apps/desktop/src/renderer/src/components/ActivityBar.tsx")
+    click Panel call navigate("../apps/desktop/src/renderer/src/components/GitPanel.tsx")
+    click GitMod call navigate("../packages/domain-git/src/git.ts")
     click Repo call navigate("./main-process.md")
-    click Cov call navigate("../src/renderer/src/coverage/run.ts")
-    click Agent call navigate("../src/renderer/src/agent.ts")
-    click Prompt call navigate("../src/renderer/src/commit/synthesize.ts")
+    click Cov call navigate("../apps/desktop/src/renderer/src/coverage/run.ts")
+    click Agent call navigate("../apps/desktop/src/renderer/src/agent.ts")
+    click Prompt call navigate("../packages/commit/src/synthesize.ts")
 ```
 
 `git.ts` spawns `git` the same disciplined way the npm runner already does
@@ -155,7 +155,7 @@ workspace root.
 ## IPC contract additions
 
 Per [CLAUDE.md](../CLAUDE.md), the IPC surface in
-[src/preload/index.d.ts](../src/preload/index.d.ts) is a versioned
+[packages/contract/src/api.ts](../packages/contract/src/api.ts) is a versioned
 interface — each new method touches all three processes (main handler,
 preload bridge, renderer caller).
 
@@ -179,10 +179,10 @@ shared type, so adding `git` is mechanical but touches several spots:
 
 | File | Change |
 |---|---|
-| [ActivityBar.tsx](../src/renderer/src/components/ActivityBar.tsx) | Add `'git'` to the local `Section` type, a `GitIcon` (24×24, 1.5px stroke), and an `ITEM_BY_KEY` entry. |
-| [store.ts](../src/renderer/src/store.ts) | Add `'git'` to the section union in `activeSection`, `lastActiveSection`, `activityOrder`, `setActiveSection`, `toggleActiveSection`. |
-| [state.tsx](../src/renderer/src/state.tsx) | Add `'git'` to the default `activityOrder` and to the `set-activity-order` reducer (type, filter guard, **re-add list**). |
-| [App.tsx](../src/renderer/src/App.tsx) | Render `<GitPanel />` when `activeSection === 'git'`. |
+| [ActivityBar.tsx](../apps/desktop/src/renderer/src/components/ActivityBar.tsx) | Add `'git'` to the local `Section` type, a `GitIcon` (24×24, 1.5px stroke), and an `ITEM_BY_KEY` entry. |
+| [store.ts](../apps/desktop/src/renderer/src/store.ts) | Add `'git'` to the section union in `activeSection`, `lastActiveSection`, `activityOrder`, `setActiveSection`, `toggleActiveSection`. |
+| [state.tsx](../apps/desktop/src/renderer/src/state.tsx) | Add `'git'` to the default `activityOrder` and to the `set-activity-order` reducer (type, filter guard, **re-add list**). |
+| [App.tsx](../apps/desktop/src/renderer/src/App.tsx) | Render `<GitPanel />` when `activeSection === 'git'`. |
 
 **Migration is free.** The `set-activity-order` reducer already re-adds any
 known section missing from a stored order at the end of the list — so
@@ -193,19 +193,19 @@ versioning or migration code needed.
 ## Phasing
 
 **Phase 1 — vertical slice, diff-only, end to end. ✅ shipped.**
-- [src/main/git.ts](../src/main/git.ts): `gitStatus`, `gitStagedDiff`, `gitCommit` (safe `execFile`, no shell).
-- [src/preload/index.d.ts](../src/preload/index.d.ts) + [src/preload/index.ts](../src/preload/index.ts): `git:*` bridge.
-- [src/main/index.ts](../src/main/index.ts): `git:status` / `git:staged-diff` / `git:commit` IPC handlers.
-- [src/renderer/src/components/GitPanel.tsx](../src/renderer/src/components/GitPanel.tsx): compose → **coverage
+- [packages/domain-git/src/git.ts](../packages/domain-git/src/git.ts): `gitStatus`, `gitStagedDiff`, `gitCommit` (safe `execFile`, no shell).
+- [packages/contract/src/api.ts](../packages/contract/src/api.ts) + [apps/desktop/src/preload/index.ts](../apps/desktop/src/preload/index.ts): `git:*` bridge.
+- [apps/desktop/src/main/index.ts](../apps/desktop/src/main/index.ts): `git:status` / `git:staged-diff` / `git:commit` IPC handlers.
+- [apps/desktop/src/renderer/src/components/GitPanel.tsx](../apps/desktop/src/renderer/src/components/GitPanel.tsx): compose → **coverage
   block** → synthesize-from-diff → editable review → commit.
-- [src/renderer/src/commit/synthesize.ts](../src/renderer/src/commit/synthesize.ts): builds the synthesis prompt, parses the reply, composes provenance trailers.
+- [packages/commit/src/synthesize.ts](../packages/commit/src/synthesize.ts): builds the synthesis prompt, parses the reply, composes provenance trailers.
 - Side-panel wiring: `git` section across `ActivityBar.tsx`, `store.ts`,
   `state.tsx`, `App.tsx` (see table above), plus `synthesizeCommitMessage`
   on the store.
 
 **Phase 2 — sessions enrich + scrubbing hardening (pending).**
 - Pull recent in-workspace `loadMessages()` transcripts (see
-  [agent.ts](../src/renderer/src/agent.ts)) as additional evidence so the
+  [agent.ts](../apps/desktop/src/renderer/src/agent.ts)) as additional evidence so the
   reconstruction matches what was actually asked.
 - A regex secret-scrub pre-pass over transcript evidence before it reaches
   the synthesizer (defense in depth alongside the prompt instruction).
@@ -242,14 +242,14 @@ see "Browsing history" above.
 
 ## Source (existing code this builds on)
 
-- [src/renderer/src/coverage/run.ts](../src/renderer/src/coverage/run.ts) — the MDD coverage gate reused as the pre-commit check.
-- [src/renderer/src/agent.ts](../src/renderer/src/agent.ts) — session-aware SDK wrapper; `listSessions` / `loadMessages` feed the phase-2 enrichment and the synthesis call.
-- [src/preload/index.d.ts](../src/preload/index.d.ts) — the IPC contract the `git:*` methods extend.
-- [src/main/index.ts](../src/main/index.ts) — where the `git:*` handlers register, alongside the existing npm script runner whose spawn discipline `git.ts` mirrors.
+- [apps/desktop/src/renderer/src/coverage/run.ts](../apps/desktop/src/renderer/src/coverage/run.ts) — the MDD coverage gate reused as the pre-commit check.
+- [apps/desktop/src/renderer/src/agent.ts](../apps/desktop/src/renderer/src/agent.ts) — session-aware SDK wrapper; `listSessions` / `loadMessages` feed the phase-2 enrichment and the synthesis call.
+- [packages/contract/src/api.ts](../packages/contract/src/api.ts) — the IPC contract the `git:*` methods extend.
+- [apps/desktop/src/main/index.ts](../apps/desktop/src/main/index.ts) — where the `git:*` handlers register, alongside the existing npm script runner whose spawn discipline `git.ts` mirrors.
 ## Source (this feature)
 
-- [src/main/git.ts](../src/main/git.ts) — `git` operations via safe `execFile` (status, staged diff, commit).
-- [src/renderer/src/components/GitPanel.tsx](../src/renderer/src/components/GitPanel.tsx) — the Commit side-panel and its compose → block → review → commit state machine.
-- [src/renderer/src/commit/synthesize.ts](../src/renderer/src/commit/synthesize.ts) — synthesis prompt builder, reply parser, and provenance trailers.
-- [src/renderer/src/commit/triage.ts](../src/renderer/src/commit/triage.ts) — triage prompt builder and sync-plan parser for commit-time drift resolution.
-- [src/renderer/src/commit/triage.test.ts](../src/renderer/src/commit/triage.test.ts) — covers the triage prompt builder and plan parser.
+- [packages/domain-git/src/git.ts](../packages/domain-git/src/git.ts) — `git` operations via safe `execFile` (status, staged diff, commit).
+- [apps/desktop/src/renderer/src/components/GitPanel.tsx](../apps/desktop/src/renderer/src/components/GitPanel.tsx) — the Commit side-panel and its compose → block → review → commit state machine.
+- [packages/commit/src/synthesize.ts](../packages/commit/src/synthesize.ts) — synthesis prompt builder, reply parser, and provenance trailers.
+- [packages/commit/src/triage.ts](../packages/commit/src/triage.ts) — triage prompt builder and sync-plan parser for commit-time drift resolution.
+- [packages/commit/src/triage.test.ts](../packages/commit/src/triage.test.ts) — covers the triage prompt builder and plan parser.

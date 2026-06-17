@@ -37,25 +37,25 @@ flowchart TD
     AppRoot --> ScriptCtl[ScriptControls]
     State --> PathUtil[path-utils.ts]
 
-    click Entry call navigate("../src/renderer/src/main.tsx")
-    click AppRoot call navigate("../src/renderer/src/App.tsx")
-    click State call navigate("../src/renderer/src/state.tsx")
-    click Store call navigate("../src/renderer/src/store.ts")
-    click Parse call navigate("../src/renderer/src/parse.ts")
-    click PathUtil call navigate("../src/renderer/src/path-utils.ts")
-    click Diagram call navigate("../src/renderer/src/components/DiagramView.tsx")
-    click Read call navigate("../src/renderer/src/components/ReadView.tsx")
-    click Output call navigate("../src/renderer/src/components/ScriptOutput.tsx")
-    click SkillsV call navigate("../src/renderer/src/components/SkillsView.tsx")
-    click Activity call navigate("../src/renderer/src/components/ActivityBar.tsx")
-    click Tree call navigate("../src/renderer/src/components/FileTree.tsx")
-    click Crumbs call navigate("../src/renderer/src/components/Breadcrumbs.tsx")
-    click Search call navigate("../src/renderer/src/components/SearchPanel.tsx")
-    click SkillsP call navigate("../src/renderer/src/components/SkillsPanel.tsx")
-    click Toasts call navigate("../src/renderer/src/components/Toasts.tsx")
-    click ScriptCtl call navigate("../src/renderer/src/components/ScriptControls.tsx")
-    click ErrBanner call navigate("../src/renderer/src/components/MermaidErrorBanner.tsx")
-    click Prose call navigate("../src/renderer/src/components/MarkdownProse.tsx")
+    click Entry call navigate("../apps/desktop/src/renderer/src/main.tsx")
+    click AppRoot call navigate("../apps/desktop/src/renderer/src/App.tsx")
+    click State call navigate("../apps/desktop/src/renderer/src/state.tsx")
+    click Store call navigate("../apps/desktop/src/renderer/src/store.ts")
+    click Parse call navigate("../apps/desktop/src/renderer/src/parse.ts")
+    click PathUtil call navigate("../apps/desktop/src/renderer/src/path-utils.ts")
+    click Diagram call navigate("../apps/desktop/src/renderer/src/components/DiagramView.tsx")
+    click Read call navigate("../apps/desktop/src/renderer/src/components/ReadView.tsx")
+    click Output call navigate("../apps/desktop/src/renderer/src/components/ScriptOutput.tsx")
+    click SkillsV call navigate("../apps/desktop/src/renderer/src/components/SkillsView.tsx")
+    click Activity call navigate("../apps/desktop/src/renderer/src/components/ActivityBar.tsx")
+    click Tree call navigate("../apps/desktop/src/renderer/src/components/FileTree.tsx")
+    click Crumbs call navigate("../apps/desktop/src/renderer/src/components/Breadcrumbs.tsx")
+    click Search call navigate("../apps/desktop/src/renderer/src/components/SearchPanel.tsx")
+    click SkillsP call navigate("../apps/desktop/src/renderer/src/components/SkillsPanel.tsx")
+    click Toasts call navigate("../apps/desktop/src/renderer/src/components/Toasts.tsx")
+    click ScriptCtl call navigate("../apps/desktop/src/renderer/src/components/ScriptControls.tsx")
+    click ErrBanner call navigate("../apps/desktop/src/renderer/src/components/MermaidErrorBanner.tsx")
+    click Prose call navigate("../apps/desktop/src/renderer/src/components/MarkdownProse.tsx")
 ```
 
 ## Notes
@@ -70,36 +70,36 @@ flowchart TD
 
 ### Entry & state
 
-- [src/renderer/src/App.tsx](../src/renderer/src/App.tsx) — top-level layout, view switch, panel wiring.
-- [src/renderer/src/state.tsx](../src/renderer/src/state.tsx) — the reducer, action types, default state.
-- [src/renderer/src/store.ts](../src/renderer/src/store.ts) — React context + `useStore()` hook.
-- [src/renderer/src/parse.ts](../src/renderer/src/parse.ts) — frontmatter + mermaid block extractor.
-- [src/renderer/src/path-utils.ts](../src/renderer/src/path-utils.ts) — POSIX path normalization and resolution.
-- [src/renderer/src/skill-frontmatter.ts](../src/renderer/src/skill-frontmatter.ts) — tiny helpers for parsing the `name`/`description` fields the Skills view shows.
-- [src/renderer/src/ansi.ts](../src/renderer/src/ansi.ts) — ANSI/SGR parser that turns raw script output into styled segments for the [ScriptOutput](../src/renderer/src/components/ScriptOutput.tsx) terminal.
+- [apps/desktop/src/renderer/src/App.tsx](../apps/desktop/src/renderer/src/App.tsx) — top-level layout, view switch, panel wiring.
+- [apps/desktop/src/renderer/src/state.tsx](../apps/desktop/src/renderer/src/state.tsx) — the reducer, action types, default state.
+- [apps/desktop/src/renderer/src/store.ts](../apps/desktop/src/renderer/src/store.ts) — React context + `useStore()` hook.
+- [apps/desktop/src/renderer/src/parse.ts](../apps/desktop/src/renderer/src/parse.ts) — frontmatter + mermaid block extractor.
+- [apps/desktop/src/renderer/src/path-utils.ts](../apps/desktop/src/renderer/src/path-utils.ts) — POSIX path normalization and resolution.
+- [apps/desktop/src/renderer/src/skill-frontmatter.ts](../apps/desktop/src/renderer/src/skill-frontmatter.ts) — tiny helpers for parsing the `name`/`description` fields the Skills view shows.
+- [apps/desktop/src/renderer/src/ansi.ts](../apps/desktop/src/renderer/src/ansi.ts) — ANSI/SGR parser that turns raw script output into styled segments for the [ScriptOutput](../apps/desktop/src/renderer/src/components/ScriptOutput.tsx) terminal.
 
 ### Components
 
-- [ActivityBar.tsx](../src/renderer/src/components/ActivityBar.tsx) — left-rail tab switcher.
-- [FileTree.tsx](../src/renderer/src/components/FileTree.tsx) — workspace file tree.
-- [Breadcrumbs.tsx](../src/renderer/src/components/Breadcrumbs.tsx) — navigation stack as crumbs.
-- [DiagramView.tsx](../src/renderer/src/components/DiagramView.tsx) — renders one mermaid block and wires `window.navigate`.
-- [MermaidErrorBanner.tsx](../src/renderer/src/components/MermaidErrorBanner.tsx) — surfaces parse/render failures inline.
-- [ReadView.tsx](../src/renderer/src/components/ReadView.tsx) — renders diagrams, markdown prose, and source files (merged from the removed CodeView).
-- [MarkdownProse.tsx](../src/renderer/src/components/MarkdownProse.tsx) — markdown renderer used inside read view and skills view.
-- [SearchPanel.tsx](../src/renderer/src/components/SearchPanel.tsx) — workspace search.
-- [SkillsPanel.tsx](../src/renderer/src/components/SkillsPanel.tsx) — left-rail list of available skills.
-- [SkillsView.tsx](../src/renderer/src/components/SkillsView.tsx) — full-pane skill markdown viewer.
-- [ScriptControls.tsx](../src/renderer/src/components/ScriptControls.tsx) — npm script dropdown + run/stop.
-- [ScriptOutput.tsx](../src/renderer/src/components/ScriptOutput.tsx) — stdout/stderr stream for the running script.
-- [DiffView.tsx](../src/renderer/src/components/DiffView.tsx) — side-by-side diff viewer for synced diagram changes.
-- [KanbanView.tsx](../src/renderer/src/components/KanbanView.tsx) — board view for the workspace kanban.
-- [McpView.tsx](../src/renderer/src/components/McpView.tsx) — MCP tools tab inside the Tools side panel.
-- [PullRequestsView.tsx](../src/renderer/src/components/PullRequestsView.tsx) — pull request listing, filtering, and inline merge flow.
-- [TerminalPanel.tsx](../src/renderer/src/components/TerminalPanel.tsx) — terminal emulator panel (Ctrl+` toggle).
-- [Toasts.tsx](../src/renderer/src/components/Toasts.tsx) — transient notifications.
+- [ActivityBar.tsx](../apps/desktop/src/renderer/src/components/ActivityBar.tsx) — left-rail tab switcher.
+- [FileTree.tsx](../apps/desktop/src/renderer/src/components/FileTree.tsx) — workspace file tree.
+- [Breadcrumbs.tsx](../apps/desktop/src/renderer/src/components/Breadcrumbs.tsx) — navigation stack as crumbs.
+- [DiagramView.tsx](../apps/desktop/src/renderer/src/components/DiagramView.tsx) — renders one mermaid block and wires `window.navigate`.
+- [MermaidErrorBanner.tsx](../apps/desktop/src/renderer/src/components/MermaidErrorBanner.tsx) — surfaces parse/render failures inline.
+- [ReadView.tsx](../apps/desktop/src/renderer/src/components/ReadView.tsx) — renders diagrams, markdown prose, and source files (merged from the removed CodeView).
+- [MarkdownProse.tsx](../apps/desktop/src/renderer/src/components/MarkdownProse.tsx) — markdown renderer used inside read view and skills view.
+- [SearchPanel.tsx](../apps/desktop/src/renderer/src/components/SearchPanel.tsx) — workspace search.
+- [SkillsPanel.tsx](../apps/desktop/src/renderer/src/components/SkillsPanel.tsx) — left-rail list of available skills.
+- [SkillsView.tsx](../apps/desktop/src/renderer/src/components/SkillsView.tsx) — full-pane skill markdown viewer.
+- [ScriptControls.tsx](../apps/desktop/src/renderer/src/components/ScriptControls.tsx) — npm script dropdown + run/stop.
+- [ScriptOutput.tsx](../apps/desktop/src/renderer/src/components/ScriptOutput.tsx) — stdout/stderr stream for the running script.
+- [DiffView.tsx](../apps/desktop/src/renderer/src/components/DiffView.tsx) — side-by-side diff viewer for synced diagram changes.
+- [KanbanView.tsx](../apps/desktop/src/renderer/src/components/KanbanView.tsx) — board view for the workspace kanban.
+- [McpView.tsx](../apps/desktop/src/renderer/src/components/McpView.tsx) — MCP tools tab inside the Tools side panel.
+- [PullRequestsPanel.tsx](../apps/desktop/src/renderer/src/components/PullRequestsPanel.tsx) — pull request listing, filtering, and inline merge flow.
+- [TerminalPanel.tsx](../apps/desktop/src/renderer/src/components/TerminalPanel.tsx) — terminal emulator panel (Ctrl+` toggle).
+- [Toasts.tsx](../apps/desktop/src/renderer/src/components/Toasts.tsx) — transient notifications.
 
 ### Chat & collaboration
 
-- [connection.ts](../src/renderer/src/chat/connection.ts) — WebSocket chat connection and `useRoomChat` hook.
-- [RoomChatPanel.tsx](../src/renderer/src/components/RoomChatPanel.tsx) — per-room chat side panel.
+- [connection.ts](../apps/desktop/src/renderer/src/chat/connection.ts) — WebSocket chat connection and `useRoomChat` hook.
+- [RoomChatPanel.tsx](../apps/desktop/src/renderer/src/components/RoomChatPanel.tsx) — per-room chat side panel.

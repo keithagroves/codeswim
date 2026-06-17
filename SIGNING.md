@@ -7,8 +7,8 @@ Application certificate** and **notarized** by Apple.
 
 This is the one-time guide for whoever has the Apple Developer account doing the
 signed build. The project is already configured (hardened runtime + entitlements
-in [electron-builder.yml](electron-builder.yml) and
-build/entitlements.mac.plist); you only supply
+in [apps/desktop/electron-builder.yml](apps/desktop/electron-builder.yml) and
+apps/desktop/build/entitlements.mac.plist); you only supply
 the certificate and notarization credentials.
 
 ## What you need
@@ -46,7 +46,7 @@ generated at appleid.apple.com, **not** your normal password.)
 
 `build:mac:signed` signs every binary in the bundle (including the bundled
 `opencode` helper), uploads to Apple for notarization, waits, and staples the
-ticket. It produces a DMG under `dist/`.
+ticket. It produces a DMG under `apps/desktop/dist/`.
 
 The app's bundle id is `com.keithagroves.codeswim`; it does **not** need to match
 your team — any valid Developer ID can sign it.
@@ -54,13 +54,13 @@ your team — any valid Developer ID can sign it.
 ## Verify before sending it out
 
 ```sh
-spctl -a -vvv -t install "dist/mac/codeswim.app"   # → "accepted, source=Notarized Developer ID"
-xcrun stapler validate "dist/mac/codeswim.app"      # → "The validate action worked!"
+spctl -a -vvv -t install "apps/desktop/dist/mac-arm64/codeswim.app"   # → "accepted, source=Notarized Developer ID"
+xcrun stapler validate "apps/desktop/dist/mac-arm64/codeswim.app"      # → "The validate action worked!"
 ```
 
 ## Publishing the result
 
-- **Simplest:** hand the notarized `dist/codeswim-<version>.dmg` back to Keith,
+- **Simplest:** hand the notarized `apps/desktop/dist/codeswim-<version>.dmg` back to Keith,
   who attaches it to the GitHub release.
 - **Or publish directly:** append `--publish always` to the build command with a
   `GH_TOKEN` env var that has write access to `keithagroves/codeswim`.
@@ -75,6 +75,6 @@ block to the macOS job in .github/workflows/release.yml:
 - Notarization: `APPLE_API_KEY` (base64 of the `.p8`), `APPLE_API_KEY_ID`,
   `APPLE_API_ISSUER`
 
-Then switch that job's command to `npm run build:mac:signed -- --publish always`.
+Then switch that job's command to `npm run build:mac:signed --workspace @codeswim/desktop -- --publish always`.
 This is left unconfigured on purpose so unsigned CI builds keep working until the
 secrets exist.

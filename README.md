@@ -94,9 +94,9 @@ npm run dev        # electron-vite dev server with HMR
 ## Building installers
 
 ```bash
-npm run build:mac      # → dist/codeswim-<version>.dmg
-npm run build:win      # → dist/codeswim-<version>-setup.exe
-npm run build:linux    # → dist/codeswim-<version>.AppImage, .snap, .deb
+npm run build:mac      # → apps/desktop/dist/codeswim-<version>.dmg
+npm run build:win      # → apps/desktop/dist/codeswim-<version>-setup.exe
+npm run build:linux    # → apps/desktop/dist/codeswim-<version>.AppImage, .snap, .deb
 ```
 
 A push of a `v*` tag triggers `.github/workflows/release.yml`, which builds on all three OSes and uploads to a GitHub draft release.

@@ -6,7 +6,7 @@ tags: [main, electron, ipc, filesystem]
 
 ## Purpose
 
-`src/main/index.ts` is the single entry point for codeswim's main (Node) process. It owns every capability the renderer cannot reach directly through the browser sandbox: reading and writing files, spawning subprocesses, watching the filesystem, managing terminal PTYs, and running the opencode sidecar. It is the authority on the workspace filesystem — the renderer never touches an absolute path.
+`apps/desktop/src/main/index.ts` is the single entry point for codeswim's main (Node) process. It owns every capability the renderer cannot reach directly through the browser sandbox: reading and writing files, spawning subprocesses, watching the filesystem, managing terminal PTYs, and running the opencode sidecar. It is the authority on the workspace filesystem — the renderer never touches an absolute path.
 
 ## Responsibilities
 
