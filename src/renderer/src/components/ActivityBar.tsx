@@ -93,6 +93,22 @@ function TerminalIcon(): React.JSX.Element {
   )
 }
 
+function ClaudeIcon(): React.JSX.Element {
+  // A sparkle/asterisk burst — Claude Code's mark — over a terminal-ish
+  // baseline, distinguishing it from the plain terminal glyph.
+  return (
+    <svg width="27" height="27" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 3v8m0 0v8m0-8h8m-8 0H4m6.5-6.5L12 11m1.5-6.5L12 11m-1.5 8.5L12 13m1.5 6.5L12 13"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 function GitIcon(): React.JSX.Element {
   // Commit-graph glyph: two nodes on a line with a branch tap.
   return (
@@ -134,6 +150,7 @@ const ITEM_BY_KEY: Record<Section, Item> = {
   tools: { key: 'tools', label: 'Tools', icon: <ToolsIcon /> },
   git: { key: 'git', label: 'Commit', icon: <GitIcon /> },
   terminal: { key: 'terminal', label: 'Terminal', icon: <TerminalIcon /> },
+  claude: { key: 'claude', label: 'Claude Code', icon: <ClaudeIcon /> },
   chat: { key: 'chat', label: 'Chat', icon: <PeopleIcon /> }
 }
 

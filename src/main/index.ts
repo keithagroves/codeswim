@@ -892,10 +892,15 @@ app.whenReady().then(async () => {
     pullRequestDiff(rootPath, number)
   )
 
-  ipcMain.handle('terminal:create', (_event, cwd?: string) => {
+  ipcMain.handle('terminal:create', (_event, cwd?: string, command?: string) => {
     const id = String(++terminalIdCounter)
     const shell = process.env.SHELL || '/bin/zsh'
-    const ptyProcess = pty.spawn(shell, [], {
+    // With no command we spawn a plain interactive shell. With one (e.g. the
+    // Claude Code tab passing `claude`) we launch it through a login shell so
+    // the user's PATH resolves the binary the way it does in their terminal;
+    // when the command exits the shell — and the pty — exit with it.
+    const args = command ? ['-l', '-c', command] : []
+    const ptyProcess = pty.spawn(shell, args, {
       name: 'xterm-256color',
       cols: 80,
       rows: 24,

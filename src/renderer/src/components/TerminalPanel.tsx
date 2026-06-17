@@ -33,7 +33,15 @@ interface TabInfo {
   label: string
 }
 
-function TerminalInstance({ cwd, active }: { cwd: string | null; active: boolean }): React.JSX.Element {
+function TerminalInstance({
+  cwd,
+  active,
+  command
+}: {
+  cwd: string | null
+  active: boolean
+  command?: string
+}): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const fitRef = useRef<FitAddon | null>(null)
   const prevActiveRef = useRef(active)
@@ -99,7 +107,7 @@ function TerminalInstance({ cwd, active }: { cwd: string | null; active: boolean
         observer = new ResizeObserver(scheduleResize)
         observer.observe(el)
 
-        void window.api.terminalCreate(cwd ?? undefined).then((id) => {
+        void window.api.terminalCreate(cwd ?? undefined, command).then((id) => {
           if (destroyed) {
             window.api.terminalDestroy(id)
             return
@@ -154,7 +162,15 @@ function TerminalInstance({ cwd, active }: { cwd: string | null; active: boolean
   return <div ref={containerRef} className="terminal-instance" style={{ display: active ? 'block' : 'none' }} />
 }
 
-export function TerminalPanel(): React.JSX.Element {
+export function TerminalPanel({
+  command,
+  labelPrefix = 'Terminal'
+}: {
+  // When set, every tab launches this command instead of a bare shell (the
+  // Claude Code tab passes `claude`). Otherwise it's a plain terminal.
+  command?: string
+  labelPrefix?: string
+} = {}): React.JSX.Element {
   const { state } = useStore()
   const cwdRef = useRef(state.rootPath)
 
@@ -162,15 +178,15 @@ export function TerminalPanel(): React.JSX.Element {
     cwdRef.current = state.rootPath
   }, [state.rootPath])
 
-  const [tabs, setTabs] = useState<TabInfo[]>(() => [{ id: nextTabId(), label: 'Terminal 1' }])
+  const [tabs, setTabs] = useState<TabInfo[]>(() => [{ id: nextTabId(), label: `${labelPrefix} 1` }])
   const [activeTab, setActiveTab] = useState<string>(() => tabs[0].id)
 
   const addTab = useCallback(() => {
     const id = nextTabId()
-    const label = `Terminal ${tabCounter}`
+    const label = `${labelPrefix} ${tabCounter}`
     setTabs((prev) => [...prev, { id, label }])
     setActiveTab(id)
-  }, [])
+  }, [labelPrefix])
 
   const closeTab = useCallback(
     (tabId: string) => {
@@ -207,13 +223,23 @@ export function TerminalPanel(): React.JSX.Element {
             )}
           </div>
         ))}
-        <button className="terminal-add-btn" onClick={addTab} title="New terminal" aria-label="New terminal">
+        <button
+          className="terminal-add-btn"
+          onClick={addTab}
+          title={`New ${labelPrefix.toLowerCase()}`}
+          aria-label={`New ${labelPrefix.toLowerCase()}`}
+        >
           +
         </button>
       </div>
       <div className="terminal-instances">
         {tabs.map((tab) => (
-          <TerminalInstance key={tab.id} cwd={cwdRef.current} active={tab.id === activeTab} />
+          <TerminalInstance
+            key={tab.id}
+            cwd={cwdRef.current}
+            active={tab.id === activeTab}
+            command={command}
+          />
         ))}
       </div>
     </div>

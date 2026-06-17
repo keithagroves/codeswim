@@ -12,7 +12,15 @@ export type FileView = 'diagram' | 'read'
 export type WorkspaceView = 'kanban' | 'navigator' | 'pulls'
 // Activity-bar / side-panel sections, in no particular order. The user's
 // preferred order lives in AppState.activityOrder.
-export type Section = 'agent' | 'files' | 'search' | 'tools' | 'git' | 'terminal' | 'chat'
+export type Section =
+  | 'agent'
+  | 'files'
+  | 'search'
+  | 'tools'
+  | 'git'
+  | 'terminal'
+  | 'claude'
+  | 'chat'
 // Sub-tabs within the Tools section. 'skills' lists user skills; 'mcp' is the
 // MCP-servers surface; 'context' holds the agent instructions (local + global
 // AGENTS.md) and the built-in system prompts.

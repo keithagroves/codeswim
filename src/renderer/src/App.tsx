@@ -62,11 +62,15 @@ function SidePanel(): React.JSX.Element | null {
   // (A conditional unmount would fire its cleanup and kill the shell.)
   const terminalOpened = useRef(false)
   if (state.activeSection === 'terminal') terminalOpened.current = true
+  // Claude Code runs in the same pty-backed panel and needs the same
+  // keep-alive so switching sections doesn't kill the running session.
+  const claudeOpened = useRef(false)
+  if (state.activeSection === 'claude') claudeOpened.current = true
 
   const collapsed = state.activeSection === null
   // When collapsed we keep the container in the tree (display:none) so the
   // background terminal stays alive; an unmount here would destroy it.
-  if (collapsed && !terminalOpened.current) return null
+  if (collapsed && !terminalOpened.current && !claudeOpened.current) return null
   return (
     <div
       className="side-panel"
@@ -84,6 +88,14 @@ function SidePanel(): React.JSX.Element | null {
           style={{ display: state.activeSection === 'terminal' ? 'flex' : 'none' }}
         >
           <TerminalPanel />
+        </div>
+      ) : null}
+      {claudeOpened.current ? (
+        <div
+          className="terminal-host"
+          style={{ display: state.activeSection === 'claude' ? 'flex' : 'none' }}
+        >
+          <TerminalPanel command="claude" labelPrefix="Claude" />
         </div>
       ) : null}
       <div

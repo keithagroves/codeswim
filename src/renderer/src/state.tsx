@@ -46,6 +46,7 @@ const DEFAULT_ACTIVITY_ORDER: Section[] = [
   'tools',
   'git',
   'terminal',
+  'claude',
   'chat'
 ]
 

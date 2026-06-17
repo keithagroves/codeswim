@@ -393,7 +393,8 @@ const api = {
     ipcRenderer.on('github:auth-changed', listener)
     return () => ipcRenderer.removeListener('github:auth-changed', listener)
   },
-  terminalCreate: (cwd?: string): Promise<string> => ipcRenderer.invoke('terminal:create', cwd),
+  terminalCreate: (cwd?: string, command?: string): Promise<string> =>
+    ipcRenderer.invoke('terminal:create', cwd, command),
   terminalWrite: (id: string, data: string): void => ipcRenderer.send('terminal:write', id, data),
   terminalResize: (id: string, cols: number, rows: number): void =>
     ipcRenderer.send('terminal:resize', id, cols, rows),

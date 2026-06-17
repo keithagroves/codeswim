@@ -315,7 +315,7 @@ export interface DiagramNavApi {
   mergePullRequest(rootPath: string, number: number, method?: MergeMethod): Promise<MergeResult>
   pullRequestDiff(rootPath: string, number: number): Promise<PullRequestDiff>
   onGitHubAuthChanged(cb: (user: GitHubUser | null) => void): () => void
-  terminalCreate(cwd?: string): Promise<string>
+  terminalCreate(cwd?: string, command?: string): Promise<string>
   terminalWrite(id: string, data: string): void
   terminalResize(id: string, cols: number, rows: number): void
   terminalDestroy(id: string): void
