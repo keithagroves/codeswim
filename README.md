@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="resources/icon.png" alt="codeswim" width="320">
+  <img src="apps/desktop/resources/icon.png" alt="codeswim" width="320">
 </p>
 
 <p align="center">

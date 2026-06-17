@@ -16,11 +16,11 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            build: npm run build:mac -- --publish always
+            build: npm run build:mac --workspace @codeswim/desktop -- --publish always
           - os: windows-latest
-            build: npm run build:win -- --publish always
+            build: npm run build:win --workspace @codeswim/desktop -- --publish always
           - os: ubuntu-latest
-            build: npm run build:linux -- --publish always
+            build: npm run build:linux --workspace @codeswim/desktop -- --publish always
 
     runs-on: ${{ matrix.os }}
 
