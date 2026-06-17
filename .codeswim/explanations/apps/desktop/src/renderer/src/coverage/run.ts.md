@@ -6,7 +6,7 @@ tags: [coverage, mdd, renderer]
 
 ## Purpose
 
-Wraps the pure `analyzeCoverage` function ([`coverage.ts`](./coverage.ts.md)) with the filesystem calls the renderer needs — listing the workspace tree via IPC, reading markdown files, and filtering out noise (ignored dirs, lockfiles, config files). The result is either returned as a `CoverageReport` for the UI or formatted into a prompt the [agent harness](../../../../../architecture/agent-harness.md) acts on.
+Wraps the pure `analyzeCoverage` function ([`coverage.ts`](../../../../../../../../packages/coverage/src/coverage.ts)) with the filesystem calls the renderer needs — listing the workspace tree via IPC, reading markdown files, and filtering out noise (ignored dirs, lockfiles, config files). The result is either returned as a `CoverageReport` for the UI or formatted into a prompt the [agent harness](../../../../../../../../architecture/agent-harness.md) acts on.
 
 ## Responsibilities
 
@@ -15,7 +15,7 @@ Wraps the pure `analyzeCoverage` function ([`coverage.ts`](./coverage.ts.md)) wi
 - Pass non-markdown file paths into the analyzer with empty content — the analyzer only needs their path to exist in the file set.
 - Filter out common non-architectural basenames (`LICENSE`, `CHANGELOG.md`, `.gitignore`, lockfiles, config dotfiles) so they never appear in the coverage report.
 - Call `analyzeCoverage` and return its report.
-- Format a report into a self-contained Markdown prompt (`buildSyncPrompt`) that teaches the agent what drift exists (broken links, orphan diagrams, uncovered sources, mermaid issues) and lets it pick the right fix per item, since the [system prompt](../../../../../packages/harness/src/prompt/system.txt) and [`mdd-fixes.md`](../../mdd-fixes.md) already encode the repair rules.
+- Format a report into a self-contained Markdown prompt (`buildSyncPrompt`) that teaches the agent what drift exists (broken links, orphan diagrams, uncovered sources, mermaid issues) and lets it pick the right fix per item, since the [system prompt](../../../../../../../../packages/harness/src/prompt/system.txt) and [`mdd-fixes.md`](../../../../../../../../packages/harness/src/prompt/mdd-fixes.md) already encode the repair rules.
 
 ## Inputs and outputs
 
@@ -31,7 +31,7 @@ Wraps the pure `analyzeCoverage` function ([`coverage.ts`](./coverage.ts.md)) wi
 1. `runCoverage(rootPath)` requests the full file tree via `listTree IPC`.
 2. `flatten()` walks the returned `TreeNode[]` recursively, dropping ignored-directory subtrees.
 3. For each file, the path is relativized against `rootPath`; non-markdown files are added with `content: ''`; markdown files are read via `readFile IPC` and paired with their relative path.
-4. The assembled `FileInfo[]` is handed to `analyzeCoverage` (in [`coverage.ts`](./coverage.ts.md)), which produces the report.
+4. The assembled `FileInfo[]` is handed to `analyzeCoverage` (in [`coverage.ts`](../../../../../../../../packages/coverage/src/coverage.ts)), which produces the report.
 5. `buildSyncPrompt` serializes each drift category into a section the agent can parse and act on.
 
 ```
@@ -44,9 +44,9 @@ Wraps the pure `analyzeCoverage` function ([`coverage.ts`](./coverage.ts.md)) wi
 
 ## Dependencies and side effects
 
-- Imports `joinPosix` / `toPosix` from [`path-utils.ts`](../../path-utils.ts) for POSIX path normalization.
-- Calls `analyzeCoverage` from [`coverage.ts`](./coverage.ts.md) — the pure core.
-- Calls `window.api.listTree` and `window.api.readFile` IPC methods defined in the [preload bridge](../../../../../architecture/preload.md) and backed by [main process](../../../../../architecture/main-process.md) handlers.
+- Imports `joinPosix` / `toPosix` from [`path-utils.ts`](../../../../../../../../apps/desktop/src/renderer/src/path-utils.ts) for POSIX path normalization.
+- Calls `analyzeCoverage` from [`coverage.ts`](../../../../../../../../packages/coverage/src/coverage.ts) — the pure core.
+- Calls `window.api.listTree` and `window.api.readFile` IPC methods defined in the [preload bridge](../../../../../../../../architecture/preload.md) and backed by [main process](../../../../../../../../architecture/main-process.md) handlers.
 - No filesystem writes. No mutation of application state.
 
 ## Failure modes
@@ -57,6 +57,6 @@ Wraps the pure `analyzeCoverage` function ([`coverage.ts`](./coverage.ts.md)) wi
 
 ## Related diagrams and decisions
 
-- [Coverage diagram](../../../../../architecture/coverage.md) — shows `run.ts` as the entry point (`runCoverage` node) that feeds into the analyzer and the prompt builder.
-- [Prompt Commits diagram](../../../../../architecture/prompt-commits.md) — reuses `buildSyncPrompt` as the MDD gate before commit synthesis. The `Cov` node in that diagram is the coverage `run.ts` module.
-- [Prompt Commits](../../../../../architecture/prompt-commits.md#thesis) — the decision to run coverage as a gate before commit synthesis, so diagrams and code land together.
+- [Coverage diagram](../../../../../../../../architecture/coverage.md) — shows `run.ts` as the entry point (`runCoverage` node) that feeds into the analyzer and the prompt builder.
+- [Prompt Commits diagram](../../../../../../../../architecture/prompt-commits.md) — reuses `buildSyncPrompt` as the MDD gate before commit synthesis. The `Cov` node in that diagram is the coverage `run.ts` module.
+- [Prompt Commits](../../../../../../../../architecture/prompt-commits.md#thesis) — the decision to run coverage as a gate before commit synthesis, so diagrams and code land together.

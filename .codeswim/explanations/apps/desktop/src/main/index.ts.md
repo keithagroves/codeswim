@@ -11,14 +11,14 @@ tags: [main, electron, ipc, filesystem]
 ## Responsibilities
 
 - **BrowserWindow lifecycle** — creates the single app window with hardened `webPreferences` (`contextIsolation: true`, `nodeIntegration: false`), wires macOS `activate` re-creation, and cleans up on `window-all-closed`.
-- **IPC handler registration** — registers every `ipcMain.handle`/`.on` call the renderer invokes through the [preload bridge](../../../architecture/preload.md). Roughly 30 handlers covering filesystem I/O, git, kanban, skills, the harness sidecar, terminal management, the script runner, and recent-project tracking.
+- **IPC handler registration** — registers every `ipcMain.handle`/`.on` call the renderer invokes through the [preload bridge](../../../../../../architecture/preload.md). Roughly 30 handlers covering filesystem I/O, git, kanban, skills, the harness sidecar, terminal management, the script runner, and recent-project tracking.
 - **File watcher** — starts a [chokidar](https://github.com/paulmillr/chokidar) instance on the picked workspace; emits `file-changed` on every edit and a debounced (200ms) `tree-changed` on add/unlink. Ignores dotfiles (except `.env`, `.gitignore`, `.codeswim`), `node_modules`, `dist`, `out`, `build`, and `.git`.
 - **Script runner** — spawns npm/custom commands via `child_process.spawn` with `shell: true, detached: true` so the user's PATH resolves. Kills the whole process group on stop (negative-pid `SIGTERM` on POSIX, `taskkill /T /F` on Windows).
 - **Terminal PTY** — creates per-tab pseudo-terminals via `node-pty` on a `SHELL` (default `/bin/zsh`). Manages a `terminals` map keyed by auto-incrementing IDs.
 - **App menu** — builds a macOS-style File menu with New Project, Open Folder, and a live Open Recent submenu persisted to `userData/recent-projects.json`.
 - **New project scaffolding** — shows a native save dialog, creates the directory, and writes a minimal `overview.md` with a starter mermaid diagram.
 - **Recents management** — reads/writes a `recent-projects.json` file in Electron's `userData` directory, capped at 12 entries. The app menu's Open Recent submenu rebuilds whenever the list changes.
-- **Sidecar supervision** — starts and stops the opencode sidecar subprocess for the [agent harness](../../../architecture/agent-harness.md). Tracks one sidecar per workspace root, re-creating it if the root changes. Forwards stdout/stderr and exit events to the renderer.
+- **Sidecar supervision** — starts and stops the opencode sidecar subprocess for the [agent harness](../../../../../../architecture/agent-harness.md). Tracks one sidecar per workspace root, re-creating it if the root changes. Forwards stdout/stderr and exit events to the renderer.
 
 ## Inputs and outputs
 
@@ -112,8 +112,8 @@ The file never calls renderer functions directly — all communication is IPC or
 
 ## Related diagrams and decisions
 
-- [Main process architecture](../../../architecture/main-process.md) — the owning diagram; shows how `index.ts` routes IPC to picker, reader, watcher, scripts, skills, and the harness.
-- [Agent harness](../../../architecture/agent-harness.md) — the `harness:start` / `harness:stop` handlers are the main process side of sidecar supervision.
-- [Preload bridge](../../../architecture/preload.md) — the IPC contract (`DiagramNavApi`) that every handler here implements.
-- [Prompt Commits](../../../architecture/prompt-commits.md) — registers the `git:*` IPC handlers documented in the IPC contract additions table. The handler names must match what `git.ts` exports.
-- The [main-process diagram](../../../architecture/main-process.md) notes explain why `runEntry` uses `detached: true` (process group cleanup) and why `tree-changed` debounces at 200ms (multi-step editor writes).
+- [Main process architecture](../../../../../../architecture/main-process.md) — the owning diagram; shows how `index.ts` routes IPC to picker, reader, watcher, scripts, skills, and the harness.
+- [Agent harness](../../../../../../architecture/agent-harness.md) — the `harness:start` / `harness:stop` handlers are the main process side of sidecar supervision.
+- [Preload bridge](../../../../../../architecture/preload.md) — the IPC contract (`DiagramNavApi`) that every handler here implements.
+- [Prompt Commits](../../../../../../architecture/prompt-commits.md) — registers the `git:*` IPC handlers documented in the IPC contract additions table. The handler names must match what `git.ts` exports.
+- The [main-process diagram](../../../../../../architecture/main-process.md) notes explain why `runEntry` uses `detached: true` (process group cleanup) and why `tree-changed` debounces at 200ms (multi-step editor writes).

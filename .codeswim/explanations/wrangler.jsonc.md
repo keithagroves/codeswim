@@ -6,7 +6,7 @@ tags: [cloudflare, chat, infrastructure]
 
 ## Purpose
 
-Configures the `wrangler` CLI to deploy and develop the chat PartyServer worker at [`party/codeswim.ts`](../party/codeswim.ts). In production the worker runs on your own Cloudflare account's `workers.dev` subdomain; locally it runs via `wrangler dev`. The config controls what the worker is called, where its entry point lives, how it authenticates connections, and which Durable Object it binds for per-repo room state.
+Configures the `wrangler` CLI to deploy and develop the chat PartyServer worker at [`party/codeswim.ts`](../../party/codeswim.ts). In production the worker runs on your own Cloudflare account's `workers.dev` subdomain; locally it runs via `wrangler dev`. The config controls what the worker is called, where its entry point lives, how it authenticates connections, and which Durable Object it binds for per-repo room state.
 
 ## Responsibilities
 
@@ -21,7 +21,7 @@ Configures the `wrangler` CLI to deploy and develop the chat PartyServer worker 
 ## Dependencies and side effects
 
 - Consumed by `wrangler` CLI commands (`wrangler dev`, `wrangler deploy`) — not by application code directly.
-- The dev port `8788` must stay in sync with the client default in [`src/renderer/src/chat/connection.ts`](../src/renderer/src/chat/connection.ts).
+- The dev port `8788` must stay in sync with the client default in [`src/renderer/src/chat/connection.ts`](../../apps/desktop/src/renderer/src/chat/connection.ts).
 - The `REQUIRE_AUTH` var is read by the worker's `onConnect` to decide whether to hold new connections until an `{type:'auth'}` frame arrives.
 - The `$schema` reference to `node_modules/wrangler/config-schema.json` provides IDE autocomplete; broken if `wrangler` is not installed.
 - No runtime imports by the renderer or main process — it is a deployment artifact, not a module.

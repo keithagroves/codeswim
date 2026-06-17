@@ -39,7 +39,7 @@ All four functions return a normalized `KanbanBoard` object. `moveGitHubKanbanIt
 Renderer IPC → handler in index.ts → kanban.ts function
                                        → fs.readFile / fs.writeFile (.codeswim/board.json)
                                        → or: execFile('gh', ...) for GitHub operations
-                                       → normalizeKanbanBoard (shared/kanban.ts)
+                                       → normalizeKanbanBoard (@codeswim/contract)
                                        → return KanbanBoard to renderer
 ```
 
@@ -61,7 +61,7 @@ The merge logic in `mergeGitHubSnapshot` is pure — it takes structured data an
 
 ### Internal
 
-- `../shared/kanban` — type definitions (`KanbanBoard`, `KanbanCard`, `KanbanColumn`, `KanbanGitHubConfig`) and the `normalizeKanbanBoard` / `createDefaultKanbanBoard` validation helpers. Every board write runs through normalisation so corrupt or hand-edited JSON is repaired before persistence.
+- `@codeswim/contract` — type definitions (`KanbanBoard`, `KanbanCard`, `KanbanColumn`, `KanbanGitHubConfig`) and the `normalizeKanbanBoard` / `createDefaultKanbanBoard` validation helpers. Every board write runs through normalisation so corrupt or hand-edited JSON is repaired before persistence.
 
 ### External
 
@@ -90,6 +90,6 @@ The merge logic in `mergeGitHubSnapshot` is pure — it takes structured data an
 
 ## Related diagrams and decisions
 
-- [Main process architecture](../../../architecture/main-process.md) — lists `kanban.ts` in the Source section and shows where it fits among the main-process modules.
-- [Agent harness](../../../architecture/agent-harness.md) — the `kanban_add` tool in the opencode plugin calls back through the main process to this module to persist new cards.
-- [Main process entry explanation](./index.ts.md) — documents the IPC channel routing and the full set of main-process modules.
+- [Main process architecture](../../../../../architecture/main-process.md) — lists `kanban.ts` in the Source section and shows where it fits among the main-process modules.
+- [Agent harness](../../../../../architecture/agent-harness.md) — the `kanban_add` tool in the opencode plugin calls back through the main process to this module to persist new cards.
+- [Main process entry explanation](../../../apps/desktop/src/main/index.ts.md) — documents the IPC channel routing and the full set of main-process modules.
