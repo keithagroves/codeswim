@@ -16,6 +16,29 @@ import { createSessionGate } from './session-gate'
 
 const CODE_MUTATING_TOOLS = new Set(['write', 'edit', 'apply_patch'])
 
+// Appended to the gated tools' descriptions so the model learns the rule from
+// the tool list and calls `diagram_edit` proactively, instead of discovering
+// the gate by eating a thrown error from `tool.execute.before` (a wasted turn
+// every session). The `tool.definition` hook carries no session context, so
+// this is necessarily static — but the rule itself is always true.
+export const GATE_NOTE =
+  '\n\nNote (codeswim): this tool is gated. It stays blocked until at least one ' +
+  '`diagram_edit` call has happened in the current session — diagrams are the spec, ' +
+  'so update the relevant diagram(s) first, then edit code.'
+
+// Renderer attaches the navigator's currently-open file as a synthetic text
+// part carrying this metadata key (empty text); the `chat.message` hook below
+// fills in the framing. Keeping the wording here versions it with the prompts.
+export const VIEWING_META_KEY = 'codeswim_viewing'
+
+export function viewingContext(path: string): string {
+  const kind = path.endsWith('.md') ? 'diagram/doc' : 'source file'
+  return (
+    `[codeswim] The user is currently viewing ${path} (${kind}) in the diagram navigator. ` +
+    `If their message refers to "this" file, diagram, or page, assume they mean ${path}.`
+  )
+}
+
 const DESCRIPTION = `Create or replace a mermaid diagram file (\`.md\`) in the workspace.
 
 Diagrams are the spec. Use this BEFORE writing code: code-mutating tools (\`write\`, \`edit\`, \`apply_patch\`) are gated on at least one prior \`diagram_edit\` call in the session.
@@ -157,6 +180,33 @@ export const CodeswimPlugin: Plugin = async () => {
       if (!CODE_MUTATING_TOOLS.has(input.tool)) return
       const blocked = gate.checkCodeEditAllowed(input.sessionID)
       if (blocked) throw new Error(blocked)
+    },
+
+    // Surface the diagrams-first gate in the tool list so the model self-corrects
+    // before attempting a blocked edit.
+    'tool.definition': async (input, output) => {
+      if (CODE_MUTATING_TOOLS.has(input.toolID)) output.description += GATE_NOTE
+    },
+
+    // Ground the agent in what the user is actually looking at in the navigator.
+    // The renderer passes the open file as a synthetic carrier part (see
+    // agent.ts); we fill its text with the framed context. Synthetic parts reach
+    // the model as user context but are hidden from the chat transcript.
+    'chat.message': async (_input, output) => {
+      // TEMP diagnostic — confirm the hook runs and what parts it receives.
+      // eslint-disable-next-line no-console
+      console.error(
+        '[codeswim] chat.message parts=',
+        output.parts.map((p) => ({
+          type: (p as { type?: string }).type,
+          meta: (p as { metadata?: unknown }).metadata
+        }))
+      )
+      for (const part of output.parts) {
+        if (part.type !== 'text') continue
+        const viewing = (part.metadata as Record<string, unknown> | undefined)?.[VIEWING_META_KEY]
+        if (typeof viewing === 'string' && viewing) part.text = viewingContext(viewing)
+      }
     }
   }
 }

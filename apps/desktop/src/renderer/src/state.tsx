@@ -516,7 +516,7 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       dispatch({ type: 'chat-status', status: 'thinking' })
 
       try {
-        const reply = await agent.send(sessionId, trimmed)
+        const reply = await agent.send(sessionId, trimmed, stateRef.current.currentFile)
         for (const part of reply.parts) {
           dispatch({ type: 'chat-upsert-part', messageID: reply.messageID, part })
         }

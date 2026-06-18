@@ -30,6 +30,19 @@
   ],
   "cards": [
     {
+      "id": "card-002",
+      "title": "AI-driven kanban card creation",
+      "description": "The AI agent should be the primary way users add cards to the kanban board — capture tasks from conversation and add them automatically.",
+      "columnId": "review",
+      "priority": "medium",
+      "labels": [
+        "agent-harness",
+        "board"
+      ],
+      "createdAt": 1749830000000,
+      "updatedAt": 1781739024422
+    },
+    {
       "id": "card-001",
       "title": "Make agent-directed searches",
       "description": "Let the agent harness drive workspace search — query the renderer's search index or filesystem from agent prompts, parse results, and navigate to matching diagrams/code. Currently search is manual-only.",
@@ -55,19 +68,6 @@
       "linkedPath": "src/renderer/src/components/ChatPanel.tsx",
       "createdAt": 1780000000000,
       "updatedAt": 1781417654839
-    },
-    {
-      "id": "card-002",
-      "title": "AI-driven kanban card creation",
-      "description": "The AI agent should be the primary way users add cards to the kanban board — capture tasks from conversation and add them automatically.",
-      "columnId": "backlog",
-      "priority": "medium",
-      "labels": [
-        "agent-harness",
-        "board"
-      ],
-      "createdAt": 1749830000000,
-      "updatedAt": 1749830000000
     },
     {
       "id": "card-003",
@@ -211,10 +211,39 @@
       "description": "Add a toggle/button to disable a skill without deleting it, so the agent stops loading it as a tool. Currently skills can only be deleted or left as read-only. A disabled state would let users temporarily turn off skills they don't need for a given session.",
       "columnId": "backlog",
       "priority": "medium",
-      "labels": ["feature", "skills"],
+      "labels": [
+        "feature",
+        "skills"
+      ],
       "linkedPath": "src/renderer/src/components/SkillsView.tsx",
       "createdAt": 1781494456000,
       "updatedAt": 1781494456000
+    },
+    {
+      "id": "card-016",
+      "title": "Create new files and folders in package explorer",
+      "description": "Add the ability to create new files and folders directly from the package explorer tree view — right-click or add-button context menu with inline naming.",
+      "columnId": "backlog",
+      "priority": "medium",
+      "labels": [
+        "feature",
+        "ui"
+      ],
+      "createdAt": 1781739024422,
+      "updatedAt": 1781739024422
+    },
+    {
+      "id": "card-017",
+      "title": "Drag files into package explorer view",
+      "description": "Support dragging files from the filesystem into the package explorer tree to add them to the project, with automatic placement in the correct folder.",
+      "columnId": "backlog",
+      "priority": "medium",
+      "labels": [
+        "feature",
+        "ui"
+      ],
+      "createdAt": 1781739024422,
+      "updatedAt": 1781739024422
     }
   ]
 }

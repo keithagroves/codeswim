@@ -34,7 +34,7 @@ import {
   type ChatMessage,
   type ChatUser,
   type ServerMessage
-} from '../src/shared/chat'
+} from '@codeswim/contract'
 
 interface Env {
   CodeswimRoom: DurableObjectNamespace

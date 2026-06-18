@@ -690,7 +690,12 @@ app.whenReady().then(async () => {
       sidecarStarting = startSidecar({
         workspaceRoot: rootPath,
         onStdout: (line) => mainWindow?.webContents.send('harness:log', { stream: 'stdout', line }),
-        onStderr: (line) => mainWindow?.webContents.send('harness:log', { stream: 'stderr', line }),
+        onStderr: (line) => {
+          // TEMP diagnostic — echo sidecar stderr (incl. plugin console.error)
+          // to the terminal running `npm run dev`.
+          if (line.includes('[codeswim]')) console.log('SIDECAR:', line)
+          mainWindow?.webContents.send('harness:log', { stream: 'stderr', line })
+        },
         onExit: (code, info) => {
           mainWindow?.webContents.send('harness:exit', {
             code,

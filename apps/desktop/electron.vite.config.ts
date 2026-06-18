@@ -13,14 +13,23 @@ const bundledWorkspaceDeps = [
   '@codeswim/domain-skills'
 ]
 
+// .env lives at the monorepo root, but electron-vite defaults envDir to this
+// app's directory. Point every process at the root so MAIN_VITE_* (GitHub
+// client id) and VITE_* (party host) load in dev and build alike — otherwise
+// GitHub reads as "not configured" and the party host falls back to localhost.
+const envDir = resolve('../..')
+
 export default defineConfig({
   main: {
+    envDir,
     plugins: [externalizeDepsPlugin({ exclude: bundledWorkspaceDeps })]
   },
   preload: {
+    envDir,
     plugins: [externalizeDepsPlugin({ exclude: bundledWorkspaceDeps })]
   },
   renderer: {
+    envDir,
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer/src')

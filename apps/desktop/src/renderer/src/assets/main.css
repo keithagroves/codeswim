@@ -4375,6 +4375,9 @@ body.is-panning .diagram-canvas-wrap {
 }
 
 .chat-device-code {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 22px;
   letter-spacing: 3px;
@@ -4383,6 +4386,22 @@ body.is-panning .diagram-canvas-wrap {
   padding: 6px 12px;
   border: 1px dashed var(--border);
   border-radius: 8px;
+  background: none;
+  cursor: pointer;
+}
+
+.chat-device-code:hover {
+  border-style: solid;
+  border-color: var(--accent, var(--text));
+}
+
+.chat-device-copy {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: normal;
+  color: var(--text-muted, var(--text));
+  opacity: 0.7;
 }
 
 .chat-error {

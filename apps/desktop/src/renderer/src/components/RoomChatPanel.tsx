@@ -23,6 +23,7 @@ export function RoomChatPanel(): React.JSX.Element {
   const [github, setGithub] = useState<GitHubStatus | null>(null)
   const [token, setToken] = useState<string | null>(null)
   const [device, setDevice] = useState<{ userCode: string; verificationUri: string } | null>(null)
+  const [codeCopied, setCodeCopied] = useState(false)
   const [signInError, setSignInError] = useState<string | null>(null)
   const [name, setName] = useState(() => localStorage.getItem(NAME_KEY) ?? '')
   const [nameDraft, setNameDraft] = useState('')
@@ -123,6 +124,17 @@ export function RoomChatPanel(): React.JSX.Element {
 
   const others = useMemo(() => users.filter((u) => u.viewing), [users])
 
+  const copyCode = async (code: string): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(code)
+      setCodeCopied(true)
+      // Reset the "Copied" label after a moment so it can be copied again.
+      setTimeout(() => setCodeCopied(false), 1500)
+    } catch {
+      // Clipboard blocked (rare) — leave the code visible to type manually.
+    }
+  }
+
   const signIn = async (): Promise<void> => {
     setSignInError(null)
     const res = await window.api.githubSignIn()
@@ -168,7 +180,15 @@ export function RoomChatPanel(): React.JSX.Element {
                 </a>
                 :
               </p>
-              <div className="chat-device-code">{device.userCode}</div>
+              <button
+                className="chat-device-code"
+                type="button"
+                title="Copy code to clipboard"
+                onClick={() => void copyCode(device.userCode)}
+              >
+                {device.userCode}
+                <span className="chat-device-copy">{codeCopied ? 'Copied' : 'Copy'}</span>
+              </button>
               <p className="chat-empty-hint">Waiting for authorization…</p>
             </div>
           ) : (
