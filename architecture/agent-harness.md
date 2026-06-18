@@ -77,3 +77,4 @@ flowchart LR
 ### Testing
 
 - [packages/harness/src/tool/kanban-add.test.ts](../packages/harness/src/tool/kanban-add.test.ts) — covers the kanban_add tool implementation.
+- [packages/harness/src/plugin.test.ts](../packages/harness/src/plugin.test.ts) — covers the opencode plugin entry point and tool registration.

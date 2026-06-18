@@ -249,7 +249,9 @@ see "Browsing history" above.
 ## Source (this feature)
 
 - [packages/domain-git/src/git.ts](../packages/domain-git/src/git.ts) — `git` operations via safe `execFile` (status, staged diff, commit).
+- [packages/domain-git/src/index.ts](../packages/domain-git/src/index.ts) — domain-git package entry point.
 - [apps/desktop/src/renderer/src/components/GitPanel.tsx](../apps/desktop/src/renderer/src/components/GitPanel.tsx) — the Commit side-panel and its compose → block → review → commit state machine.
 - [packages/commit/src/synthesize.ts](../packages/commit/src/synthesize.ts) — synthesis prompt builder, reply parser, and provenance trailers.
+- [packages/commit/src/index.ts](../packages/commit/src/index.ts) — commit package entry point.
 - [packages/commit/src/triage.ts](../packages/commit/src/triage.ts) — triage prompt builder and sync-plan parser for commit-time drift resolution.
 - [packages/commit/src/triage.test.ts](../packages/commit/src/triage.test.ts) — covers the triage prompt builder and plan parser.

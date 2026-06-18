@@ -49,3 +49,4 @@ flowchart TD
 - [apps/desktop/src/renderer/src/coverage/run.ts](../apps/desktop/src/renderer/src/coverage/run.ts) — workspace walker, file filter, prompt formatter.
 - [packages/coverage/src/coverage.ts](../packages/coverage/src/coverage.ts) — the pure `analyzeCoverage` function and report types.
 - [packages/coverage/src/mermaid-lint.ts](../packages/coverage/src/mermaid-lint.ts) — mermaid block syntax linting used inside the analyzer.
+- [packages/coverage/src/index.ts](../packages/coverage/src/index.ts) — coverage package entry point.

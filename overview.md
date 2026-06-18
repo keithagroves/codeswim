@@ -74,6 +74,8 @@ Vitest tests live next to the modules they cover:
 - [apps/desktop/vitest.config.ts](apps/desktop/vitest.config.ts) — vitest config (jsdom for the renderer-side tests).
 - [eslint.config.mjs](eslint.config.mjs) — flat-config ESLint setup.
 - [apps/desktop/scripts/build-harness.mjs](apps/desktop/scripts/build-harness.mjs) — esbuild step that bundles `packages/harness/src/` into `out/harness/` so the sidecar can load it as a single `file://` plugin.
+- [apps/desktop/scripts/capture-demo.mjs](apps/desktop/scripts/capture-demo.mjs) — Playwright script that captures the demo GIF for the README.
+- [apps/desktop/scripts/smoke-electron.mjs](apps/desktop/scripts/smoke-electron.mjs) — smoke test that opens the Electron window and verifies the UI loads.
 - [scripts/probe-skills.mjs](scripts/probe-skills.mjs) — dev helper that prints the skill index the main process would see.
 - [scripts/smoke-link-folder.mjs](scripts/smoke-link-folder.mjs) — smoke test that drives `pick-folder` end-to-end.
 - [scripts/test-events.mjs](scripts/test-events.mjs) — dev helper for exercising the watcher's `file-changed` / `tree-changed` events.
@@ -87,7 +89,12 @@ Vitest tests live next to the modules they cover:
 - [CLAUDE.md](CLAUDE.md) — Claude Code project instructions (process layout, gotchas, "don'ts").
 - [todos.md](todos.md) — ongoing work notes.
 - [philosphy.md](philosphy.md) — design philosophy: two-panel loop, MDD principles, attention-based design.
+- [pitch/pitch-deck.md](pitch/pitch-deck.md) — pitch deck source (edit the markdown, then run `pitch/generate.js` to produce the .pptx).
 
 ## Example fixture
 
 - [examples/sample-architecture/overview.md](examples/sample-architecture/overview.md) — a hand-authored codeswim-style hierarchy ("Triage" billing app) used to develop and demo against. Self-contained: its own overview, architecture docs, and `src/` tree.
+
+## Pitch
+
+- [pitch/generate.js](pitch/generate.js) — script that builds `codeswim-pitch-deck.pptx` from the pitch deck markdown source.

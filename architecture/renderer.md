@@ -55,6 +55,7 @@ flowchart TD
     click Toasts call navigate("../apps/desktop/src/renderer/src/components/Toasts.tsx")
     click ScriptCtl call navigate("../apps/desktop/src/renderer/src/components/ScriptControls.tsx")
     click ErrBanner call navigate("../apps/desktop/src/renderer/src/components/MermaidErrorBanner.tsx")
+    click View call navigate("../architecture/renderer.md")
     click Prose call navigate("../apps/desktop/src/renderer/src/components/MarkdownProse.tsx")
 ```
 

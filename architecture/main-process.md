@@ -54,9 +54,14 @@ flowchart TD
 - [packages/domain-github/src/room.ts](../packages/domain-github/src/room.ts) — room identity management for chat.
 - [packages/domain-skills/src/source-explanations.ts](../packages/domain-skills/src/source-explanations.ts) — companion explanation path resolution and read.
 - [packages/domain-skills/src/agents-doc.ts](../packages/domain-skills/src/agents-doc.ts) — reads and writes AGENTS.md files (workspace scope and global ~/.agents/ scope).
+- [packages/domain-skills/src/index.ts](../packages/domain-skills/src/index.ts) — domain-skills package entry point.
+- [apps/desktop/src/main/github.ts](../apps/desktop/src/main/github.ts) — GitHub OAuth device-flow handler in the main process.
 - [packages/domain-github/src/github-auth.ts](../packages/domain-github/src/github-auth.ts) — GitHub OAuth device-flow authentication for the chat feature.
+- [packages/domain-github/src/index.ts](../packages/domain-github/src/index.ts) — domain-github package entry point.
+- [packages/domain-kanban/src/index.ts](../packages/domain-kanban/src/index.ts) — domain-kanban package entry point.
 - [packages/contract/src/chat.ts](../packages/contract/src/chat.ts) — shared chat types used by main and renderer.
 - [packages/contract/src/kanban.ts](../packages/contract/src/kanban.ts) — shared kanban types used by main and renderer.
+- [packages/contract/src/index.ts](../packages/contract/src/index.ts) — contract package entry point.
 
 ### Testing
 
