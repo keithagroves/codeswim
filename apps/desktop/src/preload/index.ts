@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import type { KanbanBoard } from '@codeswim/contract'
+import type { AppStateSnapshot, KanbanBoard } from '@codeswim/contract'
 
 export type {
   KanbanBoard,
@@ -409,7 +409,9 @@ const api = {
     const listener = (_event: Electron.IpcRendererEvent, id: string): void => cb(id)
     ipcRenderer.on('terminal:exit', listener)
     return () => ipcRenderer.removeListener('terminal:exit', listener)
-  }
+  },
+  publishAgentState: (rootPath: string, snapshot: AppStateSnapshot): Promise<void> =>
+    ipcRenderer.invoke('agent:publish-state', rootPath, snapshot)
 }
 
 if (process.contextIsolated) {

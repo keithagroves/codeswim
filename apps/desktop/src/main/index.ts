@@ -64,6 +64,7 @@ import {
   writeKanbanBoard
 } from '@codeswim/domain-kanban'
 import { readSourceExplanation, resolveWorkspaceFile } from '@codeswim/domain-skills'
+import type { AppStateSnapshot } from '@codeswim/contract'
 
 let mainWindow: BrowserWindow | null = null
 let watcher: FSWatcher | null = null
@@ -690,12 +691,8 @@ app.whenReady().then(async () => {
       sidecarStarting = startSidecar({
         workspaceRoot: rootPath,
         onStdout: (line) => mainWindow?.webContents.send('harness:log', { stream: 'stdout', line }),
-        onStderr: (line) => {
-          // TEMP diagnostic — echo sidecar stderr (incl. plugin console.error)
-          // to the terminal running `npm run dev`.
-          if (line.includes('[codeswim]')) console.log('SIDECAR:', line)
-          mainWindow?.webContents.send('harness:log', { stream: 'stderr', line })
-        },
+        onStderr: (line) =>
+          mainWindow?.webContents.send('harness:log', { stream: 'stderr', line }),
         onExit: (code, info) => {
           mainWindow?.webContents.send('harness:exit', {
             code,
@@ -905,14 +902,32 @@ app.whenReady().then(async () => {
     pullRequestDiff(rootPath, number)
   )
 
+  // The renderer publishes its UI state here so the harness `get_app_state`
+  // tool (a separate process) can read what the user is looking at. Best-effort
+  // and atomic (temp + rename) so the tool never reads a half-written file.
+  ipcMain.handle(
+    'agent:publish-state',
+    async (_event, rootPath: string, snapshot: AppStateSnapshot) => {
+      const dir = join(rootPath, '.codeswim')
+      await fs.mkdir(dir, { recursive: true })
+      const file = join(dir, 'agent-state.json')
+      const temp = `${file}.tmp`
+      await fs.writeFile(temp, JSON.stringify(snapshot, null, 2), 'utf-8')
+      await fs.rename(temp, file)
+    }
+  )
+
   ipcMain.handle('terminal:create', (_event, cwd?: string, command?: string) => {
     const id = String(++terminalIdCounter)
     const shell = process.env.SHELL || '/bin/zsh'
     // With no command we spawn a plain interactive shell. With one (e.g. the
-    // Claude Code tab passing `claude`) we launch it through a login shell so
-    // the user's PATH resolves the binary the way it does in their terminal;
-    // when the command exits the shell — and the pty — exit with it.
-    const args = command ? ['-l', '-c', command] : []
+    // Claude Code tab passing `claude`) we launch it through an interactive
+    // login shell (`-i`) so the user's PATH resolves the binary the way it does
+    // in their terminal. `-i` is what sources `.zshrc` — many users put their
+    // PATH overrides there (not `.zprofile`), so a login-only `-l -c` shell
+    // would miss them and pick up a different/older binary on PATH. When the
+    // command exits the shell — and the pty — exit with it.
+    const args = command ? ['-i', '-l', '-c', command] : []
     const ptyProcess = pty.spawn(shell, args, {
       name: 'xterm-256color',
       cols: 80,

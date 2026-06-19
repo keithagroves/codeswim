@@ -70,6 +70,33 @@
       "updatedAt": 1781417654839
     },
     {
+      "id": "card-018",
+      "title": "Add agent-controllable browser view",
+      "description": "A global toolbar icon that opens an in-app browser panel (like Codex's browser). The agent should be able to drive it — navigate, inspect, screenshot — so we can test the browser apps codeswim generates. Lives as a side panel or overlay, not an external window.",
+      "columnId": "ready",
+      "priority": "medium",
+      "labels": [
+        "feature",
+        "ui",
+        "agent-harness"
+      ],
+      "createdAt": 1781830000000,
+      "updatedAt": 1781792980401
+    },
+    {
+      "id": "card-016",
+      "title": "Create new files and folders in package explorer",
+      "description": "Add the ability to create new files and folders directly from the package explorer tree view — right-click or add-button context menu with inline naming.",
+      "columnId": "ready",
+      "priority": "medium",
+      "labels": [
+        "feature",
+        "ui"
+      ],
+      "createdAt": 1781739024422,
+      "updatedAt": 1781792643158
+    },
+    {
       "id": "card-003",
       "title": "Add light/dark mode toggle",
       "description": "The app should support both light mode and dark mode themes.",
@@ -220,19 +247,6 @@
       "updatedAt": 1781494456000
     },
     {
-      "id": "card-016",
-      "title": "Create new files and folders in package explorer",
-      "description": "Add the ability to create new files and folders directly from the package explorer tree view — right-click or add-button context menu with inline naming.",
-      "columnId": "backlog",
-      "priority": "medium",
-      "labels": [
-        "feature",
-        "ui"
-      ],
-      "createdAt": 1781739024422,
-      "updatedAt": 1781739024422
-    },
-    {
       "id": "card-017",
       "title": "Drag files into package explorer view",
       "description": "Support dragging files from the filesystem into the package explorer tree to add them to the project, with automatic placement in the correct folder.",
@@ -244,6 +258,47 @@
       ],
       "createdAt": 1781739024422,
       "updatedAt": 1781739024422
+    },
+    {
+      "id": "card-018",
+      "title": "Add agent-controllable browser view",
+      "description": "A global toolbar icon that opens an in-app browser panel (like Codex's browser). The agent should be able to drive it — navigate, inspect, screenshot — so we can test the browser apps codeswim generates. Lives as a side panel or overlay, not an external window.",
+      "columnId": "backlog",
+      "priority": "medium",
+      "labels": [
+        "feature",
+        "ui",
+        "agent-harness"
+      ],
+      "createdAt": 1781830000000,
+      "updatedAt": 1781830000000
+    },
+    {
+      "id": "card-019",
+      "title": "Surface every UI action through agent-controllable tools",
+      "description": "Audit all interactive UI surfaces (file tree, search, git panel, kanban, skills, settings, terminal, MCP tools, pull requests) and expose them as agent-callable tools or programmatic APIs so the agent can drive the full app without requiring manual clicks. Goal: the agent is a first-class user of every feature, not just the diagram editor.",
+      "columnId": "backlog",
+      "priority": "medium",
+      "labels": [
+        "agent-harness",
+        "feature"
+      ],
+      "createdAt": 1781830000000,
+      "updatedAt": 1781830000000
+    },
+    {
+      "id": "card-020",
+      "title": "Make git diffs readable for non-expert users",
+      "description": "The raw unified diff format (index line, ---/+++, @@ hunk headers) is confusing. Replace or augment the diff view with something more approachable — side-by-side rendering, syntax-highlighted lines, or a collapsed summary of changes per file. The DiffView.tsx component is where this lives.",
+      "columnId": "backlog",
+      "priority": "medium",
+      "labels": [
+        "ui",
+        "git"
+      ],
+      "linkedPath": "src/renderer/src/components/DiffView.tsx",
+      "createdAt": 1781840000000,
+      "updatedAt": 1781840000000
     }
   ]
 }

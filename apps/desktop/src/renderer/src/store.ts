@@ -154,6 +154,12 @@ export interface AppState {
   // Most recent unanswered question opencode raised for the current
   // session. Cleared on reply/reject or when switching sessions.
   pendingQuestion: PendingQuestion | null
+  // Activity-bar badge counts, fetched in the store independently of whether
+  // the matching panel is mounted (panels only mount while active). The git
+  // count is unique changed paths in the working tree; the PR count is open
+  // pull requests. Like VS Code's sidebar badges.
+  changeCount: number
+  openPrCount: number
 }
 
 export interface StoreApi {
@@ -226,6 +232,9 @@ export interface StoreApi {
   reviewPullRequest(pr: PullRequest): Promise<void>
   // Loads a pull request's full diff and shows it in the main panel.
   showPullRequestDiff(pr: PullRequest): Promise<void>
+  // Re-fetches the open-PR count behind the Pull requests activity-bar badge.
+  // Called after a merge so the badge updates without reopening the workspace.
+  refreshOpenPrCount(): Promise<void>
 }
 
 export const StoreContext = createContext<StoreApi | null>(null)

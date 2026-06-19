@@ -1,26 +1,31 @@
-import { describe, expect, it } from 'vitest'
-import { CodeswimPlugin, GATE_NOTE, VIEWING_META_KEY, viewingContext } from './plugin'
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
+import { CodeswimPlugin, GATE_NOTE } from './plugin'
 
 // The plugin factory doesn't read its input at construction time (it only wires
 // up the session gate and returns hooks), so a bare cast is enough to reach the
-// real hook handlers and exercise them directly.
+// real hook handlers and tools and exercise them directly.
 async function loadHooks() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return CodeswimPlugin({} as any)
 }
 
-describe('viewingContext', () => {
-  it('labels a markdown file as a diagram/doc', () => {
-    const out = viewingContext('architecture/auth.md')
-    expect(out).toContain('architecture/auth.md')
-    expect(out).toContain('diagram/doc')
-  })
+// execute() is typed as `ToolResult` (a string | object union); the codeswim
+// tools always return the object form, so narrow it for assertions.
+interface ToolOutput {
+  output?: string
+  metadata?: unknown
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const asOutput = (r: any): ToolOutput => r as ToolOutput
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const ctx = (worktree?: string): any => ({ worktree })
 
-  it('labels a non-markdown file as a source file', () => {
-    const out = viewingContext('src/server.ts')
-    expect(out).toContain('src/server.ts')
-    expect(out).toContain('source file')
-  })
+const tmpDirs: string[] = []
+afterEach(async () => {
+  await Promise.all(tmpDirs.splice(0).map((d) => rm(d, { recursive: true, force: true })))
 })
 
 describe('tool.definition hook', () => {
@@ -41,30 +46,58 @@ describe('tool.definition hook', () => {
   })
 })
 
-describe('chat.message hook', () => {
-  it('frames the part carrying the viewing metadata, leaving others alone', async () => {
+describe('open_file tool', () => {
+  it('emits an open_file action for a valid path', async () => {
     const hooks = await loadHooks()
-    const userPart = { type: 'text', text: 'fix this' }
-    const carrier = { type: 'text', text: '', metadata: { [VIEWING_META_KEY]: 'flows/login.md' } }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const output = { parts: [userPart, carrier] } as any
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await hooks['chat.message']!({} as any, output)
-
-    expect(userPart.text).toBe('fix this')
-    expect(carrier.text).toBe(viewingContext('flows/login.md'))
+    const result = asOutput(await hooks.tool!.open_file.execute({ file: 'flows/login.md' }, ctx()))
+    expect(result.metadata).toEqual({
+      codeswim_action: { type: 'open_file', path: 'flows/login.md' }
+    })
   })
 
-  it('ignores text parts without the metadata key', async () => {
+  it('rejects a traversal path without emitting an action', async () => {
     const hooks = await loadHooks()
-    const plain = { type: 'text', text: 'hello', metadata: { other: 'x' } }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const output = { parts: [plain] } as any
+    const result = asOutput(await hooks.tool!.open_file.execute({ file: '../secret' }, ctx()))
+    expect(result.output).toMatch(/error/)
+    expect(result.metadata).toBeUndefined()
+  })
+})
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await hooks['chat.message']!({} as any, output)
+describe('set_view tool', () => {
+  it('emits a set_view action', async () => {
+    const hooks = await loadHooks()
+    const result = asOutput(await hooks.tool!.set_view.execute({ view: 'kanban' }, ctx()))
+    expect(result.metadata).toEqual({ codeswim_action: { type: 'set_view', view: 'kanban' } })
+  })
+})
 
-    expect(plain.text).toBe('hello')
+describe('get_app_state tool', () => {
+  it('reads and formats the published snapshot', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'codeswim-state-'))
+    tmpDirs.push(dir)
+    await mkdir(path.join(dir, '.codeswim'), { recursive: true })
+    await writeFile(
+      path.join(dir, '.codeswim', 'agent-state.json'),
+      JSON.stringify({
+        workspaceView: 'navigator',
+        currentFile: 'overview.md',
+        currentDocumentPath: 'overview.md',
+        view: 'diagram',
+        breadcrumbs: [],
+        runningScript: null
+      })
+    )
+    const hooks = await loadHooks()
+    const result = asOutput(await hooks.tool!.get_app_state.execute({}, ctx(dir)))
+    expect(result.output).toContain('overview.md')
+    expect(result.output).toContain('diagram navigator')
+  })
+
+  it('degrades gracefully when no snapshot exists', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'codeswim-state-'))
+    tmpDirs.push(dir)
+    const hooks = await loadHooks()
+    const result = asOutput(await hooks.tool!.get_app_state.execute({}, ctx(dir)))
+    expect(result.output).toMatch(/No app state/)
   })
 })

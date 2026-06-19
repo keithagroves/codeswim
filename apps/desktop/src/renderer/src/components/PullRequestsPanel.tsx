@@ -23,14 +23,19 @@ function relTime(iso: string): string {
 }
 
 export function PullRequestsPanel(): React.JSX.Element {
-  const { state } = useStore()
+  const { state, refreshOpenPrCount } = useStore()
   const root = state.rootPath
   const [filter, setFilter] = useState<Filter>('open')
   const [result, setResult] = useState<PullRequestList | null>(null)
   const [loading, setLoading] = useState(false)
   const [nonce, setNonce] = useState(0)
 
-  const refresh = useCallback(() => setNonce((n) => n + 1), [])
+  // Re-fetch this panel's list and the activity-bar badge together, so a merge
+  // or manual refresh updates both.
+  const refresh = useCallback(() => {
+    setNonce((n) => n + 1)
+    void refreshOpenPrCount()
+  }, [refreshOpenPrCount])
 
   // Inlined as an async IIFE (rather than a synchronous setState in the effect
   // body) so the loading flag and result land after an await — keeps the effect

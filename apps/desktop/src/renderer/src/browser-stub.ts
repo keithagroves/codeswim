@@ -384,7 +384,8 @@ The companion document belongs at \`${documentPath}\`.
     terminalResize: () => {},
     terminalDestroy: () => {},
     onTerminalData: () => () => {},
-    onTerminalExit: () => () => {}
+    onTerminalExit: () => () => {},
+    publishAgentState: async () => {}
   }
 
   ;(window as unknown as { api: DiagramNavApi }).api = stub

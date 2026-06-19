@@ -188,6 +188,7 @@ export function ReadView({ source }: { source: string }): React.JSX.Element {
               source={parsed.prose}
               onNavigate={(target) => void navigateRelative(target)}
               headingOffset={0}
+              collapsibleSource
             />
           </div>
         </div>

@@ -19,6 +19,17 @@ interface MarkdownProseProps {
   // onNavigate); a token that doesn't resolve stays plain inline code. Used by
   // the chat panel so file paths the agent mentions are navigable.
   resolvePath?: (raw: string) => string | null
+  // When true, a top-level `## Source` section (the bare file manifest at the
+  // foot of an architecture doc) and its blocks fold into a collapsed
+  // <details> so the prose isn't buried under a wall of file links. ReadView
+  // opts in; chat/skills render everything inline.
+  collapsibleSource?: boolean
+}
+
+// A `## Source` (or `## Source (…)`) heading whose body is just the file
+// manifest — too much detail to show expanded by default.
+function isSourceHeading(block: MarkdownBlock): boolean {
+  return block.kind === 'heading' && block.level === 2 && /^source\b/i.test(block.text.trim())
 }
 
 function isFence(line: string): boolean {
@@ -180,44 +191,69 @@ export function MarkdownProse({
   source,
   onNavigate,
   headingOffset = 2,
-  resolvePath
+  resolvePath,
+  collapsibleSource = false
 }: MarkdownProseProps): React.JSX.Element {
   const blocks = parseBlocks(source)
 
-  return (
-    <div className="diagram-prose">
-      {blocks.map((block, index) => {
-        switch (block.kind) {
-          case 'heading': {
-            const Tag = headingTag(block.level, headingOffset)
-            return <Tag key={index}>{renderInline(block.text, onNavigate, resolvePath)}</Tag>
-          }
-          case 'paragraph':
-            return <p key={index}>{renderInline(block.text, onNavigate, resolvePath)}</p>
-          case 'unordered-list':
-            return (
-              <ul key={index}>
-                {block.items.map((item, itemIndex) => (
-                  <li key={itemIndex}>{renderInline(item, onNavigate, resolvePath)}</li>
-                ))}
-              </ul>
-            )
-          case 'ordered-list':
-            return (
-              <ol key={index}>
-                {block.items.map((item, itemIndex) => (
-                  <li key={itemIndex}>{renderInline(item, onNavigate, resolvePath)}</li>
-                ))}
-              </ol>
-            )
-          case 'code':
-            return (
-              <pre key={index}>
-                <code>{block.code}</code>
-              </pre>
-            )
-        }
-      })}
-    </div>
-  )
+  const renderBlock = (block: MarkdownBlock, index: number): ReactNode => {
+    switch (block.kind) {
+      case 'heading': {
+        const Tag = headingTag(block.level, headingOffset)
+        return <Tag key={index}>{renderInline(block.text, onNavigate, resolvePath)}</Tag>
+      }
+      case 'paragraph':
+        return <p key={index}>{renderInline(block.text, onNavigate, resolvePath)}</p>
+      case 'unordered-list':
+        return (
+          <ul key={index}>
+            {block.items.map((item, itemIndex) => (
+              <li key={itemIndex}>{renderInline(item, onNavigate, resolvePath)}</li>
+            ))}
+          </ul>
+        )
+      case 'ordered-list':
+        return (
+          <ol key={index}>
+            {block.items.map((item, itemIndex) => (
+              <li key={itemIndex}>{renderInline(item, onNavigate, resolvePath)}</li>
+            ))}
+          </ol>
+        )
+      case 'code':
+        return (
+          <pre key={index}>
+            <code>{block.code}</code>
+          </pre>
+        )
+    }
+  }
+
+  const rendered: ReactNode[] = []
+  for (let index = 0; index < blocks.length; index += 1) {
+    const block = blocks[index]
+    if (collapsibleSource && isSourceHeading(block)) {
+      // Fold this heading plus everything under it (including any level-3
+      // subsections) until the next level-≤2 heading into a collapsed details.
+      const body: ReactNode[] = []
+      let cursor = index + 1
+      while (cursor < blocks.length) {
+        const next = blocks[cursor]
+        if (next.kind === 'heading' && next.level <= 2) break
+        body.push(renderBlock(next, cursor))
+        cursor += 1
+      }
+      rendered.push(
+        <details key={index} className="prose-source-details">
+          <summary>{renderInline(block.text, onNavigate, resolvePath)}</summary>
+          {body}
+        </details>
+      )
+      index = cursor - 1
+      continue
+    }
+    rendered.push(renderBlock(block, index))
+  }
+
+  return <div className="diagram-prose">{rendered}</div>
 }

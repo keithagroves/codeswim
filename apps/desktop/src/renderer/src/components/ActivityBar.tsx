@@ -175,6 +175,14 @@ const ITEM_BY_KEY: Record<Section, Item> = {
   chat: { key: 'chat', label: 'Chat', icon: <PeopleIcon /> }
 }
 
+// VS Code-style count shown over a section's icon. Capped at 99+ so a runaway
+// count never blows out the 48px-wide bar.
+function badgeFor(key: Section, state: ReturnType<typeof useStore>['state']): number {
+  if (key === 'git') return state.changeCount
+  if (key === 'pulls') return state.openPrCount
+  return 0
+}
+
 export function ActivityBar(): React.JSX.Element {
   const { state, toggleActiveSection, setActivityOrder } = useStore()
   const active = state.activeSection
@@ -218,13 +226,14 @@ export function ActivityBar(): React.JSX.Element {
         if (!item) return null
         const isActive = active === key
         const isDropTarget = dropBeforeKey === key && dragKey !== key
+        const count = badgeFor(key, state)
         return (
           <button
             key={key}
             className={`activity-btn ${isActive ? 'is-active' : ''} ${isDropTarget ? 'is-drop-target' : ''}`}
             onClick={() => toggleActiveSection(key)}
-            title={`${item.label}${isActive ? ' (click to hide)' : ''}`}
-            aria-label={item.label}
+            title={`${item.label}${count > 0 ? ` (${count})` : ''}${isActive ? ' (click to hide)' : ''}`}
+            aria-label={count > 0 ? `${item.label}, ${count}` : item.label}
             aria-pressed={isActive}
             draggable
             onDragStart={(e) => onDragStart(e, key)}
@@ -234,6 +243,11 @@ export function ActivityBar(): React.JSX.Element {
             onDragEnd={onDragEnd}
           >
             {item.icon}
+            {count > 0 ? (
+              <span className="activity-badge" aria-hidden="true">
+                {count > 99 ? '99+' : count}
+              </span>
+            ) : null}
           </button>
         )
       })}

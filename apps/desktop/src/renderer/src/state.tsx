@@ -17,7 +17,7 @@ import {
 } from '@codeswim/commit'
 import { buildTriagePrompt, parseSyncPlan, type SyncPlan } from '@codeswim/commit'
 import { extname, parseTarget, relativeToRoot, resolveRelative, toPosix } from './path-utils'
-import type { PullRequest } from '@codeswim/contract'
+import type { AgentViewAction, AppStateSnapshot, PullRequest } from '@codeswim/contract'
 import {
   prDiffLabel,
   StoreContext,
@@ -84,7 +84,9 @@ const initialState: AppState = {
   sessions: [],
   currentSessionId: null,
   recents: [],
-  pendingQuestion: null
+  pendingQuestion: null,
+  changeCount: 0,
+  openPrCount: 0
 }
 
 type Action =
@@ -159,6 +161,8 @@ type Action =
   | { type: 'sessions-set'; sessions: SessionInfo[] }
   | { type: 'session-set-current'; sessionId: string | null; messages: ChatMessage[] }
   | { type: 'recents-set'; recents: string[] }
+  | { type: 'set-change-count'; count: number }
+  | { type: 'set-open-pr-count'; count: number }
 
 function fileViewFor(rel: string): 'diagram' | 'read' {
   return extname(rel) === '.md' ? 'diagram' : 'read'
@@ -378,6 +382,10 @@ function reducer(state: AppState, action: Action): AppState {
       }
     case 'recents-set':
       return { ...state, recents: action.recents }
+    case 'set-change-count':
+      return { ...state, changeCount: action.count }
+    case 'set-open-pr-count':
+      return { ...state, openPrCount: action.count }
     default:
       return state
   }
@@ -390,6 +398,12 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
   const agentRef = useRef<AgentClient | null>(null)
   const stateRef = useRef(state)
   stateRef.current = state
+  // Bridges agent-driven view actions (off the part stream) to the navigation
+  // thunks, which are defined later in this component. Assigned in an effect.
+  const viewActionRef = useRef<((action: AgentViewAction) => void) | null>(null)
+  // Tool parts stream several updates (running → completed); dispatch each
+  // action once, keyed by part id.
+  const handledActionsRef = useRef(new Set<string>())
 
   const toast = useCallback((message: string, kind: 'info' | 'error' = 'info') => {
     const id = toastSeq++
@@ -429,6 +443,17 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       agent.subscribeParts(({ sessionID, messageID, part }) => {
         if (sessionID !== stateRef.current.currentSessionId) return
         dispatch({ type: 'chat-upsert-part', messageID, part })
+
+        // The agent drives the navigator by returning `codeswim_action` metadata
+        // from open_file/set_view tools. Act on it once the call completes.
+        if (part.kind === 'tool' && part.status === 'completed') {
+          const action = (part.metadata as { codeswim_action?: AgentViewAction } | undefined)
+            ?.codeswim_action
+          if (action && !handledActionsRef.current.has(part.id)) {
+            handledActionsRef.current.add(part.id)
+            viewActionRef.current?.(action)
+          }
+        }
       })
 
       // Forward question events for the current session. We only ever
@@ -516,7 +541,7 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       dispatch({ type: 'chat-status', status: 'thinking' })
 
       try {
-        const reply = await agent.send(sessionId, trimmed, stateRef.current.currentFile)
+        const reply = await agent.send(sessionId, trimmed)
         for (const part of reply.parts) {
           dispatch({ type: 'chat-upsert-part', messageID: reply.messageID, part })
         }
@@ -868,6 +893,38 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
     }
   }, [state.rootPath])
 
+  // Activity-bar badge counts. Fetched here (not in the panels) so the numbers
+  // show even when the matching panel has never been opened — the panels only
+  // mount while active. The change count is unique changed paths across git's
+  // staged/unstaged/untracked split, matching GitPanel's flattened list.
+  const refreshChangeCount = useCallback(async () => {
+    const root = stateRef.current.rootPath
+    if (!root) return
+    try {
+      const s = await window.api.gitStatus(root)
+      const paths = new Set<string>()
+      if (s.isRepo) {
+        for (const f of s.unstaged) paths.add(f.path)
+        for (const f of s.staged) paths.add(f.path)
+        for (const p of s.untracked) paths.add(p)
+      }
+      dispatch({ type: 'set-change-count', count: paths.size })
+    } catch {
+      dispatch({ type: 'set-change-count', count: 0 })
+    }
+  }, [])
+
+  const refreshOpenPrCount = useCallback(async () => {
+    const root = stateRef.current.rootPath
+    if (!root) return
+    try {
+      const res = await window.api.listPullRequests(root, 'open')
+      dispatch({ type: 'set-open-pr-count', count: res.status === 'ok' ? res.pulls.length : 0 })
+    } catch {
+      dispatch({ type: 'set-open-pr-count', count: 0 })
+    }
+  }, [])
+
   const openWorkspace = useCallback(
     async (picked: string) => {
       // Drop any agent attached to a previous workspace; the new harness
@@ -1178,6 +1235,51 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
     []
   )
 
+  // Apply an agent-driven view action. Wired into the part-stream handler via a
+  // ref so that handler (created on connect) can reach these later thunks.
+  const applyViewAction = useCallback(
+    (action: AgentViewAction) => {
+      if (action.type === 'open_file') {
+        void navigateAbsolute(action.path, true)
+      } else {
+        setWorkspaceView(action.view)
+      }
+    },
+    [navigateAbsolute, setWorkspaceView]
+  )
+  useEffect(() => {
+    viewActionRef.current = applyViewAction
+  }, [applyViewAction])
+
+  // Publish a snapshot of what the user is looking at so the agent's
+  // get_app_state tool can read it. Debounced; best-effort.
+  useEffect(() => {
+    const { rootPath } = state
+    if (!rootPath) return
+    const snapshot: AppStateSnapshot = {
+      workspaceView: state.workspaceView,
+      currentFile: state.currentFile,
+      currentDocumentPath: state.currentDocumentPath,
+      view: state.view,
+      breadcrumbs: state.breadcrumbs,
+      runningScript: state.runningScript?.name ?? null
+    }
+    const id = setTimeout(() => {
+      void window.api.publishAgentState(rootPath, snapshot).catch(() => {
+        // best-effort; the tool degrades gracefully when the file is absent
+      })
+    }, 150)
+    return () => clearTimeout(id)
+  }, [
+    state.rootPath,
+    state.workspaceView,
+    state.currentFile,
+    state.currentDocumentPath,
+    state.view,
+    state.breadcrumbs,
+    state.runningScript
+  ])
+
   // Live reload: re-read the current file when it changes on disk.
   // Also refresh the runs list when its source files (package.json scripts
   // or .codeswim/runs.json) change, so the agent adding a run shows up in
@@ -1207,6 +1309,28 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
     })
     return unsub
   }, [refreshTree, state.rootPath])
+
+  // Keep the activity-bar badges current. Fetch both counts when the workspace
+  // opens, then re-count working-tree changes on any file or tree change
+  // (debounced — editors write in bursts). Open-PR count only changes from the
+  // server side, so it's fetched once here and again after a merge.
+  useEffect(() => {
+    if (!state.rootPath) return
+    void refreshChangeCount()
+    void refreshOpenPrCount()
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const scheduleCount = (): void => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => void refreshChangeCount(), 250)
+    }
+    const unsubFile = window.api.onFileChanged(scheduleCount)
+    const unsubTree = window.api.onTreeChanged(scheduleCount)
+    return () => {
+      if (timer) clearTimeout(timer)
+      unsubFile()
+      unsubTree()
+    }
+  }, [state.rootPath, refreshChangeCount, refreshOpenPrCount])
 
   // Stream script output / exit events from the main process into state.
   useEffect(() => {
@@ -1379,6 +1503,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       hideDiff,
       reviewPullRequest,
       showPullRequestDiff,
+      refreshOpenPrCount,
       setCurrentSkill,
       setToolsTab,
       answerQuestion,
@@ -1425,6 +1550,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       hideDiff,
       reviewPullRequest,
       showPullRequestDiff,
+      refreshOpenPrCount,
       setCurrentSkill,
       setToolsTab,
       answerQuestion,

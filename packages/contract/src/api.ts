@@ -204,6 +204,24 @@ export interface PullRequestDiff {
   message?: string
 }
 
+// Snapshot of the renderer's UI state, published to `.codeswim/agent-state.json`
+// so the harness `get_app_state` tool (a separate process) can read what the
+// user is currently looking at. Paths are POSIX-relative to the workspace root.
+export interface AppStateSnapshot {
+  workspaceView: 'navigator' | 'kanban'
+  currentFile: string | null
+  currentDocumentPath: string | null
+  view: 'diagram' | 'read' | 'output' | 'diff'
+  breadcrumbs: string[]
+  runningScript: string | null
+}
+
+// Actions the agent emits (as tool-result metadata under `codeswim_action`) to
+// drive the navigator. The renderer dispatches these off the live part stream.
+export type AgentViewAction =
+  | { type: 'open_file'; path: string }
+  | { type: 'set_view'; view: 'navigator' | 'kanban' }
+
 export interface DiagramNavApi {
   pickFolder(): Promise<string | null>
   readFile(absPath: string): Promise<string>
@@ -312,4 +330,7 @@ export interface DiagramNavApi {
   terminalDestroy(id: string): void
   onTerminalData(cb: (id: string, data: string) => void): () => void
   onTerminalExit(cb: (id: string) => void): () => void
+  // Publishes the renderer's current UI state so the agent's get_app_state tool
+  // can read what the user is looking at. Best-effort, fire-and-forget.
+  publishAgentState(rootPath: string, snapshot: AppStateSnapshot): Promise<void>
 }

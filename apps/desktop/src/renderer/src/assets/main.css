@@ -141,6 +141,26 @@ body {
   border-radius: 0 2px 2px 0;
 }
 
+/* VS Code-style count badge over a section icon (working-tree changes,
+ * open pull requests). Anchored to the icon's lower-right corner. */
+.activity-badge {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
+}
+
 /* Indicator line at the top of the button that's about to receive a
  * dragged sibling. */
 .activity-btn.is-drop-target::after {
@@ -1302,6 +1322,38 @@ body.is-mac .header {
 
 .diagram-prose li {
   margin: 4px 0;
+}
+
+/* Folded `## Source` manifest: collapsed by default so the file list doesn't
+   bury the prose. The summary reads as the section heading it replaced. */
+.diagram-prose .prose-source-details > summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.diagram-prose .prose-source-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.diagram-prose .prose-source-details > summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 0.8em;
+  color: var(--text-muted);
+  transition: transform 0.12s ease;
+}
+
+.diagram-prose .prose-source-details[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.diagram-prose .prose-source-details > *:not(summary) {
+  margin: 12px 0 0;
 }
 
 .diagram-prose a {

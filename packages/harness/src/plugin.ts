@@ -12,6 +12,12 @@ import path from 'node:path'
 import { tool, type Plugin } from '@opencode-ai/plugin'
 import { diagramEdit, validateContent, validatePath, type DiagramFs } from './tool/diagram-edit'
 import { kanbanAdd, validateKanbanAdd, type KanbanFs } from './tool/kanban-add'
+import {
+  AGENT_STATE_FILE,
+  formatAppState,
+  validateOpenFilePath,
+  validateViewName
+} from './tool/app-view'
 import { createSessionGate } from './session-gate'
 
 const CODE_MUTATING_TOOLS = new Set(['write', 'edit', 'apply_patch'])
@@ -26,18 +32,17 @@ export const GATE_NOTE =
   '`diagram_edit` call has happened in the current session — diagrams are the spec, ' +
   'so update the relevant diagram(s) first, then edit code.'
 
-// Renderer attaches the navigator's currently-open file as a synthetic text
-// part carrying this metadata key (empty text); the `chat.message` hook below
-// fills in the framing. Keeping the wording here versions it with the prompts.
-export const VIEWING_META_KEY = 'codeswim_viewing'
+const OPEN_FILE_DESCRIPTION = `Open a file in the user's diagram navigator so they can see it.
 
-export function viewingContext(path: string): string {
-  const kind = path.endsWith('.md') ? 'diagram/doc' : 'source file'
-  return (
-    `[codeswim] The user is currently viewing ${path} (${kind}) in the diagram navigator. ` +
-    `If their message refers to "this" file, diagram, or page, assume they mean ${path}.`
-  )
-}
+Use this to *show* the user something — a diagram, a doc, or a source file — rather than only describing it in chat. The path is a POSIX path relative to the workspace root. \`.md\` targets open as a diagram/doc; source files open with their companion explanation. This switches the app to the navigator tab automatically and is not gated.`
+
+const SET_VIEW_DESCRIPTION = `Switch the user's active workspace tab.
+
+\`navigator\` shows the diagram/file navigator; \`kanban\` shows the project board. Use it when the user asks to see the board or get back to diagrams. Not gated.`
+
+const GET_APP_STATE_DESCRIPTION = `Read what the user is currently looking at in the app.
+
+Returns the active tab (navigator vs. Kanban board), the open file and its view mode, the breadcrumb trail, and any running script. Call this when the user refers to "this" file/diagram/page or asks what's open. Not gated.`
 
 const DESCRIPTION = `Create or replace a mermaid diagram file (\`.md\`) in the workspace.
 
@@ -173,6 +178,55 @@ export const CodeswimPlugin: Plugin = async () => {
             }
           }
         }
+      }),
+
+      open_file: tool({
+        description: OPEN_FILE_DESCRIPTION,
+        args: {
+          file: tool.schema
+            .string()
+            .describe('POSIX path relative to workspace root to open in the navigator')
+        },
+        async execute(args) {
+          const err = validateOpenFilePath(args.file)
+          if (err) return { output: `error: ${err}` }
+          return {
+            output: `Opening ${args.file} in the navigator for the user.`,
+            metadata: { codeswim_action: { type: 'open_file', path: args.file } }
+          }
+        }
+      }),
+
+      set_view: tool({
+        description: SET_VIEW_DESCRIPTION,
+        args: {
+          view: tool.schema
+            .enum(['navigator', 'kanban'])
+            .describe('Which workspace tab to show')
+        },
+        async execute(args) {
+          const err = validateViewName(args.view)
+          if (err) return { output: `error: ${err}` }
+          return {
+            output: `Switching to the ${args.view === 'kanban' ? 'Kanban board' : 'diagram navigator'}.`,
+            metadata: { codeswim_action: { type: 'set_view', view: args.view } }
+          }
+        }
+      }),
+
+      get_app_state: tool({
+        description: GET_APP_STATE_DESCRIPTION,
+        args: {},
+        async execute(_args, ctx) {
+          const file = path.join(ctx.worktree, ...AGENT_STATE_FILE.split('/'))
+          let raw: string | null = null
+          try {
+            raw = await fs.readFile(file, 'utf-8')
+          } catch {
+            raw = null
+          }
+          return { output: formatAppState(raw) }
+        }
       })
     },
 
@@ -186,27 +240,6 @@ export const CodeswimPlugin: Plugin = async () => {
     // before attempting a blocked edit.
     'tool.definition': async (input, output) => {
       if (CODE_MUTATING_TOOLS.has(input.toolID)) output.description += GATE_NOTE
-    },
-
-    // Ground the agent in what the user is actually looking at in the navigator.
-    // The renderer passes the open file as a synthetic carrier part (see
-    // agent.ts); we fill its text with the framed context. Synthetic parts reach
-    // the model as user context but are hidden from the chat transcript.
-    'chat.message': async (_input, output) => {
-      // TEMP diagnostic — confirm the hook runs and what parts it receives.
-      // eslint-disable-next-line no-console
-      console.error(
-        '[codeswim] chat.message parts=',
-        output.parts.map((p) => ({
-          type: (p as { type?: string }).type,
-          meta: (p as { metadata?: unknown }).metadata
-        }))
-      )
-      for (const part of output.parts) {
-        if (part.type !== 'text') continue
-        const viewing = (part.metadata as Record<string, unknown> | undefined)?.[VIEWING_META_KEY]
-        if (typeof viewing === 'string' && viewing) part.text = viewingContext(viewing)
-      }
     }
   }
 }

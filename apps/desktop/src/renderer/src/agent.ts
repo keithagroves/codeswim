@@ -71,7 +71,7 @@ export interface AgentClient {
   listSessions(): Promise<SessionInfo[]>
   createSession(): Promise<SessionInfo>
   loadMessages(sessionId: string): Promise<LoadedMessage[]>
-  send(sessionId: string, text: string, viewing?: string | null): Promise<AgentSendResult>
+  send(sessionId: string, text: string): Promise<AgentSendResult>
   subscribeParts(handler: (update: PartUpdate) => void): () => void
   subscribeQuestions(handler: (event: QuestionEvent) => void): () => void
   listPendingQuestions(sessionId?: string): Promise<PendingQuestion[]>
@@ -314,21 +314,11 @@ export async function connectAgent(url: string, directory: string): Promise<Agen
       }))
     },
 
-    async send(sessionId: string, text: string, viewing?: string | null): Promise<AgentSendResult> {
-      // The navigator's open file rides along as a synthetic carrier part: empty
-      // text + a metadata key the harness `chat.message` hook reads and frames.
-      // synthetic = sent to the model as context, hidden from the chat transcript.
-      const parts: Array<Record<string, unknown>> = [{ type: 'text', text }]
-      if (viewing) {
-        parts.push({ type: 'text', text: '', synthetic: true, metadata: { codeswim_viewing: viewing } })
-      }
-      // TEMP diagnostic — confirm the renderer is attaching the viewing carrier.
-      // eslint-disable-next-line no-console
-      console.log('[codeswim] send viewing=', viewing, 'parts=', parts.length)
+    async send(sessionId: string, text: string): Promise<AgentSendResult> {
       const result = await client.session.prompt({
         path: { id: sessionId },
         query: { directory },
-        body: { parts: parts as never },
+        body: { parts: [{ type: 'text', text }] as never },
         throwOnError: true,
         signal: abort.signal
       })
