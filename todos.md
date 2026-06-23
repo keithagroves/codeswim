@@ -1,6 +1,3 @@
-- the ai should be the main way you add cards to your kanban board.
-
-
 - I should have a light mode and a dark mode.
 
 
@@ -25,14 +22,7 @@
 
 
 
-- Agent.md should be viewable in the skills menu.
-
 - We should stop using a system.txt etc and use an Agent.md probably. I need to ask some questions before updateing this
 
 
 FUTURE FEATURES:
-
-- add ability to chat with other teammates. The chat will be based on the github url and you can talk to folks there. The repo owner can define the chat structure in a file and also decide who's an admin or banned just by managing a file. so it's like the discord channel of whoever the github repo owner is.
-We'll need to create a websocket server somwhere.
-
-- add a kanban board for tracking project progress.
