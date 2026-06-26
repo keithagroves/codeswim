@@ -100,6 +100,9 @@ export interface AppState {
   currentDocumentPath: string | null
   sourceExplanationExists: boolean
   breadcrumbs: string[]
+  // Browser-style forward history. Populated when the user goes Back; cleared
+  // on any fresh navigation. Lets the Forward button retrace.
+  forward: string[]
   view: View
   fileContents: string | null
   loading: boolean
@@ -169,6 +172,9 @@ export interface StoreApi {
   navigateAbsolute(relativeToRoot: string, pushBreadcrumb: boolean): Promise<void>
   inspectFile(relativeToRoot: string): Promise<void>
   popTo(index: number): Promise<void>
+  // Browser-style single-step history navigation.
+  goBack(): Promise<void>
+  goForward(): Promise<void>
   toast(message: string, kind?: 'info' | 'error'): void
   reload(): Promise<void>
   runScript(entry: RunEntry): Promise<void>

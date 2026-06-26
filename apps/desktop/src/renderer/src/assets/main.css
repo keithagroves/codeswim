@@ -75,6 +75,26 @@ body {
   flex-direction: column;
   height: 100%;
   width: 100%;
+  position: relative;
+}
+
+/* Window-wide bottom-up sheen: a cool blue wash at the very bottom that fades
+ * to nothing partway up, so the UI glows lighter toward the bottom and settles
+ * into the base dark above. Click-through; sits above the opaque panels so the
+ * gradient stays continuous across the sidebar/content seams. */
+.app::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  background: linear-gradient(
+    to top,
+    rgba(110, 155, 255, 0.07) 0%,
+    rgba(110, 155, 255, 0.035) 12%,
+    rgba(110, 155, 255, 0.015) 28%,
+    transparent 42%
+  );
 }
 
 .main-row {
@@ -741,6 +761,21 @@ body.is-mac .header {
   background: var(--bg);
   flex-shrink: 0;
   min-height: 28px;
+}
+
+.path-bar-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+/* Compact the Back/Home buttons so the path-bar stays a slim single row. */
+.path-bar-nav .icon-btn {
+  width: 24px;
+  height: 24px;
+  font-size: 14px;
 }
 
 .path-bar .breadcrumbs {

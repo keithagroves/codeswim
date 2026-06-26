@@ -60,6 +60,7 @@ const initialState: AppState = {
   currentDocumentPath: null,
   sourceExplanationExists: true,
   breadcrumbs: [],
+  forward: [],
   view: 'diagram',
   fileContents: null,
   loading: false,
@@ -107,6 +108,16 @@ type Action =
       type: 'pop-to'
       index: number
       file: string
+      contents: string
+      view: 'diagram' | 'read'
+      documentPath: string
+      sourceExplanationExists: boolean
+    }
+  | {
+      type: 'nav-back' | 'nav-forward'
+      file: string
+      // The file being left behind, moved onto the opposite stack.
+      previous: string | null
       contents: string
       view: 'diagram' | 'read'
       documentPath: string
@@ -187,6 +198,8 @@ function reducer(state: AppState, action: Action): AppState {
         fileContents: action.contents,
         view: action.view,
         breadcrumbs,
+        // A fresh navigation branches the history — drop any forward trail.
+        forward: [],
         loading: false,
         prevView: null,
         workspaceView: action.revealNavigator ? 'navigator' : state.workspaceView
@@ -202,6 +215,37 @@ function reducer(state: AppState, action: Action): AppState {
         fileContents: action.contents,
         view: action.view,
         breadcrumbs,
+        // Jumping to an arbitrary crumb isn't a single Back step; reset forward.
+        forward: [],
+        loading: false,
+        prevView: null,
+        workspaceView: 'navigator'
+      }
+    }
+    case 'nav-back':
+    case 'nav-forward': {
+      // Back pops the breadcrumb stack and pushes the file we're leaving onto
+      // forward; Forward does the mirror. `previous` is that left-behind file.
+      const back = action.type === 'nav-back'
+      const breadcrumbs = back
+        ? state.breadcrumbs.slice(0, -1)
+        : action.previous
+          ? [...state.breadcrumbs, action.previous]
+          : state.breadcrumbs
+      const forward = back
+        ? action.previous
+          ? [...state.forward, action.previous]
+          : state.forward
+        : state.forward.slice(0, -1)
+      return {
+        ...state,
+        currentFile: action.file,
+        currentDocumentPath: action.documentPath,
+        sourceExplanationExists: action.sourceExplanationExists,
+        fileContents: action.contents,
+        view: action.view,
+        breadcrumbs,
+        forward,
         loading: false,
         prevView: null,
         workspaceView: 'navigator'
@@ -855,6 +899,44 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
     [readFileSafe, state.rootPath, state.breadcrumbs]
   )
 
+  const goBack = useCallback(async () => {
+    if (!state.rootPath) return
+    const stack = state.breadcrumbs
+    if (stack.length === 0) return
+    const target = stack[stack.length - 1]
+    const previous = state.currentFile
+    const result = await readFileSafe(state.rootPath, target)
+    if (!result) return
+    dispatch({
+      type: 'nav-back',
+      file: target,
+      previous,
+      contents: result.contents,
+      view: result.view,
+      documentPath: result.documentPath,
+      sourceExplanationExists: result.sourceExplanationExists
+    })
+  }, [readFileSafe, state.rootPath, state.breadcrumbs, state.currentFile])
+
+  const goForward = useCallback(async () => {
+    if (!state.rootPath) return
+    const stack = state.forward
+    if (stack.length === 0) return
+    const target = stack[stack.length - 1]
+    const previous = state.currentFile
+    const result = await readFileSafe(state.rootPath, target)
+    if (!result) return
+    dispatch({
+      type: 'nav-forward',
+      file: target,
+      previous,
+      contents: result.contents,
+      view: result.view,
+      documentPath: result.documentPath,
+      sourceExplanationExists: result.sourceExplanationExists
+    })
+  }, [readFileSafe, state.rootPath, state.forward, state.currentFile])
+
   const findEntryFile = useCallback(async (rootPath: string): Promise<string | null> => {
     const files = await window.api.listMarkdown(rootPath)
     if (files.length === 0) return null
@@ -1472,6 +1554,8 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       navigateAbsolute,
       inspectFile,
       popTo,
+      goBack,
+      goForward,
       toast,
       reload,
       runScript,
@@ -1519,6 +1603,8 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       navigateAbsolute,
       inspectFile,
       popTo,
+      goBack,
+      goForward,
       toast,
       reload,
       runScript,

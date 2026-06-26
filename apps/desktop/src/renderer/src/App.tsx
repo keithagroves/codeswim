@@ -117,14 +117,11 @@ function DragStrip(): React.JSX.Element {
 }
 
 function Header(): React.JSX.Element {
-  const { state, popTo, showOutput, navigateAbsolute, setWorkspaceView, openCurrentFileInEditor } =
-    useStore()
+  const { state, showOutput, setWorkspaceView, openCurrentFileInEditor } = useStore()
   const inTools = state.activeSection === 'tools'
   const inNavigator = !inTools && state.workspaceView === 'navigator'
-  const canGoBack = inNavigator && state.breadcrumbs.length > 0
   const running = state.runningScript
   const chip = running !== null && state.view !== 'output' ? running : null
-  const atOverview = state.currentFile === 'overview.md'
   const rootName = state.rootPath?.split('/').filter(Boolean).at(-1) ?? 'Workspace'
 
   return (
@@ -148,31 +145,8 @@ function Header(): React.JSX.Element {
           Plan
         </button>
       </div>
-      {inTools ? (
+      {inTools || inNavigator ? (
         <div className="header-spacer" />
-      ) : inNavigator ? (
-        <>
-          {canGoBack ? (
-            <button
-              className="icon-btn"
-              onClick={() => void popTo(state.breadcrumbs.length - 1)}
-              title="Back"
-              aria-label="Back"
-            >
-              ←
-            </button>
-          ) : null}
-          <button
-            className="icon-btn"
-            onClick={() => void navigateAbsolute('overview.md', true)}
-            title="Overview"
-            aria-label="Overview"
-            disabled={atOverview}
-          >
-            ⌂
-          </button>
-          <div className="header-spacer" />
-        </>
       ) : (
         <div className="workspace-heading">{rootName}</div>
       )}
@@ -196,6 +170,46 @@ function Header(): React.JSX.Element {
           <ScriptControls />
         </div>
       )}
+    </div>
+  )
+}
+
+// Browser-style Back / Forward / Home controls. These live in the path-bar
+// (one row below the Explore/Plan tabs) rather than in the header itself.
+function NavControls(): React.JSX.Element {
+  const { state, goBack, goForward, navigateAbsolute } = useStore()
+  const canGoBack = state.breadcrumbs.length > 0
+  const canGoForward = state.forward.length > 0
+  const atOverview = state.currentFile === 'overview.md'
+  return (
+    <div className="path-bar-nav">
+      <button
+        className="icon-btn"
+        onClick={() => void goBack()}
+        title="Back"
+        aria-label="Back"
+        disabled={!canGoBack}
+      >
+        ←
+      </button>
+      <button
+        className="icon-btn"
+        onClick={() => void goForward()}
+        title="Forward"
+        aria-label="Forward"
+        disabled={!canGoForward}
+      >
+        →
+      </button>
+      <button
+        className="icon-btn"
+        onClick={() => void navigateAbsolute('overview.md', true)}
+        title="Overview"
+        aria-label="Overview"
+        disabled={atOverview}
+      >
+        ⌂
+      </button>
     </div>
   )
 }
@@ -358,6 +372,7 @@ function Shell(): React.JSX.Element {
           state.view !== 'diff' &&
           state.currentFile ? (
             <div className="path-bar">
+              <NavControls />
               <Breadcrumbs />
             </div>
           ) : null}
