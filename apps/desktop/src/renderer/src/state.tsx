@@ -342,7 +342,10 @@ function reducer(state: AppState, action: Action): AppState {
       const view = transient
         ? (state.prevView ?? (state.currentFile ? fileViewFor(state.currentFile) : 'diagram'))
         : state.view
-      return { ...state, workspaceView: action.view, view, prevView: null, diffPath: null }
+      // The tools (skills/mcp) surface overrides the main panel; switching to a
+      // workspace view has to leave it so the navigator/board actually shows.
+      const activeSection = state.activeSection === 'tools' ? null : state.activeSection
+      return { ...state, workspaceView: action.view, view, prevView: null, diffPath: null, activeSection }
     }
     case 'chat-status':
       return { ...state, chatStatus: action.status, chatError: action.error ?? null }

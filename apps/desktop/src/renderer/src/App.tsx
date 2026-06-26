@@ -119,7 +119,8 @@ function DragStrip(): React.JSX.Element {
 function Header(): React.JSX.Element {
   const { state, popTo, showOutput, navigateAbsolute, setWorkspaceView, openCurrentFileInEditor } =
     useStore()
-  const inNavigator = state.workspaceView === 'navigator'
+  const inTools = state.activeSection === 'tools'
+  const inNavigator = !inTools && state.workspaceView === 'navigator'
   const canGoBack = inNavigator && state.breadcrumbs.length > 0
   const running = state.runningScript
   const chip = running !== null && state.view !== 'output' ? running : null
@@ -130,24 +131,26 @@ function Header(): React.JSX.Element {
     <div className="header">
       <div className="workspace-view-switch" role="tablist" aria-label="Workspace view">
         <button
-          className={`tab-diagram ${state.workspaceView === 'navigator' ? 'is-active' : ''}`}
+          className={`tab-diagram ${inNavigator ? 'is-active' : ''}`}
           role="tab"
-          aria-selected={state.workspaceView === 'navigator'}
+          aria-selected={inNavigator}
           disabled={!state.currentFile}
           onClick={() => setWorkspaceView('navigator')}
         >
           Explore
         </button>
         <button
-          className={`tab-board ${state.workspaceView === 'kanban' ? 'is-active' : ''}`}
+          className={`tab-board ${!inTools && state.workspaceView === 'kanban' ? 'is-active' : ''}`}
           role="tab"
-          aria-selected={state.workspaceView === 'kanban'}
+          aria-selected={!inTools && state.workspaceView === 'kanban'}
           onClick={() => setWorkspaceView('kanban')}
         >
           Plan
         </button>
       </div>
-      {inNavigator ? (
+      {inTools ? (
+        <div className="header-spacer" />
+      ) : inNavigator ? (
         <>
           {canGoBack ? (
             <button
@@ -173,24 +176,26 @@ function Header(): React.JSX.Element {
       ) : (
         <div className="workspace-heading">{rootName}</div>
       )}
-      <div className="header-actions">
-        {inNavigator && state.currentFile ? (
-          <button className="secondary" onClick={() => void openCurrentFileInEditor()}>
-            Open in editor
-          </button>
-        ) : null}
-        {chip ? (
-          <button
-            className={`run-chip ${chip.status === 'running' ? 'is-running' : 'is-exited'}`}
-            onClick={showOutput}
-            title="Show script output"
-          >
-            <span className={`status-dot ${chip.status === 'running' ? 'running' : 'exited'}`} />
-            {chip.name}
-          </button>
-        ) : null}
-        <ScriptControls />
-      </div>
+      {inTools ? null : (
+        <div className="header-actions">
+          {inNavigator && state.currentFile ? (
+            <button className="secondary" onClick={() => void openCurrentFileInEditor()}>
+              Open in editor
+            </button>
+          ) : null}
+          {chip ? (
+            <button
+              className={`run-chip ${chip.status === 'running' ? 'is-running' : 'is-exited'}`}
+              onClick={showOutput}
+              title="Show script output"
+            >
+              <span className={`status-dot ${chip.status === 'running' ? 'running' : 'exited'}`} />
+              {chip.name}
+            </button>
+          ) : null}
+          <ScriptControls />
+        </div>
+      )}
     </div>
   )
 }
@@ -346,7 +351,7 @@ function Shell(): React.JSX.Element {
         <ActivityBar />
         <SidePanel />
         <div className="main-column">
-          {state.activeSection === 'tools' ? <DragStrip /> : <Header />}
+          <Header />
           {state.activeSection !== 'tools' &&
           state.workspaceView === 'navigator' &&
           state.view !== 'output' &&
