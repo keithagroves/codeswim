@@ -494,6 +494,61 @@ body.is-resizing {
   flex-shrink: 0;
 }
 
+/* File-tree row icons: a rotating chevron, then a folder/file glyph. */
+.tree-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.12s ease;
+}
+
+.tree-chevron.is-open {
+  transform: rotate(90deg);
+}
+
+/* Files have no chevron; reserve the same width so glyphs stay aligned. */
+.tree-chevron-spacer {
+  visibility: hidden;
+}
+
+.tree-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin: 0 6px 0 2px;
+  flex-shrink: 0;
+}
+
+/* Muted blue folders, like most editor file icon themes. */
+.tree-folder {
+  color: #7a9bd4;
+}
+
+.tree-folder.is-open {
+  color: #9bb6e6;
+}
+
+.tree-file {
+  color: var(--text-muted);
+}
+
+/* Markdown docs — the app's primary content — pick up the accent. */
+.tree-file.is-md {
+  color: var(--accent);
+}
+
+/* On the selected row, let the row's accent color win for legibility. */
+.tree-row.current .tree-chevron,
+.tree-row.current .tree-glyph {
+  color: inherit;
+}
+
 .tree-name {
   overflow: hidden;
   text-overflow: ellipsis;

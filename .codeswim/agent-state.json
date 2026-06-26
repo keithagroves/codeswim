@@ -1,8 +1,13 @@
 {
   "workspaceView": "navigator",
-  "currentFile": "overview.md",
-  "currentDocumentPath": "overview.md",
-  "view": "diagram",
-  "breadcrumbs": [],
+  "currentFile": ".env",
+  "currentDocumentPath": ".codeswim/explanations/.env.md",
+  "view": "read",
+  "breadcrumbs": [
+    "overview.md",
+    ".gitignore",
+    ".env",
+    "eslint.config.mjs"
+  ],
   "runningScript": null
 }
