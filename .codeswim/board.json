@@ -97,18 +97,6 @@
       "updatedAt": 1781792643158
     },
     {
-      "id": "card-003",
-      "title": "Add light/dark mode toggle",
-      "description": "The app should support both light mode and dark mode themes.",
-      "columnId": "backlog",
-      "priority": "medium",
-      "labels": [
-        "ui"
-      ],
-      "createdAt": 1749830000000,
-      "updatedAt": 1749830000000
-    },
-    {
       "id": "card-004",
       "title": "Move 'Open in editor' from header to file viewer",
       "description": "The open-in-editor button shouldn't be in the app header; it should be a button in the viewer for the file.",
@@ -260,20 +248,6 @@
       "updatedAt": 1781739024422
     },
     {
-      "id": "card-018",
-      "title": "Add agent-controllable browser view",
-      "description": "A global toolbar icon that opens an in-app browser panel (like Codex's browser). The agent should be able to drive it — navigate, inspect, screenshot — so we can test the browser apps codeswim generates. Lives as a side panel or overlay, not an external window.",
-      "columnId": "backlog",
-      "priority": "medium",
-      "labels": [
-        "feature",
-        "ui",
-        "agent-harness"
-      ],
-      "createdAt": 1781830000000,
-      "updatedAt": 1781830000000
-    },
-    {
       "id": "card-019",
       "title": "Surface every UI action through agent-controllable tools",
       "description": "Audit all interactive UI surfaces (file tree, search, git panel, kanban, skills, settings, terminal, MCP tools, pull requests) and expose them as agent-callable tools or programmatic APIs so the agent can drive the full app without requiring manual clicks. Goal: the agent is a first-class user of every feature, not just the diagram editor.",
@@ -299,6 +273,28 @@
       "linkedPath": "src/renderer/src/components/DiffView.tsx",
       "createdAt": 1781840000000,
       "updatedAt": 1781840000000
+    },
+    {
+      "id": "card-003",
+      "title": "Add light/dark mode toggle",
+      "description": "The app should support both light mode and dark mode themes.",
+      "columnId": "backlog",
+      "priority": "medium",
+      "labels": [
+        "ui"
+      ],
+      "createdAt": 1749830000000,
+      "updatedAt": 1782492537453
+    },
+    {
+      "id": "feb97d2f-b192-4a0f-8d93-364318dab166",
+      "title": "More skills information",
+      "description": "Show how many times a skill has been invoked.",
+      "columnId": "backlog",
+      "priority": "medium",
+      "labels": [],
+      "createdAt": 1782493183185,
+      "updatedAt": 1782493183185
     }
   ]
 }

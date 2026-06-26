@@ -33,6 +33,8 @@ flowchart LR
     Tool --> ToolDesc[tool/diagram-edit.txt]
     Kanban --> KanbanImpl[tool/kanban-add.ts]
     Kanban --> KanbanBoard[(.codeswim/board.json)]
+    Plugin --> AppTools[open_file / set_view / get_app_state]
+    AppTools --> AppViewImpl[tool/app-view.ts]
 
     click User call navigate("../overview.md")
     click Chat call navigate("../apps/desktop/src/renderer/src/components/ChatPanel.tsx")
@@ -51,6 +53,8 @@ flowchart LR
     click KanbanImpl call navigate("../packages/harness/src/tool/kanban-add.ts")
     click KanbanBoard call navigate("../packages/domain-kanban/src/kanban.ts")
     click Mutating call navigate("../overview.md")
+    click AppTools call navigate("../packages/harness/src/plugin.ts")
+    click AppViewImpl call navigate("../packages/harness/src/tool/app-view.ts")
 ```
 
 ## Notes
@@ -69,6 +73,7 @@ flowchart LR
 - `packages/harness/src/tool/diagram-edit.txt` — tool description shown to the model.
 - [packages/harness/src/tool/kanban-add.ts](../packages/harness/src/tool/kanban-add.ts) — pure implementation of the `kanban_add` tool (reads/normalizes `.codeswim/board.json`, appends a card, writes it back). Reuses the shared kanban normalizer so the agent and UI write identical board files.
 - `packages/harness/src/tool/kanban-add.txt` — `kanban_add` tool description (reference; the live description is inlined in `plugin.ts`).
+- [packages/harness/src/tool/app-view.ts](../packages/harness/src/tool/app-view.ts) — shared validation and state formatting for `open_file`, `set_view`, and `get_app_state` tools.
 - `packages/harness/src/prompt/system.txt` — system prompt that teaches the diagrams-first loop.
 - [packages/harness/src/prompt/mdd-fixes.md](../packages/harness/src/prompt/mdd-fixes.md) — additional MDD repair guidance the agent loads when fixing drift.
 - [apps/desktop/src/renderer/src/agent.ts](../apps/desktop/src/renderer/src/agent.ts) — renderer-side session-aware SDK wrapper.
@@ -77,4 +82,5 @@ flowchart LR
 ### Testing
 
 - [packages/harness/src/tool/kanban-add.test.ts](../packages/harness/src/tool/kanban-add.test.ts) — covers the kanban_add tool implementation.
+- [packages/harness/src/tool/app-view.test.ts](../packages/harness/src/tool/app-view.test.ts) — covers path/view validation and app state formatting.
 - [packages/harness/src/plugin.test.ts](../packages/harness/src/plugin.test.ts) — covers the opencode plugin entry point and tool registration.
