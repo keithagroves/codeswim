@@ -1,13 +1,11 @@
 {
   "workspaceView": "navigator",
-  "currentFile": ".env",
-  "currentDocumentPath": ".codeswim/explanations/.env.md",
+  "currentFile": "philosphy.md",
+  "currentDocumentPath": "philosphy.md",
   "view": "read",
   "breadcrumbs": [
     "overview.md",
-    ".gitignore",
-    ".env",
-    "eslint.config.mjs"
+    "package.json"
   ],
   "runningScript": null
 }
