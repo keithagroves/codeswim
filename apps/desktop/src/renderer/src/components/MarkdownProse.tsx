@@ -28,7 +28,9 @@ interface MarkdownProseProps {
 
 // A `## Source` (or `## Source (…)`) heading whose body is just the file
 // manifest — too much detail to show expanded by default.
-function isSourceHeading(block: MarkdownBlock): boolean {
+function isSourceHeading(
+  block: MarkdownBlock
+): block is Extract<MarkdownBlock, { kind: 'heading' }> {
   return block.kind === 'heading' && block.level === 2 && /^source\b/i.test(block.text.trim())
 }
 
@@ -184,7 +186,7 @@ function renderInline(
 
 function headingTag(level: number, offset: number): 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' {
   const target = Math.max(1, Math.min(6, level + offset))
-  return (`h${target}`) as 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
+  return `h${target}` as 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
 }
 
 export function MarkdownProse({
