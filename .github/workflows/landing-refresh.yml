@@ -1,0 +1,21 @@
+name: Refresh landing page
+
+# When a release is published (drafts don't count), rebuild the landing page
+# so its baked download links point at the new assets. Needs the
+# LANDING_DISPATCH_TOKEN secret: a fine-grained PAT with Contents read/write
+# on keithagroves/codeswim-landing, since the default GITHUB_TOKEN cannot
+# dispatch to other repos.
+on:
+  release:
+    types: [published]
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger landing deploy
+        env:
+          GH_TOKEN: ${{ secrets.LANDING_DISPATCH_TOKEN }}
+        run: |
+          gh api repos/keithagroves/codeswim-landing/dispatches \
+            -f event_type=codeswim-release
