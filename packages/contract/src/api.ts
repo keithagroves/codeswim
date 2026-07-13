@@ -34,6 +34,19 @@ export interface HarnessExitPayload {
   stderrTail: string[]
 }
 
+// App auto-update lifecycle, VS Code-style: the main process checks and
+// downloads in the background; the renderer only shows a "restart to update"
+// affordance once a new version is ready to install.
+export interface UpdateStatusPayload {
+  state: 'checking' | 'available' | 'downloading' | 'ready' | 'none' | 'error'
+  // Version the update refers to ('available' | 'downloading' | 'ready').
+  version?: string
+  // Percent 0-100 while 'downloading'.
+  percent?: number
+  // Human-readable message when 'error'.
+  message?: string
+}
+
 export interface NewProjectResult {
   path: string
   created: boolean
@@ -333,4 +346,8 @@ export interface DiagramNavApi {
   // Publishes the renderer's current UI state so the agent's get_app_state tool
   // can read what the user is looking at. Best-effort, fire-and-forget.
   publishAgentState(rootPath: string, snapshot: AppStateSnapshot): Promise<void>
+  // App auto-update: main checks + downloads on its own; the renderer listens
+  // for status and calls installUpdate to restart into the new version.
+  onUpdateStatus(cb: (payload: UpdateStatusPayload) => void): () => void
+  installUpdate(): Promise<void>
 }

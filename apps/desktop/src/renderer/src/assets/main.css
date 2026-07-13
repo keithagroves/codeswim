@@ -1862,6 +1862,34 @@ body.is-mac .header {
   background: #5a5a64;
 }
 
+/* "Restart to update" pill — same shape as .run-chip, accent-tinted so a
+   ready update is noticeable without shouting. */
+.update-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: inherit;
+  font-size: 12px;
+  background: var(--bg);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 3px 10px 3px 8px;
+  cursor: pointer;
+}
+
+.update-chip:hover {
+  background: var(--bg-muted);
+}
+
+.update-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
 .status-dot.running {
   background: var(--success);
   box-shadow: 0 0 0 0 rgba(62, 207, 142, 0.5);

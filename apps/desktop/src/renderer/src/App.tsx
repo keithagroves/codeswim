@@ -12,6 +12,7 @@ import { McpView } from './components/McpView'
 import { PullRequestsPanel } from './components/PullRequestsPanel'
 import { ReadView } from './components/ReadView'
 import { ScriptControls } from './components/ScriptControls'
+import { UpdateButton } from './components/UpdateButton'
 import { ScriptOutput } from './components/ScriptOutput'
 import { SearchPanel } from './components/SearchPanel'
 import { SkillsPanel } from './components/SkillsPanel'
@@ -161,6 +162,7 @@ function Header(): React.JSX.Element {
       )}
       {inTools ? null : (
         <div className="header-actions">
+          <UpdateButton />
           {inNavigator && state.currentFile ? (
             <button className="secondary" onClick={() => void openCurrentFileInEditor()}>
               Open in editor

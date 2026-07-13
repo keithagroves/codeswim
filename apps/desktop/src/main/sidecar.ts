@@ -10,6 +10,7 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { app } from 'electron'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { buildSidecarEnv } from './sidecar-env'
 
 export interface SidecarHandle {
   url: URL
@@ -103,29 +104,13 @@ export async function startSidecar(opts: StartOptions): Promise<SidecarHandle> {
     permission: 'allow'
   }
 
-  // Isolate opencode's on-disk state under Electron's userData dir. The XDG
-  // defaults (~/.local/share etc.) fail hard when ~/.local is root-owned — a
-  // common leftover from past sudo installs — and isolation also keeps the
-  // app's opencode state (auth, sessions) separate from any opencode CLI the
-  // user has installed.
-  const xdgRoot = path.join(app.getPath('userData'), 'opencode-xdg')
-  const xdg = {
-    XDG_DATA_HOME: path.join(xdgRoot, 'data'),
-    XDG_CONFIG_HOME: path.join(xdgRoot, 'config'),
-    XDG_STATE_HOME: path.join(xdgRoot, 'state'),
-    XDG_CACHE_HOME: path.join(xdgRoot, 'cache')
-  }
-  for (const dir of Object.values(xdg)) mkdirSync(dir, { recursive: true })
-
-  // Server binds to 127.0.0.1 only and we don't set OPENCODE_SERVER_PASSWORD,
-  // so the SDK can talk to it without auth headers. If we ever expose this
-  // beyond loopback, generate a password and proxy it via a custom fetch.
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    ...xdg,
-    OPENCODE_CONFIG_CONTENT: JSON.stringify(config)
-  }
-  delete env.OPENCODE_SERVER_PASSWORD
+  // Isolation + config injection rationale lives in sidecar-env.ts.
+  const { env, xdgDirs } = buildSidecarEnv(
+    process.env,
+    path.join(app.getPath('userData'), 'opencode-xdg'),
+    config
+  )
+  for (const dir of xdgDirs) mkdirSync(dir, { recursive: true })
 
   const stderrTail: string[] = []
   const recordStderr = (line: string): void => {

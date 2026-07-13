@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import type { AppStateSnapshot, KanbanBoard } from '@codeswim/contract'
+import type { AppStateSnapshot, KanbanBoard, UpdateStatusPayload } from '@codeswim/contract'
 
 export type {
   KanbanBoard,
@@ -411,7 +411,14 @@ const api = {
     return () => ipcRenderer.removeListener('terminal:exit', listener)
   },
   publishAgentState: (rootPath: string, snapshot: AppStateSnapshot): Promise<void> =>
-    ipcRenderer.invoke('agent:publish-state', rootPath, snapshot)
+    ipcRenderer.invoke('agent:publish-state', rootPath, snapshot),
+  onUpdateStatus: (cb: (payload: UpdateStatusPayload) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: UpdateStatusPayload): void =>
+      cb(payload)
+    ipcRenderer.on('update:status', listener)
+    return () => ipcRenderer.removeListener('update:status', listener)
+  },
+  installUpdate: (): Promise<void> => ipcRenderer.invoke('update:install')
 }
 
 if (process.contextIsolated) {
