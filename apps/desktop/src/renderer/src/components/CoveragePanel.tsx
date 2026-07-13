@@ -1,79 +1,91 @@
 import { useCallback, useEffect, useState } from 'react'
-import { analyzeCoverage, type CoverageReport, type FileInfo } from '@codeswim/coverage'
-import type { TreeNode } from '@codeswim/contract'
-import { relativeToRoot, toPosix } from '../path-utils'
+import type { CoverageReport } from '@codeswim/coverage'
+import { runCoverage } from '../coverage/run'
 import { useStore } from '../store'
 
-// Sidebar section for diagram coverage: runs the @codeswim/coverage analysis
-// over the open workspace and lists what's broken or missing. Everything runs
-// renderer-side — the analysis is pure and the data comes through existing
-// IPC (listMarkdown + readFile) plus the already-loaded file tree.
+// Sidebar section for the audit → fix loop on diagram coverage. Shows the
+// workspace's current state (via the shared runCoverage), lists only the
+// groups that actually have issues, and hands the whole batch to the agent
+// with one click (syncDiagrams — same flow GitPanel's drift banner uses).
 
-function flatten(nodes: TreeNode[], out: string[] = []): string[] {
-  for (const node of nodes) {
-    if (node.kind === 'file') out.push(node.path)
-    if (node.children) flatten(node.children, out)
-  }
-  return out
-}
+const PREVIEW_COUNT = 10
 
 interface RunState {
   status: 'idle' | 'running' | 'done' | 'error'
   report?: CoverageReport
   message?: string
-  at?: number
+}
+
+function RefreshIcon(): React.JSX.Element {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M20 12a8 8 0 1 1-2.34-5.66M20 4v4h-4"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function CheckIcon(): React.JSX.Element {
+  return (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M8 12.5l2.7 2.7L16 9.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
 }
 
 export function CoveragePanel(): React.JSX.Element {
-  const { state, navigateAbsolute } = useStore()
+  const { state, navigateAbsolute, syncDiagrams } = useStore()
   const [run, setRun] = useState<RunState>({ status: 'idle' })
+  const [fixing, setFixing] = useState(false)
   const rootPath = state.rootPath
-  const tree = state.tree
 
   const runCheck = useCallback(async (): Promise<void> => {
     if (!rootPath) return
     setRun({ status: 'running' })
     try {
-      const root = toPosix(rootPath).replace(/\/$/, '')
-      const mdAbs = await window.api.listMarkdown(rootPath)
-      const mdRel = mdAbs
-        .map((f) => relativeToRoot(root, toPosix(f)))
-        .filter((p): p is string => p !== null)
-
-      // Diagrams need content (links are extracted from them); everything
-      // else only needs to exist so link targets resolve.
-      const files: FileInfo[] = await Promise.all(
-        mdRel.map(async (path) => {
-          try {
-            return { path, content: await window.api.readFile(`${root}/${path}`) }
-          } catch {
-            return { path, content: '' }
-          }
-        })
-      )
-      const mdSet = new Set(mdRel)
-      for (const path of flatten(tree ?? [])) {
-        if (!mdSet.has(path)) files.push({ path, content: '' })
-      }
-
-      setRun({ status: 'done', report: analyzeCoverage(files), at: Date.now() })
+      setRun({ status: 'done', report: await runCoverage(rootPath) })
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      setRun({ status: 'error', message })
+      setRun({ status: 'error', message: err instanceof Error ? err.message : String(err) })
     }
-  }, [rootPath, tree])
+  }, [rootPath])
 
   // Show the current state as soon as the section opens.
   useEffect(() => {
     void runCheck()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rootPath])
+  }, [runCheck])
 
   const open = (path: string): void => {
     void navigateAbsolute(path, true)
   }
 
+  const onFix = async (): Promise<void> => {
+    setFixing(true)
+    try {
+      await syncDiagrams()
+    } finally {
+      setFixing(false)
+    }
+  }
+
   const report = run.status === 'done' ? run.report : undefined
+  const issueCount = report
+    ? report.brokenLinks.length +
+      report.orphanDiagrams.length +
+      report.uncoveredSources.length +
+      report.mermaidIssues.length
+    : 0
   const pct =
     report && report.totals.sources > 0
       ? Math.round((report.totals.coveredSources / report.totals.sources) * 100)
@@ -84,11 +96,13 @@ export function CoveragePanel(): React.JSX.Element {
       <div className="coverage-panel-header">
         <span className="sidebar-title">Coverage</span>
         <button
-          className="secondary coverage-run"
+          className="coverage-refresh"
           onClick={() => void runCheck()}
           disabled={!rootPath || run.status === 'running'}
+          title="Re-run coverage check"
+          aria-label="Re-run coverage check"
         >
-          {run.status === 'running' ? 'Checking…' : 'Run check'}
+          <RefreshIcon />
         </button>
       </div>
 
@@ -99,95 +113,68 @@ export function CoveragePanel(): React.JSX.Element {
           <div className="coverage-empty">Check failed: {run.message}</div>
         ) : !report ? (
           <div className="coverage-empty">Analyzing diagrams…</div>
+        ) : issueCount === 0 ? (
+          <div className="coverage-hero is-clean">
+            <span className="coverage-hero-icon">
+              <CheckIcon />
+            </span>
+            <div className="coverage-hero-title">Diagrams and code are in sync</div>
+            <StatsLine report={report} onOpenEntry={open} />
+          </div>
         ) : (
           <>
-            <div className="coverage-summary">
+            <div className="coverage-hero">
               {pct !== null ? (
-                <>
-                  <div className="coverage-meter" role="img" aria-label={`${pct}% covered`}>
-                    <div className="coverage-meter-fill" style={{ width: `${pct}%` }} />
-                  </div>
-                  <div className="coverage-summary-line">
-                    <strong>{pct}%</strong> of source files covered (
-                    {report.totals.coveredSources}/{report.totals.sources})
-                  </div>
-                </>
-              ) : (
-                <div className="coverage-summary-line">No source files found.</div>
-              )}
-              <div className="coverage-summary-line coverage-muted">
-                {report.totals.diagrams} diagrams · {report.totals.totalLinks} links · entry{' '}
-                {report.entry ? (
-                  <button className="coverage-link" onClick={() => open(report.entry!)}>
-                    {report.entry}
-                  </button>
-                ) : (
-                  'not found'
-                )}
+                <div className="coverage-meter" role="img" aria-label={`${pct}% covered`}>
+                  <div className="coverage-meter-fill" style={{ width: `${pct}%` }} />
+                </div>
+              ) : null}
+              <div className="coverage-hero-title">
+                {issueCount} {issueCount === 1 ? 'issue' : 'issues'}
+                {pct !== null ? (
+                  <span className="coverage-muted"> · {pct}% of sources covered</span>
+                ) : null}
               </div>
+              <button className="coverage-fix" onClick={() => void onFix()} disabled={fixing}>
+                {fixing ? 'Handing to agent…' : 'Fix with agent'}
+              </button>
+              <StatsLine report={report} onOpenEntry={open} />
             </div>
 
-            <CoverageGroup
+            <IssueGroup
               title="Broken links"
-              count={report.brokenLinks.length}
-              emptyLabel="No broken links"
-            >
-              {report.brokenLinks.map((link, i) => (
-                <li key={`${link.sourceFile}-${i}`}>
-                  <button
-                    className="coverage-item"
-                    onClick={() => open(link.sourceFile)}
-                    title={`${link.sourceFile}:${link.line} → ${link.target}`}
-                  >
-                    <span className="coverage-item-name">{link.target}</span>
-                    <span className="coverage-item-path">
-                      {link.sourceFile}:{link.line}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </CoverageGroup>
-
-            <CoverageGroup
+              items={report.brokenLinks.map((link, i) => ({
+                key: `${link.sourceFile}:${link.line}:${i}`,
+                primary: link.target,
+                secondary: `${link.sourceFile}:${link.line}`,
+                openPath: link.sourceFile,
+                tooltip: `${link.sourceFile}:${link.line} → ${link.target}`
+              }))}
+              onOpen={open}
+            />
+            <IssueGroup
               title="Orphan diagrams"
-              count={report.orphanDiagrams.length}
-              emptyLabel="Every diagram is reachable from the entry"
-            >
-              {report.orphanDiagrams.map((path) => (
-                <PathItem key={path} path={path} onOpen={open} />
-              ))}
-            </CoverageGroup>
-
-            <CoverageGroup
-              title="Uncovered source files"
-              count={report.uncoveredSources.length}
-              emptyLabel="Every source file is linked from a diagram"
-            >
-              {report.uncoveredSources.map((path) => (
-                <PathItem key={path} path={path} onOpen={open} />
-              ))}
-            </CoverageGroup>
-
-            <CoverageGroup
+              hint="Not reachable from the entry diagram"
+              items={report.orphanDiagrams.map((path) => pathItem(path))}
+              onOpen={open}
+            />
+            <IssueGroup
+              title="Uncovered sources"
+              hint="No diagram links these files"
+              items={report.uncoveredSources.map((path) => pathItem(path))}
+              onOpen={open}
+            />
+            <IssueGroup
               title="Mermaid issues"
-              count={report.mermaidIssues.length}
-              emptyLabel="No mermaid issues"
-            >
-              {report.mermaidIssues.map((issue, i) => (
-                <li key={`${issue.sourceFile}-${i}`}>
-                  <button
-                    className="coverage-item"
-                    onClick={() => open(issue.sourceFile)}
-                    title={issue.message}
-                  >
-                    <span className="coverage-item-name">{issue.message}</span>
-                    <span className="coverage-item-path">
-                      {issue.sourceFile}:{issue.line}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </CoverageGroup>
+              items={report.mermaidIssues.map((issue, i) => ({
+                key: `${issue.sourceFile}:${issue.line}:${i}`,
+                primary: issue.message,
+                secondary: `${issue.sourceFile}:${issue.line}`,
+                openPath: issue.sourceFile,
+                tooltip: issue.message
+              }))}
+              onOpen={open}
+            />
           </>
         )}
       </div>
@@ -195,38 +182,80 @@ export function CoveragePanel(): React.JSX.Element {
   )
 }
 
-function CoverageGroup(props: {
-  title: string
-  count: number
-  emptyLabel: string
-  children: React.ReactNode
+function StatsLine(props: {
+  report: CoverageReport
+  onOpenEntry: (path: string) => void
 }): React.JSX.Element {
+  const { totals, entry } = props.report
   return (
-    <details className="coverage-group" open={props.count > 0}>
-      <summary>
-        {props.title}
-        <span className={`coverage-count ${props.count > 0 ? 'has-issues' : ''}`}>
-          {props.count}
-        </span>
-      </summary>
-      {props.count === 0 ? (
-        <div className="coverage-empty">{props.emptyLabel}</div>
+    <div className="coverage-stats">
+      {totals.coveredSources}/{totals.sources} sources · {totals.diagrams} diagrams ·{' '}
+      {entry ? (
+        <button className="coverage-link" onClick={() => props.onOpenEntry(entry)}>
+          {entry}
+        </button>
       ) : (
-        <ul className="coverage-list">{props.children}</ul>
+        'no entry diagram'
       )}
-    </details>
+    </div>
   )
 }
 
-function PathItem(props: { path: string; onOpen: (path: string) => void }): React.JSX.Element {
-  const name = props.path.split('/').at(-1) ?? props.path
-  const dir = props.path.slice(0, props.path.length - name.length - 1)
+interface IssueItem {
+  key: string
+  primary: string
+  secondary?: string
+  openPath: string
+  tooltip: string
+}
+
+function pathItem(path: string): IssueItem {
+  const name = path.split('/').at(-1) ?? path
+  const dir = path.slice(0, path.length - name.length - 1)
+  return { key: path, primary: name, secondary: dir || undefined, openPath: path, tooltip: path }
+}
+
+// A flat issue section: rendered only when it has items, previewing the
+// first PREVIEW_COUNT with an explicit expand — long lists were the main
+// source of clutter in the first cut of this panel.
+function IssueGroup(props: {
+  title: string
+  hint?: string
+  items: IssueItem[]
+  onOpen: (path: string) => void
+}): React.JSX.Element | null {
+  const [expanded, setExpanded] = useState(false)
+  if (props.items.length === 0) return null
+  const shown = expanded ? props.items : props.items.slice(0, PREVIEW_COUNT)
+  const hidden = props.items.length - shown.length
+
   return (
-    <li>
-      <button className="coverage-item" onClick={() => props.onOpen(props.path)} title={props.path}>
-        <span className="coverage-item-name">{name}</span>
-        {dir ? <span className="coverage-item-path">{dir}</span> : null}
-      </button>
-    </li>
+    <section className="coverage-group">
+      <div className="coverage-group-label" title={props.hint}>
+        {props.title}
+        <span className="coverage-count">{props.items.length}</span>
+      </div>
+      <ul className="coverage-list">
+        {shown.map((item) => (
+          <li key={item.key}>
+            <button
+              className="coverage-item"
+              onClick={() => props.onOpen(item.openPath)}
+              title={item.tooltip}
+            >
+              <span className="coverage-item-name">{item.primary}</span>
+              {item.secondary ? (
+                <span className="coverage-item-path">{item.secondary}</span>
+              ) : null}
+            </button>
+          </li>
+        ))}
+      </ul>
+      {hidden > 0 ? (
+        <button className="coverage-more" onClick={() => setExpanded(true)}>
+          Show {hidden} more
+        </button>
+      ) : null}
+    </section>
   )
 }

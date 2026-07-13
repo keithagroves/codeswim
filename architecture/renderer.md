@@ -23,7 +23,8 @@ flowchart TD
     AppRoot --> Crumbs[Breadcrumbs]
     AppRoot --> Search[SearchPanel]
     AppRoot --> CoverageP[CoveragePanel]
-    CoverageP --> CovLib[packages/coverage]
+    CoverageP --> CovRun[coverage/run.ts]
+    CovRun --> CovLib[packages/coverage]
     AppRoot --> UpdateBtn[UpdateButton]
     AppRoot --> SkillsP[SkillsPanel]
     AppRoot --> Toasts
@@ -55,6 +56,7 @@ flowchart TD
     click Crumbs call navigate("../apps/desktop/src/renderer/src/components/Breadcrumbs.tsx")
     click Search call navigate("../apps/desktop/src/renderer/src/components/SearchPanel.tsx")
     click CoverageP call navigate("../apps/desktop/src/renderer/src/components/CoveragePanel.tsx")
+    click CovRun call navigate("../apps/desktop/src/renderer/src/coverage/run.ts")
     click CovLib call navigate("./coverage.md")
     click UpdateBtn call navigate("../apps/desktop/src/renderer/src/components/UpdateButton.tsx")
     click SkillsP call navigate("../apps/desktop/src/renderer/src/components/SkillsPanel.tsx")
@@ -95,7 +97,7 @@ flowchart TD
 - [ReadView.tsx](../apps/desktop/src/renderer/src/components/ReadView.tsx) — renders diagrams, markdown prose, and source files (merged from the removed CodeView).
 - [MarkdownProse.tsx](../apps/desktop/src/renderer/src/components/MarkdownProse.tsx) — markdown renderer used inside read view and skills view.
 - [SearchPanel.tsx](../apps/desktop/src/renderer/src/components/SearchPanel.tsx) — workspace search.
-- [CoveragePanel.tsx](../apps/desktop/src/renderer/src/components/CoveragePanel.tsx) — diagram-coverage section: runs the [coverage analysis](./coverage.md) over the workspace and lists broken links, orphan diagrams, and uncovered sources.
+- [CoveragePanel.tsx](../apps/desktop/src/renderer/src/components/CoveragePanel.tsx) — diagram-coverage section: shows the audit state via the shared [coverage runner](../apps/desktop/src/renderer/src/coverage/run.ts) and hands the whole batch to the agent via `syncDiagrams` ("Fix with agent").
 - [UpdateButton.tsx](../apps/desktop/src/renderer/src/components/UpdateButton.tsx) — "Restart to update" pill shown in the header when an app update is downloaded and ready.
 - [SkillsPanel.tsx](../apps/desktop/src/renderer/src/components/SkillsPanel.tsx) — left-rail list of available skills.
 - [SkillsView.tsx](../apps/desktop/src/renderer/src/components/SkillsView.tsx) — full-pane skill markdown viewer.
