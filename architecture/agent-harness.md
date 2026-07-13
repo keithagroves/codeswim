@@ -67,6 +67,8 @@ flowchart LR
 ## Source
 
 - [apps/desktop/src/main/sidecar.ts](../apps/desktop/src/main/sidecar.ts) — spawns and supervises the `opencode serve` subprocess.
+- [apps/desktop/src/main/sidecar-env.ts](../apps/desktop/src/main/sidecar-env.ts) — pure construction of the sidecar env: XDG isolation under userData plus `OPENCODE_CONFIG_CONTENT` injection.
+- [apps/desktop/src/main/sidecar-env.test.ts](../apps/desktop/src/main/sidecar-env.test.ts) — covers the env isolation, config serialization, and password stripping.
 - [packages/harness/src/plugin.ts](../packages/harness/src/plugin.ts) — opencode plugin entry; registers `diagram_edit` and the tool-call gate hook.
 - [packages/harness/src/session-gate.ts](../packages/harness/src/session-gate.ts) — per-session "has a diagram been edited yet?" state used by the gate.
 - [packages/harness/src/tool/diagram-edit.ts](../packages/harness/src/tool/diagram-edit.ts) — pure implementation of the `diagram_edit` tool (frontmatter check, mermaid block check, file write).

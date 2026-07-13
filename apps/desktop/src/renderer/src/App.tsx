@@ -13,6 +13,7 @@ import { PullRequestsPanel } from './components/PullRequestsPanel'
 import { ReadView } from './components/ReadView'
 import { ScriptControls } from './components/ScriptControls'
 import { UpdateButton } from './components/UpdateButton'
+import { CoveragePanel } from './components/CoveragePanel'
 import { ScriptOutput } from './components/ScriptOutput'
 import { SearchPanel } from './components/SearchPanel'
 import { SkillsPanel } from './components/SkillsPanel'
@@ -81,6 +82,7 @@ function SidePanel(): React.JSX.Element | null {
       {state.activeSection === 'files' ? <FileTree /> : null}
       {state.activeSection === 'agent' ? <ChatPanel /> : null}
       {state.activeSection === 'search' ? <SearchPanel /> : null}
+      {state.activeSection === 'coverage' ? <CoveragePanel /> : null}
       {state.activeSection === 'tools' ? <SkillsPanel /> : null}
       {state.activeSection === 'git' ? <GitPanel /> : null}
       {state.activeSection === 'pulls' ? <PullRequestsPanel /> : null}

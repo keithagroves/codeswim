@@ -25,6 +25,7 @@ export type Section =
   | 'agent'
   | 'files'
   | 'search'
+  | 'coverage'
   | 'tools'
   | 'git'
   | 'pulls'

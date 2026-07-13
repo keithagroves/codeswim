@@ -53,6 +53,30 @@ function SearchIcon(): React.JSX.Element {
   )
 }
 
+function CoverageIcon(): React.JSX.Element {
+  // Diagram-with-check: two linked nodes plus a check mark — "the diagrams
+  // line up with the code".
+  return (
+    <svg width="27" height="27" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="3" y="3" width="7" height="5.5" rx="1" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="3" y="15.5" width="7" height="5.5" rx="1" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M6.5 8.5v7"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M13.5 12.5l2.5 2.5 5-5.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 function ToolsIcon(): React.JSX.Element {
   // Wrench — the Tools section hosts skills, MCP servers, and other agent
   // capabilities, so a generic tool glyph rather than the old skill book.
@@ -167,6 +191,7 @@ const ITEM_BY_KEY: Record<Section, Item> = {
   agent: { key: 'agent', label: 'Agent', icon: <ChatIcon /> },
   files: { key: 'files', label: 'Files', icon: <FolderIcon /> },
   search: { key: 'search', label: 'Search', icon: <SearchIcon /> },
+  coverage: { key: 'coverage', label: 'Diagram coverage', icon: <CoverageIcon /> },
   tools: { key: 'tools', label: 'Tools', icon: <ToolsIcon /> },
   git: { key: 'git', label: 'Commit', icon: <GitIcon /> },
   pulls: { key: 'pulls', label: 'Pull requests', icon: <PullRequestIcon /> },

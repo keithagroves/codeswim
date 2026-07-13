@@ -20,6 +20,8 @@ flowchart TD
     Index --> Scripts[run-script / kill-script]
     Index --> Skills[skills.ts<br/>list/read SKILL.md]
     Index --> Harness[start-harness]
+    Index --> Updater[updater.ts<br/>auto-update]
+    Updater -->|update:status| Renderer
     Watcher -->|file-changed,<br/>tree-changed| Renderer
     Scripts -->|spawn npm run,<br/>detached| Group[(process group)]
     Harness -->|opencode serve| Sidecar((Sidecar))
@@ -36,6 +38,7 @@ flowchart TD
     click Index call navigate("../apps/desktop/src/main/index.ts")
     click Skills call navigate("../packages/domain-skills/src/skills.ts")
     click Harness call navigate("./agent-harness.md")
+    click Updater call navigate("../apps/desktop/src/main/updater.ts")
 ```
 
 ## Notes
@@ -56,6 +59,7 @@ flowchart TD
 - [packages/domain-skills/src/agents-doc.ts](../packages/domain-skills/src/agents-doc.ts) — reads and writes AGENTS.md files (workspace scope and global ~/.agents/ scope).
 - [packages/domain-skills/src/index.ts](../packages/domain-skills/src/index.ts) — domain-skills package entry point.
 - [apps/desktop/src/main/github.ts](../apps/desktop/src/main/github.ts) — GitHub OAuth device-flow handler in the main process.
+- [apps/desktop/src/main/updater.ts](../apps/desktop/src/main/updater.ts) — background auto-update from GitHub releases via electron-updater; renderer shows the restart button.
 - [packages/domain-github/src/github-auth.ts](../packages/domain-github/src/github-auth.ts) — GitHub OAuth device-flow authentication for the chat feature.
 - [packages/domain-github/src/index.ts](../packages/domain-github/src/index.ts) — domain-github package entry point.
 - [packages/domain-kanban/src/index.ts](../packages/domain-kanban/src/index.ts) — domain-kanban package entry point.
@@ -68,3 +72,4 @@ flowchart TD
 - [packages/domain-kanban/src/kanban.test.ts](../packages/domain-kanban/src/kanban.test.ts) — covers the main-process kanban operations.
 - [packages/domain-github/src/room.test.ts](../packages/domain-github/src/room.test.ts) — covers the room identity logic.
 - [packages/domain-skills/src/source-explanations.test.ts](../packages/domain-skills/src/source-explanations.test.ts) — covers explanation path resolution.
+- [apps/desktop/src/main/updater.test.ts](../apps/desktop/src/main/updater.test.ts) — covers the updater's event-to-status mapping and install IPC against mocked electron modules.

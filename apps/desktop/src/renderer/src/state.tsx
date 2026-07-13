@@ -46,6 +46,7 @@ const DEFAULT_ACTIVITY_ORDER: Section[] = [
   'agent',
   'files',
   'search',
+  'coverage',
   'tools',
   'git',
   'pulls',

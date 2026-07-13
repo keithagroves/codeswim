@@ -22,6 +22,9 @@ flowchart TD
     AppRoot --> Tree[FileTree]
     AppRoot --> Crumbs[Breadcrumbs]
     AppRoot --> Search[SearchPanel]
+    AppRoot --> CoverageP[CoveragePanel]
+    CoverageP --> CovLib[packages/coverage]
+    AppRoot --> UpdateBtn[UpdateButton]
     AppRoot --> SkillsP[SkillsPanel]
     AppRoot --> Toasts
     AppRoot --> View{view}
@@ -51,6 +54,9 @@ flowchart TD
     click Tree call navigate("../apps/desktop/src/renderer/src/components/FileTree.tsx")
     click Crumbs call navigate("../apps/desktop/src/renderer/src/components/Breadcrumbs.tsx")
     click Search call navigate("../apps/desktop/src/renderer/src/components/SearchPanel.tsx")
+    click CoverageP call navigate("../apps/desktop/src/renderer/src/components/CoveragePanel.tsx")
+    click CovLib call navigate("./coverage.md")
+    click UpdateBtn call navigate("../apps/desktop/src/renderer/src/components/UpdateButton.tsx")
     click SkillsP call navigate("../apps/desktop/src/renderer/src/components/SkillsPanel.tsx")
     click Toasts call navigate("../apps/desktop/src/renderer/src/components/Toasts.tsx")
     click ScriptCtl call navigate("../apps/desktop/src/renderer/src/components/ScriptControls.tsx")
@@ -89,6 +95,8 @@ flowchart TD
 - [ReadView.tsx](../apps/desktop/src/renderer/src/components/ReadView.tsx) — renders diagrams, markdown prose, and source files (merged from the removed CodeView).
 - [MarkdownProse.tsx](../apps/desktop/src/renderer/src/components/MarkdownProse.tsx) — markdown renderer used inside read view and skills view.
 - [SearchPanel.tsx](../apps/desktop/src/renderer/src/components/SearchPanel.tsx) — workspace search.
+- [CoveragePanel.tsx](../apps/desktop/src/renderer/src/components/CoveragePanel.tsx) — diagram-coverage section: runs the [coverage analysis](./coverage.md) over the workspace and lists broken links, orphan diagrams, and uncovered sources.
+- [UpdateButton.tsx](../apps/desktop/src/renderer/src/components/UpdateButton.tsx) — "Restart to update" pill shown in the header when an app update is downloaded and ready.
 - [SkillsPanel.tsx](../apps/desktop/src/renderer/src/components/SkillsPanel.tsx) — left-rail list of available skills.
 - [SkillsView.tsx](../apps/desktop/src/renderer/src/components/SkillsView.tsx) — full-pane skill markdown viewer.
 - [ScriptControls.tsx](../apps/desktop/src/renderer/src/components/ScriptControls.tsx) — npm script dropdown + run/stop.

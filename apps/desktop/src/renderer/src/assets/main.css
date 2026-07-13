@@ -298,6 +298,151 @@ body.is-resizing {
   text-align: center;
 }
 
+/* Diagram coverage panel */
+
+.coverage-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-muted);
+}
+
+.coverage-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  min-height: 48px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.coverage-run {
+  font-size: 12px;
+}
+
+.coverage-panel-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.coverage-summary {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.coverage-meter {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.coverage-meter-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+}
+
+.coverage-summary-line {
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.coverage-muted {
+  color: var(--text-muted);
+}
+
+.coverage-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.coverage-group {
+  border-bottom: 1px solid var(--border);
+}
+
+.coverage-group summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  color: var(--text);
+}
+
+.coverage-count {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 7px;
+  line-height: 16px;
+}
+
+.coverage-count.has-issues {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.coverage-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 6px;
+}
+
+.coverage-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  padding: 4px 12px;
+  background: none;
+  border: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.coverage-item:hover {
+  background: var(--bg);
+}
+
+.coverage-item-name {
+  font-size: 12.5px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.coverage-item-path {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.coverage-empty {
+  padding: 10px 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 .search-result {
   display: flex;
   flex-direction: column;
