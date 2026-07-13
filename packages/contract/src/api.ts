@@ -208,7 +208,7 @@ export interface PullRequestDiff {
 // so the harness `get_app_state` tool (a separate process) can read what the
 // user is currently looking at. Paths are POSIX-relative to the workspace root.
 export interface AppStateSnapshot {
-  workspaceView: 'navigator' | 'kanban'
+  workspaceView: 'navigator' | 'kanban' | 'agents'
   currentFile: string | null
   currentDocumentPath: string | null
   view: 'diagram' | 'read' | 'output' | 'diff'

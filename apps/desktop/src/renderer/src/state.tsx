@@ -21,6 +21,7 @@ import type { AgentViewAction, AppStateSnapshot, PullRequest } from '@codeswim/c
 import {
   prDiffLabel,
   StoreContext,
+  type AgentTab,
   type AppState,
   type ChatMessage,
   type ChatMessagePart,
@@ -87,7 +88,9 @@ const initialState: AppState = {
   recents: [],
   pendingQuestion: null,
   changeCount: 0,
-  openPrCount: 0
+  openPrCount: 0,
+  agentTabs: [],
+  activeAgentTabId: null
 }
 
 type Action =
@@ -171,6 +174,25 @@ type Action =
   | { type: 'chat-set-settings'; open: boolean }
   | { type: 'sessions-set'; sessions: SessionInfo[] }
   | { type: 'session-set-current'; sessionId: string | null; messages: ChatMessage[] }
+  | { type: 'agent-tab-open'; tab: AgentTab }
+  | { type: 'agent-tab-close'; tabId: string }
+  | { type: 'agent-tab-activate'; tabId: string }
+  | {
+      type: 'agent-tab-patch'
+      tabId: string
+      patch: Partial<Pick<AgentTab, 'sessionId' | 'title' | 'status' | 'error'>>
+    }
+  | { type: 'agent-tab-add-message'; tabId: string; message: ChatMessage }
+  // Routed by opencode session id (part updates arrive off the shared event
+  // stream, which doesn't know about tabs). No-op when no tab matches.
+  | {
+      type: 'agent-tab-upsert-part'
+      sessionId: string
+      messageID: string
+      part: ChatMessagePart & { id: string }
+    }
+  | { type: 'agent-tab-question'; sessionId: string; question: PendingQuestion }
+  | { type: 'agent-tab-question-closed'; requestID: string }
   | { type: 'recents-set'; recents: string[] }
   | { type: 'set-change-count'; count: number }
   | { type: 'set-open-pr-count'; count: number }
@@ -389,7 +411,14 @@ function reducer(state: AppState, action: Action): AppState {
       // The tools (skills/mcp) surface overrides the main panel; switching to a
       // workspace view has to leave it so the navigator/board actually shows.
       const activeSection = state.activeSection === 'tools' ? null : state.activeSection
-      return { ...state, workspaceView: action.view, view, prevView: null, diffPath: null, activeSection }
+      return {
+        ...state,
+        workspaceView: action.view,
+        view,
+        prevView: null,
+        diffPath: null,
+        activeSection
+      }
     }
     case 'chat-status':
       return { ...state, chatStatus: action.status, chatError: action.error ?? null }
@@ -427,6 +456,74 @@ function reducer(state: AppState, action: Action): AppState {
         // its own pending-question state which we'll refetch on connect.
         pendingQuestion: null
       }
+    case 'agent-tab-open':
+      return {
+        ...state,
+        agentTabs: [...state.agentTabs, action.tab],
+        activeAgentTabId: action.tab.id
+      }
+    case 'agent-tab-close': {
+      const idx = state.agentTabs.findIndex((t) => t.id === action.tabId)
+      if (idx < 0) return state
+      const agentTabs = state.agentTabs.filter((t) => t.id !== action.tabId)
+      // Closing the active tab activates its right-hand neighbor (or the new
+      // last tab), like a browser.
+      let activeAgentTabId = state.activeAgentTabId
+      if (activeAgentTabId === action.tabId) {
+        activeAgentTabId = agentTabs[Math.min(idx, agentTabs.length - 1)]?.id ?? null
+      }
+      return { ...state, agentTabs, activeAgentTabId }
+    }
+    case 'agent-tab-activate':
+      return { ...state, activeAgentTabId: action.tabId }
+    case 'agent-tab-patch':
+      return {
+        ...state,
+        agentTabs: state.agentTabs.map((t) =>
+          t.id === action.tabId ? { ...t, ...action.patch } : t
+        )
+      }
+    case 'agent-tab-add-message':
+      return {
+        ...state,
+        agentTabs: state.agentTabs.map((t) =>
+          t.id === action.tabId ? { ...t, messages: [...t.messages, action.message] } : t
+        )
+      }
+    case 'agent-tab-upsert-part':
+      return {
+        ...state,
+        agentTabs: state.agentTabs.map((t) => {
+          if (t.sessionId !== action.sessionId) return t
+          const messages = t.messages.slice()
+          const msgIdx = messages.findIndex((m) => m.id === action.messageID)
+          if (msgIdx < 0) {
+            messages.push({ id: action.messageID, role: 'assistant', parts: [action.part] })
+            return { ...t, messages }
+          }
+          const msg = messages[msgIdx]
+          const partIdx = msg.parts.findIndex((p) => 'id' in p && p.id === action.part.id)
+          const nextParts = msg.parts.slice()
+          if (partIdx < 0) nextParts.push(action.part)
+          else nextParts[partIdx] = action.part
+          messages[msgIdx] = { ...msg, parts: nextParts }
+          return { ...t, messages }
+        })
+      }
+    case 'agent-tab-question':
+      return {
+        ...state,
+        agentTabs: state.agentTabs.map((t) =>
+          t.sessionId === action.sessionId ? { ...t, pendingQuestion: action.question } : t
+        )
+      }
+    case 'agent-tab-question-closed':
+      return {
+        ...state,
+        agentTabs: state.agentTabs.map((t) =>
+          t.pendingQuestion?.id === action.requestID ? { ...t, pendingQuestion: null } : t
+        )
+      }
     case 'recents-set':
       return { ...state, recents: action.recents }
     case 'set-change-count':
@@ -439,6 +536,9 @@ function reducer(state: AppState, action: Action): AppState {
 }
 
 let toastSeq = 1
+// Numbers new agent tabs ("Agent 1", "Agent 2", …) until opencode auto-titles
+// the session from the first prompt.
+let agentTabSeq = 1
 
 export function StoreProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const [state, dispatch] = useReducer(reducer, initialState)
@@ -488,6 +588,12 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       // the active session as they arrive, so the user sees the agent
       // working instead of a static "thinking…" placeholder.
       agent.subscribeParts(({ sessionID, messageID, part }) => {
+        // Route to any Agents-view tab bound to this session; the reducer
+        // no-ops when nothing matches.
+        const tabbed = stateRef.current.agentTabs.some((t) => t.sessionId === sessionID)
+        if (tabbed) {
+          dispatch({ type: 'agent-tab-upsert-part', sessionId: sessionID, messageID, part })
+        }
         if (sessionID !== stateRef.current.currentSessionId) return
         dispatch({ type: 'chat-upsert-part', messageID, part })
 
@@ -508,9 +614,17 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       // questions for a single session in practice.
       agent.subscribeQuestions((event) => {
         if (event.kind === 'asked') {
+          if (stateRef.current.agentTabs.some((t) => t.sessionId === event.question.sessionID)) {
+            dispatch({
+              type: 'agent-tab-question',
+              sessionId: event.question.sessionID,
+              question: event.question
+            })
+          }
           if (event.question.sessionID !== stateRef.current.currentSessionId) return
           dispatch({ type: 'set-pending-question', question: event.question })
         } else {
+          dispatch({ type: 'agent-tab-question-closed', requestID: event.requestID })
           const pending = stateRef.current.pendingQuestion
           if (pending && pending.id === event.requestID) {
             dispatch({ type: 'set-pending-question', question: null })
@@ -701,6 +815,7 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
         // our subscriber — but clear locally too so the UI doesn't sit on
         // the prompt waiting for the round-trip.
         dispatch({ type: 'set-pending-question', question: null })
+        dispatch({ type: 'agent-tab-question-closed', requestID })
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         toast(`Couldn't answer: ${msg}`, 'error')
@@ -716,6 +831,7 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
       try {
         await agent.rejectQuestion(requestID)
         dispatch({ type: 'set-pending-question', question: null })
+        dispatch({ type: 'agent-tab-question-closed', requestID })
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         toast(`Couldn't cancel question: ${msg}`, 'error')
@@ -736,6 +852,92 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
       // best-effort
     }
   }, [])
+
+  // --- Agents view (browser-style tabs, one opencode session per tab) ---
+
+  const openAgentTab = useCallback(() => {
+    const n = agentTabSeq++
+    dispatch({
+      type: 'agent-tab-open',
+      tab: {
+        id: `tab-${Date.now()}-${n}`,
+        sessionId: null,
+        title: `Agent ${n}`,
+        status: 'idle',
+        error: null,
+        messages: [],
+        pendingQuestion: null
+      }
+    })
+  }, [])
+
+  const closeAgentTab = useCallback((tabId: string) => {
+    dispatch({ type: 'agent-tab-close', tabId })
+  }, [])
+
+  const activateAgentTab = useCallback((tabId: string) => {
+    dispatch({ type: 'agent-tab-activate', tabId })
+  }, [])
+
+  const sendAgentChat = useCallback(
+    async (tabId: string, text: string) => {
+      const trimmed = text.trim()
+      if (!trimmed) return
+      const root = stateRef.current.rootPath
+      if (!root) {
+        toast('Open a folder before chatting with the agent.', 'error')
+        return
+      }
+      const agent = await ensureAgent(root)
+      if (!agent) return
+      const tab = stateRef.current.agentTabs.find((t) => t.id === tabId)
+      if (!tab) return
+
+      const patch = (
+        p: Partial<Pick<AgentTab, 'sessionId' | 'title' | 'status' | 'error'>>
+      ): void => dispatch({ type: 'agent-tab-patch', tabId, patch: p })
+
+      try {
+        // Sessions are created lazily so an unused tab leaves no history.
+        let sessionId = tab.sessionId
+        if (!sessionId) {
+          patch({ status: 'connecting' })
+          const created = await agent.createSession()
+          sessionId = created.id
+          patch({ sessionId })
+        }
+
+        const userMsgId = `u-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+        dispatch({
+          type: 'agent-tab-add-message',
+          tabId,
+          message: { id: userMsgId, role: 'user', parts: [{ kind: 'text', text: trimmed }] }
+        })
+        patch({ status: 'thinking', error: null })
+
+        const reply = await agent.send(sessionId, trimmed)
+        for (const part of reply.parts) {
+          dispatch({ type: 'agent-tab-upsert-part', sessionId, messageID: reply.messageID, part })
+        }
+        patch({ status: 'ready' })
+
+        // opencode auto-titles the session from the first prompt; adopt it as
+        // the tab title once available.
+        void agent.listSessions().then((sessions) => {
+          dispatch({ type: 'sessions-set', sessions })
+          const info = sessions.find((s) => s.id === sessionId)
+          if (info?.title) {
+            dispatch({ type: 'agent-tab-patch', tabId, patch: { title: info.title } })
+          }
+        })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        patch({ status: 'error', error: msg })
+        toast(`Agent error: ${msg}`, 'error')
+      }
+    },
+    [ensureAgent, toast]
+  )
 
   const setActiveSection = useCallback(
     (section: Section | null) => dispatch({ type: 'set-active-section', section }),
@@ -1594,7 +1796,11 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       setCurrentSkill,
       setToolsTab,
       answerQuestion,
-      rejectQuestion
+      rejectQuestion,
+      openAgentTab,
+      closeAgentTab,
+      activateAgentTab,
+      sendAgentChat
     }),
     [
       state,
@@ -1643,7 +1849,11 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       setCurrentSkill,
       setToolsTab,
       answerQuestion,
-      rejectQuestion
+      rejectQuestion,
+      openAgentTab,
+      closeAgentTab,
+      activateAgentTab,
+      sendAgentChat
     ]
   )
 

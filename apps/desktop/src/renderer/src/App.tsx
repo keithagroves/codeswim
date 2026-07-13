@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { ActivityBar } from './components/ActivityBar'
+import { AgentsView } from './components/AgentsView'
 import { Breadcrumbs } from './components/Breadcrumbs'
 import { ChatPanel } from './components/ChatPanel'
 import { DiagramView } from './components/DiagramView'
@@ -144,6 +145,14 @@ function Header(): React.JSX.Element {
         >
           Plan
         </button>
+        <button
+          className={`tab-agents ${!inTools && state.workspaceView === 'agents' ? 'is-active' : ''}`}
+          role="tab"
+          aria-selected={!inTools && state.workspaceView === 'agents'}
+          onClick={() => setWorkspaceView('agents')}
+        >
+          Agents
+        </button>
       </div>
       {inTools || inNavigator ? (
         <div className="header-spacer" />
@@ -230,6 +239,9 @@ function Body(): React.JSX.Element {
   }
   if (state.workspaceView === 'kanban') {
     return <KanbanView />
+  }
+  if (state.workspaceView === 'agents') {
+    return <AgentsView />
   }
   if (!state.currentFile || state.fileContents === null) {
     return (

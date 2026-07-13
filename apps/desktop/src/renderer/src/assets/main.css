@@ -2194,6 +2194,292 @@ body.is-mac .header {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
+/* --- Agents workspace view: browser-style tabs, one agent per tab --- */
+
+.agents-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.agents-tabbar {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 6px 10px 0;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  flex: none;
+}
+
+.agents-tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px 6px 12px;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 7px 7px 0 0;
+  background: var(--bg-muted);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  max-width: 220px;
+  min-width: 90px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.agents-tab.is-active {
+  background: var(--bg);
+  color: var(--text);
+  /* Visually merge with the content below by covering the tabbar border. */
+  margin-bottom: -1px;
+  padding-bottom: 7px;
+}
+
+.agents-tab-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agents-tab-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--text-muted);
+  opacity: 0.5;
+}
+
+.agents-tab-dot-ready {
+  background: var(--success);
+  opacity: 1;
+}
+
+.agents-tab-dot-thinking,
+.agents-tab-dot-connecting {
+  background: var(--accent);
+  opacity: 1;
+  animation: agents-dot-pulse 1.2s ease-in-out infinite;
+}
+
+.agents-tab-dot-error {
+  background: var(--error-border);
+  opacity: 1;
+}
+
+@keyframes agents-dot-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.agents-tab-close {
+  background: none;
+  border: 0;
+  padding: 0 3px;
+  border-radius: 4px;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  flex: none;
+}
+
+.agents-tab-close:hover {
+  background: color-mix(in srgb, currentColor 15%, transparent);
+}
+
+.agents-tab-new {
+  align-self: center;
+  background: none;
+  border: 0;
+  border-radius: 5px;
+  padding: 2px 9px;
+  margin-left: 2px;
+  font-size: 16px;
+  line-height: 1.3;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex: none;
+}
+
+.agents-tab-new:hover {
+  background: var(--bg-muted);
+  color: var(--text);
+}
+
+/* Reuses the chat-* message/input classes; this wrapper centers them at a
+   readable column width inside the wide main panel. */
+.agents-tab-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0 16px 14px;
+}
+
+.agents-tab-body .chat-input-row {
+  padding: 8px 0 0;
+}
+
+.agents-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: var(--text-muted);
+  font-size: 13.5px;
+}
+
+/* Inline <plan>{json}</plan> blocks in agent messages, rendered as a commit
+   plan card instead of raw JSON. Mirrors the git-plan look, scaled for chat. */
+.chat-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: var(--bg-raised, var(--bg-muted));
+  margin: 6px 0;
+}
+
+.chat-plan-pending {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.chat-plan-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-plan-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.chat-plan-obvious {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--success);
+  border: 1px solid color-mix(in srgb, var(--success) 40%, transparent);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
+.chat-plan-summary {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.chat-plan-ignore {
+  border: 1px solid var(--warning-border);
+  background: var(--warning-bg);
+  border-radius: 5px;
+  padding: 6px 8px;
+}
+
+.chat-plan-ignore-title {
+  font-weight: 600;
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+
+.chat-plan-ignore-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.chat-plan-ignore-reason {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.chat-plan-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chat-plan-groups-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.chat-plan-group {
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 7px 9px;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.chat-plan-group-subject {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.chat-plan-group-body {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.chat-plan-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 8px;
+}
+
+.chat-plan-file {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.chat-plan-file-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+}
+
+.chat-plan-file-link:hover {
+  text-decoration: underline;
+}
+
 .chat-input-row {
   display: flex;
   flex-direction: column;

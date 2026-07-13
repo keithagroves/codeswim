@@ -38,7 +38,13 @@ export function formatAppState(raw: string | null): string {
   }
 
   const lines: string[] = []
-  lines.push(`Active tab: ${state.workspaceView === 'kanban' ? 'Kanban board' : 'diagram navigator'}`)
+  const tabLabel =
+    state.workspaceView === 'kanban'
+      ? 'Kanban board'
+      : state.workspaceView === 'agents'
+        ? 'Agents (tabbed agent sessions)'
+        : 'diagram navigator'
+  lines.push(`Active tab: ${tabLabel}`)
 
   if (state.workspaceView === 'navigator') {
     if (state.currentFile) {

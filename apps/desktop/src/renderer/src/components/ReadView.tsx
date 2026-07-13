@@ -92,8 +92,12 @@ export function ReadView({ source }: { source: string }): React.JSX.Element {
   // Both ReadView and DiagramView re-bind this on mount; only one is in the
   // DOM at a time so the latest one wins, which is correct.
   useEffect(() => {
-    window.navigate = (target: string): void => {
+    const navigate = (target: string): void => {
       void navigateRelative(target)
+    }
+    window.navigate = navigate
+    return () => {
+      if (window.navigate === navigate) delete window.navigate
     }
   }, [navigateRelative])
 

@@ -114,6 +114,7 @@ export function DiagramView({ source }: { source: string }): React.JSX.Element {
   const [renderError, setRenderError] = useState<{ source: string; message: string } | null>(null)
   const [view, setView] = useState<ViewTransform>({ scale: 1, tx: 0, ty: 0 })
   const viewRef = useRef(view)
+  const dragCleanupRef = useRef<(() => void) | null>(null)
   useEffect(() => {
     viewRef.current = view
   }, [view])
@@ -211,20 +212,25 @@ export function DiagramView({ source }: { source: string }): React.JSX.Element {
       document.body.classList.remove('is-panning')
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
+      dragCleanupRef.current = null
     }
+    dragCleanupRef.current?.()
+    dragCleanupRef.current = onUp
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
   }
 
+  useEffect(() => () => dragCleanupRef.current?.(), [])
+
   // Expose the navigate hook for mermaid's `click ... call navigate(...)` syntax.
   // Re-bind on every render so the closure captures the current navigateRelative.
   useEffect(() => {
-    window.navigate = (target: string): void => {
+    const navigate = (target: string): void => {
       void navigateRelative(target)
     }
+    window.navigate = navigate
     return () => {
-      if (window.navigate === undefined) return
-      // leave it bound — another DiagramView mount will replace it.
+      if (window.navigate === navigate) delete window.navigate
     }
   }, [navigateRelative])
 

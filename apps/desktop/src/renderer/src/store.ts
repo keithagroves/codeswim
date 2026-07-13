@@ -18,7 +18,7 @@ export function prDiffLabel(pr: { number: number; title: string }): string {
 
 export type View = 'diagram' | 'read' | 'output' | 'diff'
 export type FileView = 'diagram' | 'read'
-export type WorkspaceView = 'kanban' | 'navigator'
+export type WorkspaceView = 'kanban' | 'navigator' | 'agents'
 // Activity-bar / side-panel sections, in no particular order. The user's
 // preferred order lives in AppState.activityOrder.
 export type Section =
@@ -89,6 +89,36 @@ export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   parts: ChatMessagePart[]
+}
+
+// One browser-style tab in the Agents workspace view. Each tab is its own
+// opencode session with an independent message log, so several agents can run
+// side by side. `sessionId` is null until the first message creates the
+// session lazily.
+export interface AgentTab {
+  id: string
+  sessionId: string | null
+  title: string
+  status: ChatStatus
+  error: string | null
+  messages: ChatMessage[]
+  pendingQuestion: PendingQuestion | null
+}
+
+// Flatten the file tree to a list of root-relative file paths, for resolving
+// path-like tokens in agent output (directories are dropped — only files are
+// navigable targets). Shared by the chat panel and the Agents view.
+export function flattenTreeFiles(tree: TreeNode[] | null): string[] {
+  if (!tree) return []
+  const out: string[] = []
+  const walk = (nodes: TreeNode[]): void => {
+    for (const node of nodes) {
+      if (node.kind === 'file') out.push(node.path)
+      else if (node.children) walk(node.children)
+    }
+  }
+  walk(tree)
+  return out
 }
 
 export interface AppState {
@@ -163,6 +193,9 @@ export interface AppState {
   // pull requests. Like VS Code's sidebar badges.
   changeCount: number
   openPrCount: number
+  // Tabs in the Agents workspace view (header tab next to Explore/Plan).
+  agentTabs: AgentTab[]
+  activeAgentTabId: string | null
 }
 
 export interface StoreApi {
@@ -241,6 +274,11 @@ export interface StoreApi {
   // Re-fetches the open-PR count behind the Pull requests activity-bar badge.
   // Called after a merge so the badge updates without reopening the workspace.
   refreshOpenPrCount(): Promise<void>
+  // Agents view (browser-style tabs, one opencode session per tab).
+  openAgentTab(): void
+  closeAgentTab(tabId: string): void
+  activateAgentTab(tabId: string): void
+  sendAgentChat(tabId: string, text: string): Promise<void>
 }
 
 export const StoreContext = createContext<StoreApi | null>(null)

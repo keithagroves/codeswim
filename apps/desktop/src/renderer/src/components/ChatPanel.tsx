@@ -1,25 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useStore } from '../store'
+import { flattenTreeFiles, useStore } from '../store'
 import { MarkdownProse } from './MarkdownProse'
 import { resolveWorkspacePath } from '../path-utils'
-import type { ChatMessage, ChatMessagePart, TreeNode } from '../store'
+import type { ChatMessage, ChatMessagePart, PendingQuestion } from '../store'
+import type { SyncPlan } from '@codeswim/commit'
 
 type PathResolver = (raw: string) => string | null
-
-// Flatten the file tree to a list of root-relative file paths for path
-// resolution (directories are dropped — only files are navigable targets).
-function flattenTreeFiles(tree: TreeNode[] | null): string[] {
-  if (!tree) return []
-  const out: string[] = []
-  const walk = (nodes: TreeNode[]): void => {
-    for (const node of nodes) {
-      if (node.kind === 'file') out.push(node.path)
-      else if (node.children) walk(node.children)
-    }
-  }
-  walk(tree)
-  return out
-}
 
 interface DiagramEditMetadata {
   kind: 'created' | 'replaced'
@@ -49,6 +35,137 @@ function isKanbanAddMetadata(value: unknown): value is KanbanAddMetadata {
   if (!value || typeof value !== 'object') return false
   const m = value as Record<string, unknown>
   return typeof m.title === 'string' && typeof m.columnName === 'string'
+}
+
+// A commit plan the agent emitted inline in chat (same <plan>{json}</plan>
+// format as the Sync triage). Unlike parseSyncPlan we have no list of valid
+// paths to filter against — this is display-only, so we keep whatever the
+// agent said and return null when the JSON is unreadable (the raw text is
+// shown as a fallback).
+function parseChatPlan(json: string): SyncPlan | null {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(json)
+  } catch {
+    return null
+  }
+  if (!parsed || typeof parsed !== 'object') return null
+  const raw = parsed as Record<string, unknown>
+  const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '')
+  const groups = Array.isArray(raw.groups)
+    ? raw.groups
+        .map((g) => {
+          const obj = (g ?? {}) as Record<string, unknown>
+          const paths = Array.isArray(obj.paths)
+            ? obj.paths.filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
+            : []
+          return { subject: str(obj.subject), body: str(obj.body), paths }
+        })
+        .filter((g) => g.subject.length > 0 || g.paths.length > 0)
+    : []
+  const ignore = Array.isArray(raw.ignore)
+    ? raw.ignore
+        .map((i) => {
+          const obj = (i ?? {}) as Record<string, unknown>
+          return { pattern: str(obj.pattern), reason: str(obj.reason) }
+        })
+        .filter((i) => i.pattern.length > 0)
+    : []
+  if (!str(raw.summary) && groups.length === 0 && ignore.length === 0) return null
+  return { summary: str(raw.summary), obvious: raw.obvious === true, groups, ignore }
+}
+
+type TextSegment =
+  | { kind: 'prose'; text: string }
+  | { kind: 'plan'; json: string }
+  | { kind: 'plan-pending' }
+
+// Split assistant text around <plan>…</plan> blocks so the JSON renders as a
+// card instead of raw markdown. An opening tag with no close yet means the
+// plan is still streaming — swap the partial JSON for a placeholder.
+function splitPlanSegments(text: string): TextSegment[] {
+  const out: TextSegment[] = []
+  const re = /<plan>\s*([\s\S]*?)\s*<\/plan>/gi
+  let last = 0
+  for (const m of text.matchAll(re)) {
+    if (m.index > last) out.push({ kind: 'prose', text: text.slice(last, m.index) })
+    out.push({ kind: 'plan', json: m[1] })
+    last = m.index + m[0].length
+  }
+  const rest = text.slice(last)
+  const open = rest.search(/<plan>/i)
+  if (open !== -1) {
+    if (open > 0) out.push({ kind: 'prose', text: rest.slice(0, open) })
+    out.push({ kind: 'plan-pending' })
+  } else if (rest.length > 0) {
+    out.push({ kind: 'prose', text: rest })
+  }
+  return out
+}
+
+function PlanCard({
+  plan,
+  resolvePath
+}: {
+  plan: SyncPlan
+  resolvePath: PathResolver
+}): React.JSX.Element {
+  const { navigateAbsolute } = useStore()
+  const multi = plan.groups.length > 1
+  return (
+    <div className="chat-plan">
+      <div className="chat-plan-header">
+        <span className="chat-plan-label">Commit plan</span>
+        {plan.obvious ? <span className="chat-plan-obvious">auto-commit</span> : null}
+      </div>
+      {plan.summary ? <p className="chat-plan-summary">{plan.summary}</p> : null}
+      {plan.ignore.length > 0 ? (
+        <div className="chat-plan-ignore">
+          <div className="chat-plan-ignore-title">Probably shouldn’t be saved</div>
+          {plan.ignore.map((i) => (
+            <div key={i.pattern} className="chat-plan-ignore-row">
+              <span className="chat-plan-file">{i.pattern}</span>
+              {i.reason ? <span className="chat-plan-ignore-reason">{i.reason}</span> : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {plan.groups.length > 0 ? (
+        <div className="chat-plan-groups">
+          {multi ? (
+            <div className="chat-plan-groups-title">{plan.groups.length} commits</div>
+          ) : null}
+          {plan.groups.map((g, idx) => (
+            <div key={idx} className="chat-plan-group">
+              <div className="chat-plan-group-subject">{g.subject}</div>
+              {g.body ? <div className="chat-plan-group-body">{g.body}</div> : null}
+              {g.paths.length > 0 ? (
+                <div className="chat-plan-files">
+                  {g.paths.map((p) => {
+                    const resolved = resolvePath(p)
+                    return resolved ? (
+                      <button
+                        key={p}
+                        className="chat-plan-file chat-plan-file-link"
+                        onClick={() => void navigateAbsolute(resolved, true)}
+                        title={`Open ${p}`}
+                      >
+                        {p}
+                      </button>
+                    ) : (
+                      <span key={p} className="chat-plan-file" title={p}>
+                        {p}
+                      </span>
+                    )
+                  })}
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 function StatusBadge(): React.JSX.Element {
@@ -84,13 +201,41 @@ function PartView({
   const { navigateAbsolute, setWorkspaceView } = useStore()
   if (part.kind === 'text') {
     if (role === 'assistant') {
+      const segments = splitPlanSegments(part.text ?? '')
       return (
         <div className="chat-text chat-text-md">
-          <MarkdownProse
-            source={part.text ?? ''}
-            onNavigate={(target) => void navigateAbsolute(target, true)}
-            resolvePath={resolvePath}
-          />
+          {segments.map((seg, i) => {
+            if (seg.kind === 'prose') {
+              return (
+                <MarkdownProse
+                  key={i}
+                  source={seg.text}
+                  onNavigate={(target) => void navigateAbsolute(target, true)}
+                  resolvePath={resolvePath}
+                />
+              )
+            }
+            if (seg.kind === 'plan-pending') {
+              return (
+                <div key={i} className="chat-plan chat-plan-pending">
+                  Preparing a commit plan…
+                </div>
+              )
+            }
+            const plan = parseChatPlan(seg.json)
+            if (!plan) {
+              // Unreadable JSON — fall back to showing the block verbatim.
+              return (
+                <MarkdownProse
+                  key={i}
+                  source={'```\n' + seg.json + '\n```'}
+                  onNavigate={(target) => void navigateAbsolute(target, true)}
+                  resolvePath={resolvePath}
+                />
+              )
+            }
+            return <PlanCard key={i} plan={plan} resolvePath={resolvePath} />
+          })}
         </div>
       )
     }
@@ -286,7 +431,9 @@ function ProviderSetup({ onCancel }: { onCancel?: () => void } = {}): React.JSX.
         <p className="chat-help-note">Loading providers…</p>
       ) : (
         <>
-          <p>Pick a provider and paste an API key. The key is sent only to the local opencode server.</p>
+          <p>
+            Pick a provider and paste an API key. The key is sent only to the local opencode server.
+          </p>
           <label className="chat-help-label">
             Provider
             <select value={providerId} onChange={(e) => setProviderId(e.target.value)}>
@@ -323,11 +470,7 @@ function ProviderSetup({ onCancel }: { onCancel?: () => void } = {}): React.JSX.
                 Cancel
               </button>
             ) : null}
-            <button
-              className="primary"
-              onClick={() => void onSave()}
-              disabled={!canSave}
-            >
+            <button className="primary" onClick={() => void onSave()} disabled={!canSave}>
               {saving ? 'Saving…' : 'Save and connect'}
             </button>
           </div>
@@ -337,7 +480,7 @@ function ProviderSetup({ onCancel }: { onCancel?: () => void } = {}): React.JSX.
   )
 }
 
-function MessageView({
+export function MessageView({
   message,
   resolvePath
 }: {
@@ -443,9 +586,15 @@ interface QuestionAnswerDraft {
   custom: string
 }
 
-function QuestionPrompt(): React.JSX.Element | null {
-  const { state, answerQuestion, rejectQuestion } = useStore()
-  const pending = state.pendingQuestion
+// Renders one pending agent question. `pending` is passed in (rather than read
+// from global state) so both the side-panel chat and each Agents-view tab can
+// host their own prompt; answering goes through the shared store either way.
+export function QuestionPrompt({
+  pending
+}: {
+  pending: PendingQuestion | null
+}): React.JSX.Element | null {
+  const { answerQuestion, rejectQuestion } = useStore()
   const requestID = pending?.id
   const questions = pending?.questions ?? []
   const [drafts, setDrafts] = useState<QuestionAnswerDraft[]>([])
@@ -482,7 +631,7 @@ function QuestionPrompt(): React.JSX.Element | null {
 
   // Whether the textarea is shown: explicit `custom: true`, or implicitly
   // when the question has no clickable options to choose from.
-  const allowsCustom = (q: typeof questions[number]): boolean =>
+  const allowsCustom = (q: (typeof questions)[number]): boolean =>
     !!q.custom || q.options.length === 0
 
   const isReady = drafts.every((d, i) => {
@@ -516,7 +665,12 @@ function QuestionPrompt(): React.JSX.Element | null {
     <div className="chat-question">
       <div className="chat-question-header">
         <span className="chat-question-label">Agent is asking</span>
-        <button className="link-btn" onClick={onCancel} disabled={submitting} title="Cancel this question">
+        <button
+          className="link-btn"
+          onClick={onCancel}
+          disabled={submitting}
+          title="Cancel this question"
+        >
           Cancel
         </button>
       </div>
@@ -668,7 +822,7 @@ export function ChatPanel(): React.JSX.Element {
           )
         ) : null}
       </div>
-      <QuestionPrompt />
+      <QuestionPrompt pending={state.pendingQuestion} />
       <div className="chat-input-row">
         <textarea
           className="chat-input"

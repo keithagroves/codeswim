@@ -1,11 +1,8 @@
 {
   "workspaceView": "navigator",
-  "currentFile": "philosphy.md",
-  "currentDocumentPath": "philosphy.md",
-  "view": "read",
-  "breadcrumbs": [
-    "overview.md",
-    "package.json"
-  ],
+  "currentFile": "overview.md",
+  "currentDocumentPath": "overview.md",
+  "view": "diagram",
+  "breadcrumbs": [],
   "runningScript": null
 }

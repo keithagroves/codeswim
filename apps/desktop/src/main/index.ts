@@ -186,12 +186,18 @@ async function listTree(rootPath: string): Promise<TreeNode[]> {
 }
 
 function stopWatching(): void {
+  if (treeChangeTimer) {
+    clearTimeout(treeChangeTimer)
+    treeChangeTimer = null
+  }
   if (watcher) {
-    watcher.close()
+    void watcher.close()
     watcher = null
     watchedRoot = null
   }
 }
+
+let treeChangeTimer: NodeJS.Timeout | null = null
 
 function startWatching(rootPath: string): void {
   if (watchedRoot === rootPath && watcher) return
@@ -218,7 +224,6 @@ function startWatching(rootPath: string): void {
   })
   watchedRoot = rootPath
 
-  let treeChangeTimer: NodeJS.Timeout | null = null
   const scheduleTreeChange = (): void => {
     if (treeChangeTimer) clearTimeout(treeChangeTimer)
     treeChangeTimer = setTimeout(() => {
@@ -245,6 +250,17 @@ function startWatching(rootPath: string): void {
   watcher.on('unlink', onAddOrUnlink)
   watcher.on('addDir', scheduleTreeChange)
   watcher.on('unlinkDir', scheduleTreeChange)
+}
+
+function killTerminals(): void {
+  for (const terminal of terminals.values()) {
+    try {
+      terminal.kill()
+    } catch {
+      /* already exited */
+    }
+  }
+  terminals.clear()
 }
 
 interface RunEntry {
@@ -976,13 +992,16 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
   stopWatching()
   killActiveRun()
+  killTerminals()
   if (process.platform !== 'darwin') {
     app.quit()
   }
 })
 
 app.on('before-quit', () => {
+  stopWatching()
   killActiveRun()
+  killTerminals()
   if (sidecar) {
     void sidecar.stop()
     sidecar = null
