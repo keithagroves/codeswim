@@ -83,6 +83,7 @@ Vitest tests live next to the modules they cover:
 ## Project docs
 
 - [README.md](README.md) — what codeswim is and how to run it.
+- [ia-map.md](ia-map.md) — information architecture map: descriptive inventory of every renderer capability, its surfaces, and interaction mode.
 - [SIGNING.md](SIGNING.md) — how to produce a signed + notarized macOS build for release.
 - [plan.md](plan.md) — the thesis: as AI writes more code, humans should navigate intentional diagrams instead of generated implementation.
 - [AGENTS.md](AGENTS.md) — guidance for AI agents working in this repo.

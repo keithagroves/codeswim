@@ -109,6 +109,7 @@ flowchart TD
 - [PullRequestsPanel.tsx](../apps/desktop/src/renderer/src/components/PullRequestsPanel.tsx) — pull request listing, filtering, and inline merge flow.
 - [TerminalPanel.tsx](../apps/desktop/src/renderer/src/components/TerminalPanel.tsx) — terminal emulator panel (Ctrl+` toggle).
 - [Toasts.tsx](../apps/desktop/src/renderer/src/components/Toasts.tsx) — transient notifications.
+- [AgentsView.tsx](../apps/desktop/src/renderer/src/components/AgentsView.tsx) — multi-tab agent workspace: browser-style tabs, one opencode session per tab, independent streaming.
 
 ### Chat & collaboration
 
