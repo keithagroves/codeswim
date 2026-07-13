@@ -15,6 +15,7 @@ import * as pty from 'node-pty'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { startSidecar, type SidecarHandle } from './sidecar'
+import { initUpdater } from './updater'
 import {
   configureBuiltinSkillsDir,
   deleteSkill,
@@ -595,6 +596,8 @@ app.whenReady().then(async () => {
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
+
+  initUpdater(() => mainWindow)
 
   ipcMain.handle('pick-folder', async () => {
     if (!mainWindow) return null
