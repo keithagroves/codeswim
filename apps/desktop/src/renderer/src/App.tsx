@@ -268,7 +268,7 @@ function Body(): React.JSX.Element {
 }
 
 function StartScreen(): React.JSX.Element {
-  const { state, pickRoot, newProject, openRecent, clearRecents } = useStore()
+  const { state, pickRoot, newProject, openDemo, openRecent, clearRecents } = useStore()
   const recents = state.recents
 
   return (
@@ -287,6 +287,9 @@ function StartScreen(): React.JSX.Element {
         </button>
       </div>
       <p className="start-screen-hint">⌘N to create · ⌘O to open</p>
+      <button className="link-btn start-screen-demo" onClick={() => void openDemo()}>
+        Or try the demo project
+      </button>
 
       {recents.length > 0 ? (
         <div className="start-recents">

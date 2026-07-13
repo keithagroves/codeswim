@@ -6,6 +6,9 @@ import type { TreeNode } from '../store'
 import { analyzeCoverage, type CoverageReport, type FileInfo } from '@codeswim/coverage'
 
 const IGNORE_DIRS = new Set([
+  // App-managed companion docs (explanations, board) — not part of the
+  // author's diagram tree, so they must not count as orphan diagrams.
+  '.codeswim',
   'node_modules',
   'dist',
   'out',

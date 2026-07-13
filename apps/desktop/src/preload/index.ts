@@ -276,6 +276,7 @@ const api = {
     return () => ipcRenderer.removeListener('menu:open-folder', listener)
   },
   newProject: (): Promise<NewProjectResult | null> => ipcRenderer.invoke('new-project'),
+  openDemo: (): Promise<string> => ipcRenderer.invoke('open-demo'),
   getRecents: (): Promise<string[]> => ipcRenderer.invoke('get-recents'),
   clearRecents: (): Promise<string[]> => ipcRenderer.invoke('clear-recents'),
   addRecent: (path: string): Promise<string[]> => ipcRenderer.invoke('add-recent', path),

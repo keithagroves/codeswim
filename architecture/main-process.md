@@ -21,6 +21,8 @@ flowchart TD
     Index --> Skills[skills.ts<br/>list/read SKILL.md]
     Index --> Harness[start-harness]
     Index --> Updater[updater.ts<br/>auto-update]
+    Index --> Demo[demo.ts<br/>open-demo]
+    Demo -->|copy on first use| DemoWs[(userData/<br/>demo-workspace)]
     Updater -->|update:status| Renderer
     Watcher -->|file-changed,<br/>tree-changed| Renderer
     Scripts -->|spawn npm run,<br/>detached| Group[(process group)]
@@ -39,6 +41,8 @@ flowchart TD
     click Skills call navigate("../packages/domain-skills/src/skills.ts")
     click Harness call navigate("./agent-harness.md")
     click Updater call navigate("../apps/desktop/src/main/updater.ts")
+    click Demo call navigate("../apps/desktop/src/main/demo.ts")
+    click DemoWs call navigate("../apps/desktop/src/main/demo.ts")
 ```
 
 ## Notes
@@ -60,6 +64,7 @@ flowchart TD
 - [packages/domain-skills/src/index.ts](../packages/domain-skills/src/index.ts) — domain-skills package entry point.
 - [apps/desktop/src/main/github.ts](../apps/desktop/src/main/github.ts) — GitHub OAuth device-flow handler in the main process.
 - [apps/desktop/src/main/updater.ts](../apps/desktop/src/main/updater.ts) — background auto-update from GitHub releases via electron-updater; renderer shows the restart button.
+- [apps/desktop/src/main/demo.ts](../apps/desktop/src/main/demo.ts) — "Try the demo": resolves the bundled example (extraResource in packaged builds, `examples/sample-architecture` in dev) and copies it into `userData/demo-workspace` on first use.
 - [packages/domain-github/src/github-auth.ts](../packages/domain-github/src/github-auth.ts) — GitHub OAuth device-flow authentication for the chat feature.
 - [packages/domain-github/src/index.ts](../packages/domain-github/src/index.ts) — domain-github package entry point.
 - [packages/domain-kanban/src/index.ts](../packages/domain-kanban/src/index.ts) — domain-kanban package entry point.
@@ -73,3 +78,4 @@ flowchart TD
 - [packages/domain-github/src/room.test.ts](../packages/domain-github/src/room.test.ts) — covers the room identity logic.
 - [packages/domain-skills/src/source-explanations.test.ts](../packages/domain-skills/src/source-explanations.test.ts) — covers explanation path resolution.
 - [apps/desktop/src/main/updater.test.ts](../apps/desktop/src/main/updater.test.ts) — covers the updater's event-to-status mapping and install IPC against mocked electron modules.
+- [apps/desktop/src/main/demo.test.ts](../apps/desktop/src/main/demo.test.ts) — covers demo source-dir resolution (dev vs packaged) and the copy-once semantics of the demo workspace.

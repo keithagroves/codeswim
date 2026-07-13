@@ -266,6 +266,9 @@ export interface DiagramNavApi {
   onHarnessExit(cb: (payload: HarnessExitPayload) => void): () => void
   onMenuOpenFolder(cb: () => void): () => void
   newProject(): Promise<NewProjectResult | null>
+  // Copies the bundled example project into userData (first time) and returns
+  // its path, ready to open as a normal workspace.
+  openDemo(): Promise<string>
   getRecents(): Promise<string[]>
   clearRecents(): Promise<string[]>
   addRecent(path: string): Promise<string[]>

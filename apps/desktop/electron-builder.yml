@@ -31,6 +31,11 @@ files:
       - opencode-linux-x64/**
       - opencode-windows-x64/**
       - node-pty/**
+# The bundled demo workspace ("Try the demo" on the start screen) — copied
+# into userData at first use so it's writable.
+extraResources:
+  - from: ../../examples/sample-architecture
+    to: demo
 asarUnpack:
   - resources/**
   # opencode is a spawned binary — must live on disk, not inside app.asar.

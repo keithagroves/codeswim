@@ -15,6 +15,9 @@ flowchart LR
     Authn --> Billing[Billing Routes]
     Authn --> Account[Account Routes]
 
+    click Inbound call navigate("./overview.md")
+    click Router call navigate("./overview.md")
     click Authn call navigate("./auth.md")
     click Billing call navigate("./billing.md")
+    click Account call navigate("./auth.md")
 ```

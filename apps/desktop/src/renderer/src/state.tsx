@@ -1277,6 +1277,16 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
     }
   }, [openWorkspace, toast])
 
+  const openDemo = useCallback(async () => {
+    try {
+      const path = await window.api.openDemo()
+      await openWorkspace(path)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      toast(`Could not open the demo: ${msg}`, 'error')
+    }
+  }, [openWorkspace, toast])
+
   const openRecent = useCallback(
     async (path: string) => {
       await openWorkspace(path)
@@ -1782,6 +1792,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       switchSession,
       refreshSessions,
       newProject,
+      openDemo,
       openRecent,
       clearRecents,
       syncDiagrams,
@@ -1835,6 +1846,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       switchSession,
       refreshSessions,
       newProject,
+      openDemo,
       openRecent,
       clearRecents,
       syncDiagrams,

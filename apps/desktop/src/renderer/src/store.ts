@@ -246,6 +246,8 @@ export interface StoreApi {
   switchSession(sessionId: string): Promise<void>
   refreshSessions(): Promise<void>
   newProject(): Promise<void>
+  // Copies the bundled example workspace into userData (first use) and opens it.
+  openDemo(): Promise<void>
   openRecent(path: string): Promise<void>
   clearRecents(): Promise<void>
   // Audits the workspace against the MDD rules and either reports clean

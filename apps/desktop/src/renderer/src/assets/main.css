@@ -3423,6 +3423,11 @@ body.is-mac .header {
   margin-top: 0;
 }
 
+.start-screen-demo {
+  font-size: 12.5px;
+  margin-top: 2px;
+}
+
 .start-recents {
   margin-top: 24px;
   width: 100%;

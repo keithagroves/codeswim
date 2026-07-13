@@ -16,6 +16,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { startSidecar, type SidecarHandle } from './sidecar'
 import { initUpdater } from './updater'
+import { demoSourceDir, ensureDemoWorkspace } from './demo'
 import {
   configureBuiltinSkillsDir,
   deleteSkill,
@@ -612,6 +613,14 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('new-project', async () => {
     return newProject()
+  })
+
+  ipcMain.handle('open-demo', async () => {
+    const source = demoSourceDir(app.getAppPath(), process.resourcesPath, app.isPackaged)
+    const target = join(app.getPath('userData'), 'demo-workspace')
+    await ensureDemoWorkspace(source, target)
+    await addRecent(target)
+    return target
   })
 
   ipcMain.handle('get-recents', async () => {

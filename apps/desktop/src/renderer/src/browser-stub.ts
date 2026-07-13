@@ -332,6 +332,7 @@ The companion document belongs at \`${documentPath}\`.
     onHarnessExit: noopUnsub,
     onMenuOpenFolder: noopUnsub,
     newProject: notInBrowser<NewProjectResult | null>('newProject'),
+    openDemo: notInBrowser<string>('openDemo'),
     getRecents: () => Promise.resolve([]),
     clearRecents: () => Promise.resolve([]),
     addRecent: () => Promise.resolve([]),
