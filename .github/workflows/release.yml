@@ -35,6 +35,11 @@ jobs:
       - run: npm ci
 
       - name: Build and publish
+        # The Linux .deb step crashes in electron-builder's fpm on current
+        # runners; the AppImage still uploads. Tolerate only the Linux leg so
+        # a known-bad .deb doesn't turn the whole release red. mac/win must
+        # still pass.
+        continue-on-error: ${{ matrix.os == 'ubuntu-latest' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Baked into the app at build time (normally read from the
@@ -50,3 +55,16 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: ${{ matrix.build }}
+
+  # electron-builder uploads artifacts to a *draft* release; nothing promotes
+  # it. Flip it to published once the builds are in — this is also what fires
+  # the landing-page refresh (which triggers on release: published).
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Publish the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ github.ref_name }}" --draft=false --repo "${{ github.repository }}"

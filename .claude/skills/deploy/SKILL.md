@@ -7,11 +7,12 @@ Ship a new codeswim release end to end. The version source of truth is
 `apps/desktop/package.json` (NOT the repo-root package.json — that stays at
 0.1.2 and is ignored). Releases trigger on a pushed `v*` git tag.
 
-The single most important thing this skill exists to remember: **CI uploads
-the artifacts to a GitHub _draft_ release and nothing promotes it. You must
-publish the draft by hand at the end.** A finished run with a lingering draft
-looks like success-but-nothing-shipped; publishing is also what fires the
-landing-page refresh.
+Publishing is now automatic: `release.yml` has a `publish` job that flips the
+draft to published once the mac/win builds pass, and the Linux `.deb` failure
+is tolerated (`continue-on-error` on that leg) so the run goes green. So the
+happy path is just bump → tag → push → watch it go green → verify. Step 9
+below (manual publish) is now only a fallback if that job is ever removed or
+fails.
 
 ## Steps
 
@@ -34,17 +35,17 @@ landing-page refresh.
    `git tag v<X.Y.Z> && git push origin main && git push origin v<X.Y.Z>`
 
 6. **Watch the run.** `gh run list --workflow=Release --limit 3` to get the id, then `gh run watch <id> --exit-status --interval 30`.
-   - **Expected outcome: the run shows FAILURE, and that is fine.** Only the Linux job fails — the pre-existing electron-builder `fpm` crash building the `.deb`. The AppImage still uploads. Mac and Windows must succeed. Confirm exactly that shape; a mac or windows failure is a real problem.
+   - **Expected outcome: the run goes GREEN.** The Linux leg's `.deb` step still crashes (pre-existing electron-builder `fpm` bug) but is marked non-fatal via `continue-on-error`, so it no longer reddens the run; the AppImage still uploads. Mac and Windows must genuinely succeed — a real failure there still fails the run and (correctly) blocks the `publish` job.
 
 7. **Verify the mac build is signed + notarized** (the whole reason signing exists — friend's Gatekeeper block):
    `gh run view <id> --log | grep -iE "Developer ID Application|notarization successful"`
    Expect "Developer ID Application: Osphor Labs LLC" and "notarization successful".
 
-8. **Check the assets landed on the (draft) release:**
-   `gh release view v<X.Y.Z> --json isDraft,assets --jq '{isDraft,assets:[.assets[].name]}'`
-   Expect `isDraft: true` and: mac `.zip`+`.dmg`(+blockmaps), win `-setup.exe`, linux `.AppImage`, plus `latest-mac.yml` and `latest.yml` (the electron-updater feeds — without these the in-app updater can't see the release).
+8. **Check the assets landed and the release auto-published:**
+   `gh release view v<X.Y.Z> --json isDraft,publishedAt,assets --jq '{isDraft,publishedAt,assets:[.assets[].name]}'`
+   Expect `isDraft: false` (the `publish` job flipped it) and: mac `.zip`+`.dmg`(+blockmaps), win `-setup.exe`, linux `.AppImage`, plus `latest-mac.yml` and `latest.yml` (the electron-updater feeds — without these the in-app updater can't see the release).
 
-9. **Publish the draft** (the manual step CI omits):
+9. **Fallback only — if the release is still a draft** (the `publish` job was removed or failed):
    `gh release edit v<X.Y.Z> --draft=false`
    Then confirm: `gh release view v<X.Y.Z> --json isDraft,publishedAt`.
 
@@ -62,8 +63,7 @@ shipped the updater (v0.1.6+). Mention the Linux `.deb` job failed as expected.
 
 ## Notes / gotchas
 
-- Don't be alarmed by the red ✗ on the Release run — it's Linux-only. Read the per-job status, not the overall.
 - Never `git push` the tag before the bump commit, or the tagged tree won't contain the new version.
-- If `gh release edit --draft=false` says the release doesn't exist yet, the mac/win jobs haven't finished uploading — wait for step 6 to complete first.
 - The mac build takes ~7 min (notarization round-trip). Budget for it when watching.
-- To make this fully automatic later, add a publish step to `.github/workflows/release.yml` after the matrix (e.g. `gh release edit "$TAG" --draft=false`) — until then this manual step is load-bearing.
+- The `publish` job only runs on tag pushes (`if: startsWith(github.ref, 'refs/tags/v')`) and only if `build` passed — so a genuine mac/win failure correctly leaves the release unpublished.
+- The real remaining wart is the Linux `.deb` itself. If you'd rather not ship `.deb` at all, drop `deb` from `linux.target` in `apps/desktop/electron-builder.yml` and the `continue-on-error` hack becomes unnecessary.
