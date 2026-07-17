@@ -11,6 +11,8 @@
 // the git remote) lives in getRoomIdentity at the bottom.
 
 import { createHash } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { gitRemoteUrl } from '@codeswim/domain-git'
 
 export interface RoomIdentity {
@@ -72,10 +74,32 @@ export function roomIdentityFromSlug(slug: string): RoomIdentity {
   return { roomId, slug, provider }
 }
 
-// Read the workspace's origin remote and derive its room identity, or null
-// when there's no origin to key on (local-only repo) — the renderer treats
-// null as "chat unavailable for this workspace".
+// A workspace can pin itself to a fixed room by shipping
+// `.codeswim/room.json` — `{ "slug": "github.com/owner/repo" }`. The bundled
+// demo relies on this: it's copied into userData with no git origin, so there
+// is no remote to key on, yet we still want everyone who clicks "Try the demo"
+// to land in one shared, public room. A pinned slug wins over the git remote.
+async function pinnedSlug(rootPath: string): Promise<string | null> {
+  try {
+    const raw = await readFile(join(rootPath, '.codeswim', 'room.json'), 'utf8')
+    const parsed = JSON.parse(raw) as { slug?: unknown }
+    if (typeof parsed.slug !== 'string') return null
+    // Run it through the same normalizer as a remote so a hand-written slug
+    // collides with a real clone's origin, and malformed input yields null.
+    return normalizeRemote(parsed.slug)
+  } catch {
+    // Missing file, unreadable, or invalid JSON — fall back to the git remote.
+    return null
+  }
+}
+
+// Resolve the workspace's room identity: a pinned `.codeswim/room.json` slug
+// if present, else the origin remote, else null. null means "no shared remote
+// to key on" and the renderer treats it as "chat unavailable for this
+// workspace".
 export async function getRoomIdentity(rootPath: string): Promise<RoomIdentity | null> {
+  const pinned = await pinnedSlug(rootPath)
+  if (pinned) return roomIdentityFromSlug(pinned)
   const remote = await gitRemoteUrl(rootPath)
   if (!remote) return null
   const slug = normalizeRemote(remote)

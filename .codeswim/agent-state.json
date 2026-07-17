@@ -1,11 +1,11 @@
 {
   "workspaceView": "navigator",
-  "currentFile": "apps/desktop/src/renderer/src/components/AgentsView.tsx",
-  "currentDocumentPath": ".codeswim/explanations/apps/desktop/src/renderer/src/components/AgentsView.tsx.md",
-  "view": "read",
+  "currentFile": "overview.md",
+  "currentDocumentPath": "overview.md",
+  "view": "diagram",
   "breadcrumbs": [
     "overview.md",
-    "ia-map.md"
+    "architecture/preload.md"
   ],
   "runningScript": null
 }

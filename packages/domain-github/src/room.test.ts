@@ -1,5 +1,8 @@
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { normalizeRemote, roomIdentityFromSlug } from './room'
+import { getRoomIdentity, normalizeRemote, roomIdentityFromSlug } from './room'
 
 describe('normalizeRemote', () => {
   it('normalizes https, scp-like, and ssh forms of the same repo to one slug', () => {
@@ -53,5 +56,32 @@ describe('roomIdentityFromSlug', () => {
 
   it('tags non-github hosts as generic git', () => {
     expect(roomIdentityFromSlug('gitlab.com/group/project').provider).toBe('git')
+  })
+})
+
+describe('getRoomIdentity with a pinned room file', () => {
+  it('resolves the slug from .codeswim/room.json even with no git remote', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'codeswim-room-'))
+    try {
+      mkdirSync(join(root, '.codeswim'), { recursive: true })
+      writeFileSync(
+        join(root, '.codeswim', 'room.json'),
+        JSON.stringify({ slug: 'github.com/keithagroves/codeswim-demo' })
+      )
+      // The temp dir is not a git repo, so without the marker this is null.
+      const id = await getRoomIdentity(root)
+      expect(id).toEqual(roomIdentityFromSlug('github.com/keithagroves/codeswim-demo'))
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('returns null for a non-repo with no pinned room file', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'codeswim-room-'))
+    try {
+      expect(await getRoomIdentity(root)).toBeNull()
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })
