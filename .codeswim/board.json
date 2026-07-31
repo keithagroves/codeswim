@@ -295,6 +295,19 @@
       "labels": [],
       "createdAt": 1782493183185,
       "updatedAt": 1782493183185
+    },
+    {
+      "id": "card-021",
+      "title": "Add play button to execute Ready items",
+      "description": "A play/execute button on the Ready column (or in the header) that runs all cards currently in the Ready column — e.g. spawning the agent to process them sequentially, or kicking off the scripts/flows they represent. Should show progress and aggregate results.",
+      "columnId": "backlog",
+      "priority": "medium",
+      "labels": [
+        "feature",
+        "board"
+      ],
+      "createdAt": 1785168000000,
+      "updatedAt": 1785168000000
     }
   ]
 }

@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import mermaid from 'mermaid'
 import { parseMarkdown } from '../parse'
+import { parseTarget, resolveRelative, toPosix } from '../path-utils'
 import { useStore } from '../store'
 import { MarkdownProse } from './MarkdownProse'
 import { MermaidErrorBanner } from './MermaidErrorBanner'
@@ -77,7 +78,8 @@ function ensureMermaidInitialized(): void {
 }
 
 export function ReadView({ source }: { source: string }): React.JSX.Element {
-  const { state, navigateRelative, navigateAbsolute, createCurrentExplanation } = useStore()
+  const { state, navigateRelative, navigateAbsolute, createCurrentExplanation, openSourceCode } =
+    useStore()
   const parsed = useMemo(() => parseMarkdown(source), [source])
   const canvasRef = useRef<HTMLDivElement>(null)
   const reactId = useId().replace(/[^a-zA-Z0-9]/g, '')
@@ -158,7 +160,17 @@ export function ReadView({ source }: { source: string }): React.JSX.Element {
 
       <div className="read-text-col">
         <header className="read-header">
-          {state.currentFile ? <div className="read-path">{state.currentFile}</div> : null}
+          {state.currentFile ? (
+            <div className="read-path-row">
+              <div className="read-path">{state.currentFile}</div>
+              <button
+                className="secondary read-view-source"
+                onClick={() => void openSourceCode(state.currentFile!, null)}
+              >
+                View source
+              </button>
+            </div>
+          ) : null}
           <h1 className="read-title">{fm.name ?? fileLabel}</h1>
           {fm.description ? <p className="read-lead">{fm.description}</p> : null}
           {tags.length > 0 ? (
@@ -193,6 +205,25 @@ export function ReadView({ source }: { source: string }): React.JSX.Element {
               onNavigate={(target) => void navigateRelative(target)}
               headingOffset={0}
               collapsibleSource
+              loadSnippet={async (target) => {
+                if (!state.rootPath) return null
+                const baseDoc = state.currentDocumentPath ?? state.currentFile
+                if (!baseDoc) return null
+                const { path } = parseTarget(target)
+                const resolved = resolveRelative(baseDoc, path)
+                const abs = `${toPosix(state.rootPath).replace(/\/$/, '')}/${resolved}`
+                try {
+                  return await window.api.readFile(abs)
+                } catch {
+                  return null
+                }
+              }}
+              onOpenEditor={(target) => {
+                const baseDoc = state.currentDocumentPath ?? state.currentFile
+                if (!baseDoc) return
+                const { path, range } = parseTarget(target)
+                void openSourceCode(resolveRelative(baseDoc, path), range)
+              }}
             />
           </div>
         </div>

@@ -3139,7 +3139,18 @@ body.is-mac .header {
   font-family:
     ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
   color: var(--text-muted);
+}
+
+.read-path-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 12px;
+}
+
+.read-view-source {
+  flex-shrink: 0;
 }
 
 .read-tags {
@@ -5367,4 +5378,95 @@ body.is-panning .diagram-canvas-wrap {
   background: var(--bg);
   color: var(--error-text);
   font-size: 11px;
+}
+
+/* Full-page read-only source view (CodeView). */
+.code-view {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.code-view .cm-editor {
+  height: 100%;
+  font-size: 13px;
+}
+
+.code-view .cm-scroller {
+  font-family:
+    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+/* Line-range highlight in CodeView — applied to each line in the navigate
+ * target's #L10-L22 range. Warm accent tint plus a left-edge bar so the
+ * range is visible even without scrolling. */
+.cm-target-line {
+  background: var(--warning-bg);
+  box-shadow: -3px 0 0 var(--warning) inset;
+}
+
+/* Inline expandable code-snippet card (MarkdownProse links with a #L range). */
+.inline-code-link {
+  display: inline;
+}
+
+.inline-code-toggle {
+  background: none;
+  border: 0;
+  padding: 0 0 0 4px;
+  margin: 0;
+  font-size: 0.85em;
+  color: var(--text-muted);
+  cursor: pointer;
+  vertical-align: baseline;
+}
+
+.inline-code-toggle:hover {
+  color: var(--text);
+}
+
+.code-snippet-card {
+  display: block;
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-raised);
+  overflow: hidden;
+}
+
+.code-snippet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-muted);
+}
+
+.code-snippet-path {
+  font-size: 12px;
+  font-family:
+    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  color: var(--text-muted);
+}
+
+.code-snippet-open {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.code-snippet-body {
+  font-size: 13px;
+}
+
+.code-snippet-body .cm-editor {
+  font-family:
+    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+.code-snippet-message {
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--text-muted);
 }

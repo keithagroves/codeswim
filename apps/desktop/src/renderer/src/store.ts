@@ -3,6 +3,9 @@ import type { PendingQuestion } from './agent'
 import type { CommitMessage } from '@codeswim/commit'
 import type { SyncPlan } from '@codeswim/commit'
 import type { GitIgnoreResult, PullRequest } from '@codeswim/contract'
+import type { LineRange } from './path-utils'
+
+export type { LineRange } from './path-utils'
 
 export type { PendingQuestion } from './agent'
 export type { CommitMessage } from '@codeswim/commit'
@@ -16,8 +19,8 @@ export function prDiffLabel(pr: { number: number; title: string }): string {
   return `#${pr.number} · ${pr.title}`
 }
 
-export type View = 'diagram' | 'read' | 'output' | 'diff'
-export type FileView = 'diagram' | 'read'
+export type View = 'diagram' | 'read' | 'code' | 'output' | 'diff'
+export type FileView = 'diagram' | 'read' | 'code'
 export type WorkspaceView = 'kanban' | 'navigator' | 'agents'
 // Activity-bar / side-panel sections, in no particular order. The user's
 // preferred order lives in AppState.activityOrder.
@@ -136,6 +139,9 @@ export interface AppState {
   forward: string[]
   view: View
   fileContents: string | null
+  // Line range to highlight/scroll to in the `code` view. Set only by
+  // openSourceCode; navigation elsewhere clears it.
+  codeRange: LineRange | null
   loading: boolean
   toasts: Toast[]
   runs: RunEntry[]
@@ -205,6 +211,9 @@ export interface StoreApi {
   navigateRelative(relativePathFromCurrent: string): Promise<void>
   navigateAbsolute(relativeToRoot: string, pushBreadcrumb: boolean): Promise<void>
   inspectFile(relativeToRoot: string): Promise<void>
+  // Opens a file's raw source in the in-app read-only code view, optionally
+  // scrolled to and highlighting a line range.
+  openSourceCode(relativeToRoot: string, range: LineRange | null): Promise<void>
   popTo(index: number): Promise<void>
   // Browser-style single-step history navigation.
   goBack(): Promise<void>

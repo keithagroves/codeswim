@@ -1,4 +1,6 @@
-import type { MouseEvent, ReactNode } from 'react'
+import { useEffect, useState, type MouseEvent, type ReactNode } from 'react'
+import { CodeSnippetCard } from './CodeSnippetCard'
+import { extname, parseTarget } from '../path-utils'
 
 type MarkdownBlock =
   | { kind: 'heading'; level: number; text: string }
@@ -24,6 +26,17 @@ interface MarkdownProseProps {
   // <details> so the prose isn't buried under a wall of file links. ReadView
   // opts in; chat/skills render everything inline.
   collapsibleSource?: boolean
+  // Optional: enables the expandable inline code-snippet card. Given a raw
+  // link target (e.g. "./billing.ts#L40-52"), resolves and returns the full
+  // text of the target file, or null if it can't be read. Only links whose
+  // target carries a `#L` line range and resolves to a non-markdown file
+  // become expandable; every other link is unaffected. Omit to disable the
+  // feature entirely (its default).
+  loadSnippet?: (target: string) => Promise<string | null>
+  // Called when the user clicks "Open in editor" on an expanded snippet
+  // card, with the same raw target string. Required alongside loadSnippet
+  // for the expandable-card feature to activate.
+  onOpenEditor?: (target: string) => void
 }
 
 // A `## Source` (or `## Source (…)`) heading whose body is just the file
@@ -124,10 +137,93 @@ function isExternalLink(target: string): boolean {
   return /^(?:[a-z][a-z0-9+.-]*:|#)/i.test(target)
 }
 
+// A plain `[label](target)` link, unless `target` carries a `#L` line range
+// onto a non-markdown file and the caller supplied `loadSnippet` — then it
+// also gets a toggle that expands an inline, syntax-highlighted card showing
+// exactly that block of the real file.
+function InlineCodeLink({
+  label,
+  target,
+  onNavigate,
+  loadSnippet,
+  onOpenEditor
+}: {
+  label: string
+  target: string
+  onNavigate: (target: string) => void
+  loadSnippet?: (target: string) => Promise<string | null>
+  onOpenEditor?: (target: string) => void
+}): React.JSX.Element {
+  const parsed = parseTarget(target)
+  const expandable = Boolean(loadSnippet && parsed.range && extname(parsed.path) !== '.md')
+
+  const [expanded, setExpanded] = useState(false)
+  const [snippet, setSnippet] = useState<string | null>(null)
+  const [loadFailed, setLoadFailed] = useState(false)
+
+  useEffect(() => {
+    if (!expanded || !expandable || snippet !== null || loadFailed) return
+    let cancelled = false
+    void loadSnippet!(target).then((text) => {
+      if (cancelled) return
+      if (text === null) setLoadFailed(true)
+      else setSnippet(text)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [expanded, expandable, snippet, loadFailed, loadSnippet, target])
+
+  const handleClick = (event: MouseEvent<HTMLAnchorElement>): void => {
+    if (isExternalLink(target)) return
+    event.preventDefault()
+    onNavigate(target)
+  }
+
+  const link = (
+    <a href={target} onClick={handleClick}>
+      {label}
+    </a>
+  )
+
+  if (!expandable) return link
+
+  return (
+    <span className="inline-code-link">
+      {link}
+      <button
+        type="button"
+        className="inline-code-toggle"
+        aria-expanded={expanded}
+        title={expanded ? 'Hide code' : 'Show code'}
+        onClick={() => setExpanded((v) => !v)}
+      >
+        {expanded ? '▾' : '▸'}
+      </button>
+      {expanded ? (
+        loadFailed ? (
+          <div className="code-snippet-card code-snippet-message">Could not load {parsed.path}</div>
+        ) : snippet !== null ? (
+          <CodeSnippetCard
+            path={parsed.path}
+            range={parsed.range!}
+            fileText={snippet}
+            onOpenEditor={() => onOpenEditor?.(target)}
+          />
+        ) : (
+          <div className="code-snippet-card code-snippet-message">Loading…</div>
+        )
+      ) : null}
+    </span>
+  )
+}
+
 function renderInline(
   text: string,
   onNavigate: (target: string) => void,
-  resolvePath?: (raw: string) => string | null
+  resolvePath?: (raw: string) => string | null,
+  loadSnippet?: (target: string) => Promise<string | null>,
+  onOpenEditor?: (target: string) => void
 ): ReactNode[] {
   const nodes: ReactNode[] = []
   const pattern = /(`([^`]+)`|\*\*([^*]+)\*\*|\[([^\]]+)\]\(([^)]+)\))/g
@@ -163,17 +259,15 @@ function renderInline(
     } else if (match[3]) {
       nodes.push(<strong key={nodes.length}>{match[3]}</strong>)
     } else if (match[4] && match[5]) {
-      const label = match[4]
-      const target = match[5]
-      const handleClick = (event: MouseEvent<HTMLAnchorElement>): void => {
-        if (isExternalLink(target)) return
-        event.preventDefault()
-        onNavigate(target)
-      }
       nodes.push(
-        <a key={nodes.length} href={target} onClick={handleClick}>
-          {label}
-        </a>
+        <InlineCodeLink
+          key={nodes.length}
+          label={match[4]}
+          target={match[5]}
+          onNavigate={onNavigate}
+          loadSnippet={loadSnippet}
+          onOpenEditor={onOpenEditor}
+        />
       )
     }
 
@@ -194,23 +288,27 @@ export function MarkdownProse({
   onNavigate,
   headingOffset = 2,
   resolvePath,
-  collapsibleSource = false
+  collapsibleSource = false,
+  loadSnippet,
+  onOpenEditor
 }: MarkdownProseProps): React.JSX.Element {
   const blocks = parseBlocks(source)
+  const inline = (text: string): ReactNode[] =>
+    renderInline(text, onNavigate, resolvePath, loadSnippet, onOpenEditor)
 
   const renderBlock = (block: MarkdownBlock, index: number): ReactNode => {
     switch (block.kind) {
       case 'heading': {
         const Tag = headingTag(block.level, headingOffset)
-        return <Tag key={index}>{renderInline(block.text, onNavigate, resolvePath)}</Tag>
+        return <Tag key={index}>{inline(block.text)}</Tag>
       }
       case 'paragraph':
-        return <p key={index}>{renderInline(block.text, onNavigate, resolvePath)}</p>
+        return <p key={index}>{inline(block.text)}</p>
       case 'unordered-list':
         return (
           <ul key={index}>
             {block.items.map((item, itemIndex) => (
-              <li key={itemIndex}>{renderInline(item, onNavigate, resolvePath)}</li>
+              <li key={itemIndex}>{inline(item)}</li>
             ))}
           </ul>
         )
@@ -218,7 +316,7 @@ export function MarkdownProse({
         return (
           <ol key={index}>
             {block.items.map((item, itemIndex) => (
-              <li key={itemIndex}>{renderInline(item, onNavigate, resolvePath)}</li>
+              <li key={itemIndex}>{inline(item)}</li>
             ))}
           </ol>
         )
@@ -247,7 +345,7 @@ export function MarkdownProse({
       }
       rendered.push(
         <details key={index} className="prose-source-details">
-          <summary>{renderInline(block.text, onNavigate, resolvePath)}</summary>
+          <summary>{inline(block.text)}</summary>
           {body}
         </details>
       )

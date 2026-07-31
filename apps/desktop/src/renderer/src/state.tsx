@@ -27,6 +27,7 @@ import {
   type ChatMessagePart,
   type ChatStatus,
   type FileView,
+  type LineRange,
   type RunEntry,
   type RunningScript,
   type Section,
@@ -65,6 +66,7 @@ const initialState: AppState = {
   forward: [],
   view: 'diagram',
   fileContents: null,
+  codeRange: null,
   loading: false,
   toasts: [],
   runs: [],
@@ -101,19 +103,22 @@ type Action =
       type: 'load-success'
       file: string
       contents: string
-      view: 'diagram' | 'read'
+      view: FileView
       pushBreadcrumb: boolean
       previous: string | null
       revealNavigator: boolean
       documentPath: string
       sourceExplanationExists: boolean
+      // Line range to highlight when view is 'code'. Any other navigation
+      // (including revisiting a code file without a range) clears it.
+      range?: LineRange | null
     }
   | {
       type: 'pop-to'
       index: number
       file: string
       contents: string
-      view: 'diagram' | 'read'
+      view: FileView
       documentPath: string
       sourceExplanationExists: boolean
     }
@@ -123,7 +128,7 @@ type Action =
       // The file being left behind, moved onto the opposite stack.
       previous: string | null
       contents: string
-      view: 'diagram' | 'read'
+      view: FileView
       documentPath: string
       sourceExplanationExists: boolean
     }
@@ -220,6 +225,7 @@ function reducer(state: AppState, action: Action): AppState {
         sourceExplanationExists: action.sourceExplanationExists,
         fileContents: action.contents,
         view: action.view,
+        codeRange: action.range ?? null,
         breadcrumbs,
         // A fresh navigation branches the history — drop any forward trail.
         forward: [],
@@ -237,6 +243,7 @@ function reducer(state: AppState, action: Action): AppState {
         sourceExplanationExists: action.sourceExplanationExists,
         fileContents: action.contents,
         view: action.view,
+        codeRange: null,
         breadcrumbs,
         // Jumping to an arbitrary crumb isn't a single Back step; reset forward.
         forward: [],
@@ -267,6 +274,7 @@ function reducer(state: AppState, action: Action): AppState {
         sourceExplanationExists: action.sourceExplanationExists,
         fileContents: action.contents,
         view: action.view,
+        codeRange: null,
         breadcrumbs,
         forward,
         loading: false,
@@ -1038,9 +1046,9 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
   const navigateAbsolute = useCallback(
     async (relPath: string, pushBreadcrumb: boolean, markdownView?: 'diagram' | 'read') => {
       if (!state.rootPath) return
-      // The path may carry a legacy #L10-L22 line ref; peel it off before
-      // reading. Ranges are not rendered — codeswim explains source behavior
-      // instead of showing line ranges.
+      // The path may carry a #L10-L22 line ref; peel it off before reading.
+      // This path always lands on the explanation view, so the range has
+      // nowhere to apply — use openSourceCode to open raw source at a range.
       const { path } = parseTarget(relPath)
       dispatch({ type: 'set-loading', loading: true })
       const previous = state.currentFile
@@ -1067,6 +1075,35 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
   const inspectFile = useCallback(
     (relPath: string): Promise<void> => navigateAbsolute(relPath, true, 'read'),
     [navigateAbsolute]
+  )
+
+  const openSourceCode = useCallback(
+    async (relPath: string, range: LineRange | null): Promise<void> => {
+      if (!state.rootPath) return
+      dispatch({ type: 'set-loading', loading: true })
+      const previous = state.currentFile
+      try {
+        const abs = `${toPosix(state.rootPath).replace(/\/$/, '')}/${relPath}`
+        const contents = await window.api.readFile(abs)
+        dispatch({
+          type: 'load-success',
+          file: relPath,
+          contents,
+          view: 'code',
+          pushBreadcrumb: true,
+          previous,
+          revealNavigator: true,
+          documentPath: relPath,
+          sourceExplanationExists: true,
+          range
+        })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        toast(`Could not open ${relPath}: ${msg}`, 'error')
+        dispatch({ type: 'set-loading', loading: false })
+      }
+    },
+    [state.rootPath, state.currentFile, toast]
   )
 
   const navigateRelative = useCallback(
@@ -1766,6 +1803,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       navigateRelative,
       navigateAbsolute,
       inspectFile,
+      openSourceCode,
       popTo,
       goBack,
       goForward,
@@ -1820,6 +1858,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       navigateRelative,
       navigateAbsolute,
       inspectFile,
+      openSourceCode,
       popTo,
       goBack,
       goForward,

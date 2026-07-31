@@ -224,7 +224,7 @@ export interface AppStateSnapshot {
   workspaceView: 'navigator' | 'kanban' | 'agents'
   currentFile: string | null
   currentDocumentPath: string | null
-  view: 'diagram' | 'read' | 'output' | 'diff'
+  view: 'diagram' | 'read' | 'code' | 'output' | 'diff'
   breadcrumbs: string[]
   runningScript: string | null
 }

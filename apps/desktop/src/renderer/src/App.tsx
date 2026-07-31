@@ -3,6 +3,7 @@ import { ActivityBar } from './components/ActivityBar'
 import { AgentsView } from './components/AgentsView'
 import { Breadcrumbs } from './components/Breadcrumbs'
 import { ChatPanel } from './components/ChatPanel'
+import { CodeView } from './components/CodeView'
 import { DiagramView } from './components/DiagramView'
 import { DiffView } from './components/DiffView'
 import { FileTree } from './components/FileTree'
@@ -260,6 +261,15 @@ function Body(): React.JSX.Element {
   }
   if (state.view === 'diagram') {
     return <DiagramView source={state.fileContents} />
+  }
+  if (state.view === 'code') {
+    return (
+      <CodeView
+        path={state.currentFile ?? ''}
+        contents={state.fileContents ?? ''}
+        highlightRange={state.codeRange}
+      />
+    )
   }
   if (state.view === 'read') {
     return <ReadView source={state.fileContents} />
