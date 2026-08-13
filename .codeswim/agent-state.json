@@ -1,12 +1,8 @@
 {
   "workspaceView": "navigator",
-  "currentFile": "apps/desktop/src/renderer/src/components/SearchPanel.tsx",
-  "currentDocumentPath": "apps/desktop/src/renderer/src/components/SearchPanel.tsx",
-  "view": "code",
-  "breadcrumbs": [
-    "overview.md",
-    "architecture/renderer.md",
-    "apps/desktop/src/renderer/src/components/SearchPanel.tsx"
-  ],
+  "currentFile": "overview.md",
+  "currentDocumentPath": "overview.md",
+  "view": "diagram",
+  "breadcrumbs": [],
   "runningScript": null
 }

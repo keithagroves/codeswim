@@ -98,19 +98,15 @@ interface ViewTransform {
   ty: number
 }
 
-export function DiagramView({ source }: { source: string }): React.JSX.Element {
-  const { state, navigateRelative } = useStore()
-  const parsed = useMemo(() => parseMarkdown(source), [source])
-  // The mermaid SVG is rendered into canvasRef; viewportRef is the
-  // overflow-hidden window we transform within; contentRef is the
-  // wrapper that carries the translate/scale transform.
+// Renders one mermaid block with its own independent pan/zoom canvas. A
+// document can embed several diagrams (e.g. a flow plus a state chart) —
+// each gets its own viewport so zooming one doesn't affect the others.
+function MermaidCanvas({ source }: { source: string }): React.JSX.Element {
   const canvasRef = useRef<HTMLDivElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const reactId = useId().replace(/[^a-zA-Z0-9]/g, '')
   const renderId = `mermaid-${reactId}`
-  // Track errors keyed by the source they apply to, so stale errors auto-clear
-  // when the source changes — no setState-in-effect needed.
   const [renderError, setRenderError] = useState<{ source: string; message: string } | null>(null)
   const [view, setView] = useState<ViewTransform>({ scale: 1, tx: 0, ty: 0 })
   const viewRef = useRef(view)
@@ -118,10 +114,8 @@ export function DiagramView({ source }: { source: string }): React.JSX.Element {
   useEffect(() => {
     viewRef.current = view
   }, [view])
-  const currentSource = parsed.mermaidBlocks[0] ?? ''
-  const navigationTargets = useMemo(() => extractNavigationTargets(currentSource), [currentSource])
-  const errorMessage =
-    renderError && renderError.source === currentSource ? renderError.message : null
+  const navigationTargets = useMemo(() => extractNavigationTargets(source), [source])
+  const errorMessage = renderError && renderError.source === source ? renderError.message : null
 
   // Compute fit-to-viewport. Mermaid sometimes emits an SVG whose viewBox
   // is much larger than the actual content, so fitting against viewBox
@@ -222,23 +216,11 @@ export function DiagramView({ source }: { source: string }): React.JSX.Element {
 
   useEffect(() => () => dragCleanupRef.current?.(), [])
 
-  // Expose the navigate hook for mermaid's `click ... call navigate(...)` syntax.
-  // Re-bind on every render so the closure captures the current navigateRelative.
-  useEffect(() => {
-    const navigate = (target: string): void => {
-      void navigateRelative(target)
-    }
-    window.navigate = navigate
-    return () => {
-      if (window.navigate === navigate) delete window.navigate
-    }
-  }, [navigateRelative])
-
   useEffect(() => {
     ensureMermaidInitialized()
     const container = canvasRef.current
     if (!container) return
-    if (!currentSource) {
+    if (!source) {
       container.innerHTML = ''
       return
     }
@@ -246,7 +228,7 @@ export function DiagramView({ source }: { source: string }): React.JSX.Element {
     container.innerHTML = ''
 
     mermaid
-      .render(renderId, currentSource)
+      .render(renderId, source)
       .then(({ svg, bindFunctions }) => {
         if (cancelled || !canvasRef.current) return
         canvasRef.current.innerHTML = svg
@@ -264,7 +246,7 @@ export function DiagramView({ source }: { source: string }): React.JSX.Element {
       .catch((err: unknown) => {
         if (cancelled) return
         const msg = err instanceof Error ? err.message : String(err)
-        setRenderError({ source: currentSource, message: msg })
+        setRenderError({ source, message: msg })
       })
 
     return () => {
@@ -272,13 +254,64 @@ export function DiagramView({ source }: { source: string }): React.JSX.Element {
       const stray = document.getElementById(renderId)
       stray?.remove()
     }
-  }, [currentSource, navigationTargets, renderId, fitToViewport])
-
-  const fm = parsed.frontmatter
-  const fileLabel = state.currentFile ?? ''
+  }, [source, navigationTargets, renderId, fitToViewport])
 
   const isFitted =
     Math.abs(view.scale - 1) < 0.001 && Math.abs(view.tx) < 1 && Math.abs(view.ty) < 1
+
+  if (errorMessage) return <MermaidErrorBanner error={errorMessage} source={source} />
+
+  return (
+    <div
+      className="diagram-canvas-wrap"
+      ref={viewportRef}
+      onWheel={onWheel}
+      onMouseDown={onMouseDown}
+    >
+      <div
+        className="diagram-canvas-content"
+        ref={contentRef}
+        style={{
+          transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})`,
+          transformOrigin: '0 0'
+        }}
+      >
+        <div className="diagram-canvas" ref={canvasRef} />
+      </div>
+      {!isFitted ? (
+        <button
+          className="diagram-zoom-reset"
+          onClick={() => fitToViewport()}
+          title="Fit to screen"
+        >
+          {Math.round(view.scale * 100)}% — fit
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
+export function DiagramView({ source }: { source: string }): React.JSX.Element {
+  const { state, navigateRelative } = useStore()
+  const parsed = useMemo(() => parseMarkdown(source), [source])
+
+  // Expose the navigate hook for mermaid's `click ... call navigate(...)` syntax.
+  // Re-bind on every render so the closure captures the current navigateRelative.
+  // Shared across every diagram block on the page — only one `navigate` can be
+  // globally bound at a time, which is fine since a click only ever targets
+  // whichever node the user actually clicked.
+  useEffect(() => {
+    const navigate = (target: string): void => {
+      void navigateRelative(target)
+    }
+    window.navigate = navigate
+    return () => {
+      if (window.navigate === navigate) delete window.navigate
+    }
+  }, [navigateRelative])
+
+  const fm = parsed.frontmatter
+  const fileLabel = state.currentFile ?? ''
 
   return (
     <div className="diagram-view">
@@ -298,41 +331,8 @@ export function DiagramView({ source }: { source: string }): React.JSX.Element {
 
       {parsed.mermaidBlocks.length === 0 ? (
         <div className="banner warning">This file has no mermaid code block.</div>
-      ) : parsed.mermaidBlocks.length > 1 ? (
-        <div className="banner warning">
-          This file has {parsed.mermaidBlocks.length} mermaid blocks; rendering only the first.
-        </div>
-      ) : null}
-
-      {errorMessage ? (
-        <MermaidErrorBanner error={errorMessage} source={currentSource} />
       ) : (
-        <div
-          className="diagram-canvas-wrap"
-          ref={viewportRef}
-          onWheel={onWheel}
-          onMouseDown={onMouseDown}
-        >
-          <div
-            className="diagram-canvas-content"
-            ref={contentRef}
-            style={{
-              transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})`,
-              transformOrigin: '0 0'
-            }}
-          >
-            <div className="diagram-canvas" ref={canvasRef} />
-          </div>
-          {!isFitted ? (
-            <button
-              className="diagram-zoom-reset"
-              onClick={() => fitToViewport()}
-              title="Fit to screen"
-            >
-              {Math.round(view.scale * 100)}% — fit
-            </button>
-          ) : null}
-        </div>
+        parsed.mermaidBlocks.map((block, index) => <MermaidCanvas key={index} source={block} />)
       )}
 
       {parsed.prose ? (

@@ -86,15 +86,17 @@ flowchart TD
 - [apps/desktop/src/renderer/src/path-utils.ts](../apps/desktop/src/renderer/src/path-utils.ts) — POSIX path normalization and resolution.
 - [apps/desktop/src/renderer/src/skill-frontmatter.ts](../apps/desktop/src/renderer/src/skill-frontmatter.ts) — tiny helpers for parsing the `name`/`description` fields the Skills view shows.
 - [apps/desktop/src/renderer/src/ansi.ts](../apps/desktop/src/renderer/src/ansi.ts) — ANSI/SGR parser that turns raw script output into styled segments for the [ScriptOutput](../apps/desktop/src/renderer/src/components/ScriptOutput.tsx) terminal.
+- [apps/desktop/src/renderer/src/code-lang.ts](../apps/desktop/src/renderer/src/code-lang.ts) — maps a file extension to its CodeMirror language extension.
+- [apps/desktop/src/renderer/src/code-theme.ts](../apps/desktop/src/renderer/src/code-theme.ts) — CodeMirror editor theme factory matching the app's CSS tokens; parameterized by background so inline cards and the full-page view both sit on-palette.
 
 ### Components
 
 - [ActivityBar.tsx](../apps/desktop/src/renderer/src/components/ActivityBar.tsx) — left-rail tab switcher.
 - [FileTree.tsx](../apps/desktop/src/renderer/src/components/FileTree.tsx) — workspace file tree.
 - [Breadcrumbs.tsx](../apps/desktop/src/renderer/src/components/Breadcrumbs.tsx) — navigation stack as crumbs.
-- [DiagramView.tsx](../apps/desktop/src/renderer/src/components/DiagramView.tsx) — renders one mermaid block and wires `window.navigate`.
+- [DiagramView.tsx](../apps/desktop/src/renderer/src/components/DiagramView.tsx) — renders every mermaid block in the document (each with its own independent pan/zoom canvas) and wires `window.navigate`.
 - [MermaidErrorBanner.tsx](../apps/desktop/src/renderer/src/components/MermaidErrorBanner.tsx) — surfaces parse/render failures inline.
-- [ReadView.tsx](../apps/desktop/src/renderer/src/components/ReadView.tsx) — renders diagrams, markdown prose, and source files (merged from the removed CodeView).
+- [ReadView.tsx](../apps/desktop/src/renderer/src/components/ReadView.tsx) — renders diagrams, markdown prose, and source-file explanations; the raw source view is a separate `code` view handled by [CodeView](../apps/desktop/src/renderer/src/components/CodeView.tsx).
 - [MarkdownProse.tsx](../apps/desktop/src/renderer/src/components/MarkdownProse.tsx) — markdown renderer used inside read view and skills view.
 - [SearchPanel.tsx](../apps/desktop/src/renderer/src/components/SearchPanel.tsx) — workspace search.
 - [CoveragePanel.tsx](../apps/desktop/src/renderer/src/components/CoveragePanel.tsx) — diagram-coverage section: shows the audit state via the shared [coverage runner](../apps/desktop/src/renderer/src/coverage/run.ts) and hands the whole batch to the agent via `syncDiagrams` ("Fix with agent").
@@ -110,6 +112,8 @@ flowchart TD
 - [TerminalPanel.tsx](../apps/desktop/src/renderer/src/components/TerminalPanel.tsx) — terminal emulator panel (Ctrl+` toggle).
 - [Toasts.tsx](../apps/desktop/src/renderer/src/components/Toasts.tsx) — transient notifications.
 - [AgentsView.tsx](../apps/desktop/src/renderer/src/components/AgentsView.tsx) — multi-tab agent workspace: browser-style tabs, one opencode session per tab, independent streaming.
+- [CodeSnippetCard.tsx](../apps/desktop/src/renderer/src/components/CodeSnippetCard.tsx) — inline CodeMirror editor that renders a line-range slice of a source file inside [MarkdownProse](../apps/desktop/src/renderer/src/components/MarkdownProse.tsx).
+- [CodeView.tsx](../apps/desktop/src/renderer/src/components/CodeView.tsx) — full-page read-only CodeMirror editor with line highlighting; rendered by [App](../apps/desktop/src/renderer/src/App.tsx) when a source file is the current file.
 
 ### Chat & collaboration
 

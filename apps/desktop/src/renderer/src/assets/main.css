@@ -3555,6 +3555,13 @@ body.is-mac .header {
   cursor: grab;
 }
 
+/* A document with more than one mermaid block: each canvas only needs enough
+ * room to read comfortably, not the single-diagram floor above (which would
+ * otherwise stack to several screens of height). */
+.diagram-view:has(.diagram-canvas-wrap ~ .diagram-canvas-wrap) .diagram-canvas-wrap {
+  min-height: 45vh;
+}
+
 body.is-panning,
 body.is-panning .diagram-canvas-wrap {
   cursor: grabbing !important;

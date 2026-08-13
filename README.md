@@ -24,7 +24,7 @@ codeswim is a desktop app (Electron) that opens a folder and renders the markdow
 
 ## Try it
 
-Point codeswim at [examples/sample-architecture](./examples/sample-architecture) — a small demo codebase with an `overview.md` at the root and a full diagram tree underneath. That's the fastest way to see what the format looks like in practice.
+Point codeswim at [examples/sample-architecture/overview.md](./examples/sample-architecture/overview.md) — a small demo codebase with an `overview.md` at the root and a full diagram tree underneath. That's the fastest way to see what the format looks like in practice.
 
 ## The format
 
@@ -104,4 +104,4 @@ A push of a `v*` tag triggers `.github/workflows/release.yml`, which builds on a
 ## Related
 
 - [codeswim-vscode](https://github.com/keithagroves/codeswim-vscode) — same idea as a VS Code extension; ships a `codeswim-coverage` CLI for checking diagram/code alignment.
-- [`examples/sample-architecture`](./examples/sample-architecture) — a small demo codebase to point the navigator at.
+- [`examples/sample-architecture/overview.md`](./examples/sample-architecture/overview.md) — a small demo codebase to point the navigator at.
