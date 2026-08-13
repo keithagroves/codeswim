@@ -3,11 +3,18 @@
 // `partysocket` dependency) so the renderer pulls in nothing new and works
 // against the local `wrangler dev` server out of the box.
 //
-// AUTH: pass `auth` (a GitHub token + repo slug) to join an auth-gated room.
-// We send it as the first frame after the socket opens — never in the URL, so
-// the token stays out of edge logs — and wait for `auth-ok` before treating
-// the connection as ready. An `error` frame means the server rejected us
-// (not signed in / no repo access): we surface 'denied' and stop reconnecting.
+// ROOMS: every repo has two rooms — 'public' (anyone with a display name,
+// server-side no auth ever) and 'collab' (GitHub collaborator-gated when the
+// server enforces it). `mode` picks which one the socket URL addresses; the
+// slug travels in the query string too (not secret) so the server can
+// confirm the room being joined actually matches the claimed repo.
+//
+// AUTH: for mode='collab' rooms, pass `auth` (a GitHub token + repo slug) to
+// join. We send it as the first frame after the socket opens — never in the
+// URL, so the token stays out of edge logs — and wait for `auth-ok` before
+// treating the connection as ready. An `error` frame means the server
+// rejected us (not signed in / no repo access): we surface 'denied' and stop
+// reconnecting.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
@@ -25,19 +32,22 @@ const PARTY_HOST = (import.meta.env.VITE_PARTY_HOST as string | undefined) ?? '1
 
 export type ChatStatus = 'connecting' | 'open' | 'closed' | 'denied'
 
-// Credentials for an auth-gated room: a GitHub token and the repo slug the
-// room claims to be (the server checks both).
+export type RoomMode = 'collab' | 'public'
+
+// Credentials for an auth-gated (mode='collab') room: a GitHub token and the
+// repo slug the room claims to be (the server checks both).
 export interface RoomAuth {
   slug: string
   token: string
 }
 
-function socketUrl(roomId: string, name: string): string {
+function socketUrl(roomId: string, name: string, mode: RoomMode, slug: string | null): string {
   const secure = !/^(127\.0\.0\.1|localhost)(:|$)/.test(PARTY_HOST)
   const proto = secure ? 'wss' : 'ws'
   // PartyServer routes the CodeswimRoom binding's rooms under
   // /parties/codeswim-room/<room> (binding name kebab-cased).
-  const params = new URLSearchParams({ name })
+  const params = new URLSearchParams({ name, mode })
+  if (slug) params.set('slug', slug)
   return `${proto}://${PARTY_HOST}/parties/codeswim-room/${encodeURIComponent(roomId)}?${params}`
 }
 
@@ -50,11 +60,16 @@ export interface RoomChat {
 }
 
 // Connects to `roomId` as `name` and keeps the connection alive across drops.
-// Passing roomId=null (no shared remote) leaves the hook idle and closed.
-// Pass `auth` to join a room that requires GitHub sign-in.
+// Passing roomId=null (no shared remote, or nothing to join yet) leaves the
+// hook idle and closed. `mode` picks which room kind this is; `slug` is the
+// repo slug the room claims to be (required so the server can confirm the
+// room matches — always for 'public', and echoed via `auth` for 'collab').
+// Pass `auth` to join a 'collab' room that requires GitHub sign-in.
 export function useRoomChat(
   roomId: string | null,
   name: string,
+  mode: RoomMode,
+  slug: string | null,
   auth: RoomAuth | null = null
 ): RoomChat {
   const [status, setStatus] = useState<ChatStatus>('connecting')
@@ -69,7 +84,7 @@ export function useRoomChat(
   // Depend on primitives so a fresh `auth` object identity each render doesn't
   // thrash the connection.
   const token = auth?.token ?? null
-  const slug = auth?.slug ?? null
+  const authSlug = auth?.slug ?? null
 
   const sendRaw = useCallback((msg: ClientMessage) => {
     const ws = wsRef.current
@@ -97,13 +112,13 @@ export function useRoomChat(
 
     const connect = (): void => {
       setStatus('connecting')
-      const ws = new WebSocket(socketUrl(roomId, name))
+      const ws = new WebSocket(socketUrl(roomId, name, mode, slug))
       wsRef.current = ws
 
       ws.onopen = () => {
-        if (token && slug) {
+        if (mode === 'collab' && token && authSlug) {
           // Auth-gated: send credentials first, stay 'connecting' until ok.
-          ws.send(JSON.stringify({ type: 'auth', token, slug }))
+          ws.send(JSON.stringify({ type: 'auth', token, slug: authSlug }))
         } else {
           becomeReady(ws)
         }
@@ -148,7 +163,7 @@ export function useRoomChat(
       wsRef.current?.close()
       wsRef.current = null
     }
-  }, [roomId, name, token, slug])
+  }, [roomId, name, mode, slug, token, authSlug])
 
   const send = useCallback(
     (text: string) => {

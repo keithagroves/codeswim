@@ -46,6 +46,7 @@ jobs:
           # gitignored .env): the deployed PartyServer chat worker and the
           # GitHub OAuth client id for chat sign-in. Neither is a secret.
           VITE_PARTY_HOST: ${{ vars.VITE_PARTY_HOST }}
+          MAIN_VITE_PARTY_HOST: ${{ vars.VITE_PARTY_HOST }}
           MAIN_VITE_GITHUB_CLIENT_ID: ${{ vars.MAIN_VITE_GITHUB_CLIENT_ID }}
           # macOS signing + notarization. Scoped to macOS so the mac .p12 in
           # CSC_LINK doesn't get picked up as a Windows signing cert.

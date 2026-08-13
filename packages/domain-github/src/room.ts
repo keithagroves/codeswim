@@ -16,8 +16,14 @@ import { join } from 'node:path'
 import { gitRemoteUrl } from '@codeswim/domain-git'
 
 export interface RoomIdentity {
-  // Opaque, stable room key (hex). Safe to use as a websocket room name.
+  // Opaque, stable key (hex) for the collaborator-gated room: joining
+  // requires GitHub auth and collaborator access to the repo when the
+  // websocket server enforces it. Safe to use as a websocket room name.
   roomId: string
+  // Opaque, stable key (hex) for the public room on the same repo: anyone
+  // with a display name can join, no auth required. Separate history/roster
+  // from `roomId` — same repo, two rooms.
+  publicRoomId: string
   // Canonical 'host/owner/repo', lowercased. Display + server-side auth.
   slug: string
   // 'github' when hosted on github.com, else 'git' for other hosts. Lets the
@@ -65,13 +71,25 @@ export function normalizeRemote(rawUrl: string): string | null {
   return `${host}/${path}`
 }
 
-// Derive the full room identity from a canonical slug. 64 bits of SHA-256 is
-// plenty to avoid collisions across realistic repo counts while keeping the
-// room name short.
+// 64 bits of SHA-256 is plenty to avoid collisions across realistic repo
+// counts while keeping the room name short. The 'collab:'/'public:' prefixes
+// domain-separate the two rooms so neither hash can be mistaken for (or
+// forged into) the other — the party server re-derives the same prefixed
+// hash to confirm a joining client's claimed slug+kind matches the room it's
+// connecting to (see roomIdForSlug in party/codeswim.ts).
+function hashRoomId(kind: 'collab' | 'public', slug: string): string {
+  return createHash('sha256').update(`${kind}:${slug}`).digest('hex').slice(0, 16)
+}
+
+// Derive the full room identity (both rooms) from a canonical slug.
 export function roomIdentityFromSlug(slug: string): RoomIdentity {
-  const roomId = createHash('sha256').update(slug).digest('hex').slice(0, 16)
   const provider = slug.startsWith('github.com/') ? 'github' : 'git'
-  return { roomId, slug, provider }
+  return {
+    roomId: hashRoomId('collab', slug),
+    publicRoomId: hashRoomId('public', slug),
+    slug,
+    provider
+  }
 }
 
 // A workspace can pin itself to a fixed room by shipping

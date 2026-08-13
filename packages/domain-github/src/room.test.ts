@@ -57,6 +57,14 @@ describe('roomIdentityFromSlug', () => {
   it('tags non-github hosts as generic git', () => {
     expect(roomIdentityFromSlug('gitlab.com/group/project').provider).toBe('git')
   })
+
+  it('gives the collab and public rooms distinct, stable ids for the same repo', () => {
+    const a = roomIdentityFromSlug('github.com/acme/triage')
+    const b = roomIdentityFromSlug('github.com/acme/triage')
+    expect(a.publicRoomId).toBe(b.publicRoomId)
+    expect(a.publicRoomId).toMatch(/^[0-9a-f]{16}$/)
+    expect(a.publicRoomId).not.toBe(a.roomId)
+  })
 })
 
 describe('getRoomIdentity with a pinned room file', () => {

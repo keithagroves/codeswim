@@ -18,6 +18,16 @@ import {
   validateOpenFilePath,
   validateViewName
 } from './tool/app-view'
+import {
+  defaultRoom,
+  formatMessages,
+  readChat,
+  resolveChatConfig,
+  sendChat,
+  validateChatRoom,
+  type ChatIo,
+  type ChatRoom
+} from './tool/chat'
 import { createSessionGate } from './session-gate'
 
 const CODE_MUTATING_TOOLS = new Set(['write', 'edit', 'apply_patch'])
@@ -58,6 +68,14 @@ Use this to capture work the user describes — features, bugs, follow-ups, TODO
 
 Create one card per discrete task; break a large request into several cards rather than one sprawling card. \`status\` matches a column by name or id (defaults to the first column, usually Backlog). \`priority\` is low/medium/high (defaults to medium). \`linkedPath\` is a POSIX path relative to workspace root so the card deep-links into the navigator. This tool is not gated on diagram edits.`
 
+const CHAT_READ_DESCRIPTION = `Read recent messages from this project's team chat (the in-app chat panel, not this conversation).
+
+Two rooms exist for this repo: "public" (anyone, no sign-in) and "team" (GitHub collaborators only). Defaults to "team" when the user is signed in with GitHub, else "public". Use this to catch up on what teammates said, or to check whether someone already answered a question, before responding to the user.`
+
+const CHAT_SEND_DESCRIPTION = `Post a message to this project's team chat (the in-app chat panel), visible to everyone else currently in the room.
+
+Same two rooms as \`chat_read\`; same default. Posts under the agent's own display name so people can tell it's automated — this is not how you reply to the user, it's how you relay something to teammates who aren't in this conversation (e.g. a status update they asked for, or an answer to something asked in chat). Use sparingly.`
+
 const realFs: DiagramFs = {
   async exists(absPath) {
     try {
@@ -97,8 +115,15 @@ function kanbanFsFor(workspaceRoot: string): KanbanFs {
   }
 }
 
+const chatIo: ChatIo = { fetch: (url, init) => fetch(url, init) }
+
 export const CodeswimPlugin: Plugin = async () => {
   const gate = createSessionGate()
+  // Resolved once per subprocess — the host (apps/desktop/src/main/sidecar.ts)
+  // restarts the subprocess whenever the workspace root changes, so this env
+  // is always scoped to the current workspace's room. null means this
+  // workspace has no shared git remote to key a chat room on.
+  const chatConfig = resolveChatConfig(process.env)
 
   return {
     tool: {
@@ -180,6 +205,57 @@ export const CodeswimPlugin: Plugin = async () => {
         }
       }),
 
+      ...(chatConfig
+        ? {
+            chat_read: tool({
+              description: CHAT_READ_DESCRIPTION,
+              args: {
+                room: tool.schema
+                  .enum(['public', 'team'])
+                  .optional()
+                  .describe('Which room to read — defaults to "team" when signed in, else "public"')
+              },
+              async execute(args) {
+                const roomErr = args.room !== undefined ? validateChatRoom(args.room) : null
+                if (roomErr) return { output: `error: ${roomErr}` }
+                const room: ChatRoom = args.room ?? defaultRoom(chatConfig)
+
+                const result = await readChat(room, chatConfig, chatIo)
+                if (!result.ok) return { output: `error: ${result.error}` }
+                return {
+                  output: formatMessages(room, result.value),
+                  metadata: { room, count: result.value.length }
+                }
+              }
+            }),
+
+            chat_send: tool({
+              description: CHAT_SEND_DESCRIPTION,
+              args: {
+                room: tool.schema
+                  .enum(['public', 'team'])
+                  .optional()
+                  .describe(
+                    'Which room to post to — defaults to "team" when signed in, else "public"'
+                  ),
+                text: tool.schema.string().describe('Message text to post')
+              },
+              async execute(args) {
+                const roomErr = args.room !== undefined ? validateChatRoom(args.room) : null
+                if (roomErr) return { output: `error: ${roomErr}` }
+                const room: ChatRoom = args.room ?? defaultRoom(chatConfig)
+
+                const result = await sendChat(room, args.text, chatConfig, chatIo)
+                if (!result.ok) return { output: `error: ${result.error}` }
+                return {
+                  output: `Posted to the ${room} room as ${result.value.name}.`,
+                  metadata: { room, messageId: result.value.id }
+                }
+              }
+            })
+          }
+        : {}),
+
       open_file: tool({
         description: OPEN_FILE_DESCRIPTION,
         args: {
@@ -200,9 +276,7 @@ export const CodeswimPlugin: Plugin = async () => {
       set_view: tool({
         description: SET_VIEW_DESCRIPTION,
         args: {
-          view: tool.schema
-            .enum(['navigator', 'kanban'])
-            .describe('Which workspace tab to show')
+          view: tool.schema.enum(['navigator', 'kanban']).describe('Which workspace tab to show')
         },
         async execute(args) {
           const err = validateViewName(args.view)

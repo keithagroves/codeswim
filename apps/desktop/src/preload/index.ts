@@ -144,6 +144,7 @@ export interface GitCommitEntry {
 
 export interface RoomIdentity {
   roomId: string
+  publicRoomId: string
   slug: string
   provider: 'github' | 'git'
 }

@@ -1,9 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
-import { useRoomChat } from '../chat/connection'
+import { useRoomChat, type RoomMode } from '../chat/connection'
+import { resolveRoomConnect } from '../chat/room-connect'
 import type { GitHubStatus, RoomIdentity } from '@codeswim/contract'
 
 const NAME_KEY = 'codeswim:chatName'
+const ROOM_KIND_KEY = 'codeswim:chatRoomKind'
+
+function loadRoomKind(): RoomMode {
+  return localStorage.getItem(ROOM_KIND_KEY) === 'collab' ? 'collab' : 'public'
+}
 
 function shortPath(path: string): string {
   const parts = path.split('/')
@@ -27,6 +33,7 @@ export function RoomChatPanel(): React.JSX.Element {
   const [signInError, setSignInError] = useState<string | null>(null)
   const [name, setName] = useState(() => localStorage.getItem(NAME_KEY) ?? '')
   const [nameDraft, setNameDraft] = useState('')
+  const [roomKind, setRoomKind] = useState<RoomMode>(loadRoomKind)
   const [draft, setDraft] = useState('')
   const listRef = useRef<HTMLDivElement | null>(null)
 
@@ -97,18 +104,26 @@ export function RoomChatPanel(): React.JSX.Element {
     }
   }, [user])
 
-  // Connection model:
-  //   configured + signed in  -> auth-gated, identity from GitHub
-  //   not configured          -> anonymous with a manual display name
-  //   configured + signed out  -> no connection (prompt sign-in)
-  const displayName = user ? user.name || user.login : name.trim()
-  const auth = useMemo(
-    () => (user && token && identity ? { slug: identity.slug, token } : null),
-    [user, token, identity]
+  const { effectiveKind, displayName, auth, roomId } = resolveRoomConnect({
+    identity,
+    configured,
+    roomKind,
+    user,
+    token,
+    name
+  })
+  const { status, messages, users, send, setViewing } = useRoomChat(
+    roomId,
+    displayName,
+    effectiveKind,
+    identity?.slug ?? null,
+    auth
   )
-  const wantConnect = Boolean(identity && (user ? !!token : !configured && !!name.trim()))
-  const roomId = wantConnect && identity ? identity.roomId : null
-  const { status, messages, users, send, setViewing } = useRoomChat(roomId, displayName, auth)
+
+  const chooseRoomKind = (kind: RoomMode): void => {
+    setRoomKind(kind)
+    localStorage.setItem(ROOM_KIND_KEY, kind)
+  }
 
   // Broadcast the currently-open file as presence so teammates see what
   // diagram we're looking at.
@@ -142,6 +157,28 @@ export function RoomChatPanel(): React.JSX.Element {
     else setDevice(res)
   }
 
+  // Public/Team switch. Only meaningful when GitHub is configured for this
+  // build — otherwise every room is effectively public and there's nothing
+  // to switch to.
+  const roomTabs = configured ? (
+    <div className="chat-room-tabs">
+      <button
+        type="button"
+        className={`chat-room-tab${effectiveKind === 'public' ? ' active' : ''}`}
+        onClick={() => chooseRoomKind('public')}
+      >
+        Public
+      </button>
+      <button
+        type="button"
+        className={`chat-room-tab${effectiveKind === 'collab' ? ' active' : ''}`}
+        onClick={() => chooseRoomKind('collab')}
+      >
+        Team
+      </button>
+    </div>
+  ) : null
+
   if (!identityLoaded || github === null) {
     return <div className="chat-panel chat-empty">Loading…</div>
   }
@@ -162,12 +199,13 @@ export function RoomChatPanel(): React.JSX.Element {
     )
   }
 
-  // Auth-gated: configured but not signed in.
-  if (configured && !user) {
+  // Auth-gated: Team room selected but not signed in.
+  if (effectiveKind === 'collab' && !user) {
     return (
       <div className="chat-panel chat-empty">
+        {roomTabs}
         <div className="chat-signin">
-          <p>Sign in with GitHub to join the room for</p>
+          <p>Sign in with GitHub to join the team room for</p>
           <p className="chat-room-name" title={identity.slug}>
             {identity.slug}
           </p>
@@ -202,10 +240,11 @@ export function RoomChatPanel(): React.JSX.Element {
     )
   }
 
-  // Anonymous fallback (GitHub not configured): pick a display name.
-  if (!configured && !name.trim()) {
+  // Public room (or GitHub not configured at all) and no display name yet.
+  if (effectiveKind === 'public' && !user && !name.trim()) {
     return (
       <div className="chat-panel chat-empty">
+        {roomTabs}
         <form
           className="chat-name-form"
           onSubmit={(e) => {
@@ -262,9 +301,13 @@ export function RoomChatPanel(): React.JSX.Element {
         </div>
       </div>
 
+      {roomTabs}
+
       {status === 'denied' ? (
         <div className="chat-error chat-denied">
-          GitHub didn’t grant access to this repository’s room.
+          {effectiveKind === 'collab'
+            ? "GitHub didn't grant access to this repository's team room — you need to be a collaborator."
+            : "This room doesn't match the current repository."}
         </div>
       ) : null}
 

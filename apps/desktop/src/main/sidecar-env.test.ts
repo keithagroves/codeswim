@@ -47,4 +47,45 @@ describe('buildSidecarEnv', () => {
     buildSidecarEnv(base, XDG_ROOT, {})
     expect(base.OPENCODE_SERVER_PASSWORD).toBe('hunter2')
   })
+
+  it('adds no CODESWIM_CHAT_* vars when chat is omitted or null', () => {
+    const { env } = buildSidecarEnv({}, XDG_ROOT, {}, null)
+    expect(Object.keys(env).some((k) => k.startsWith('CODESWIM_CHAT_'))).toBe(false)
+  })
+
+  it('threads room identity into CODESWIM_CHAT_* vars', () => {
+    const { env } = buildSidecarEnv(
+      {},
+      XDG_ROOT,
+      {},
+      {
+        partyHost: '127.0.0.1:8788',
+        slug: 'github.com/acme/triage',
+        publicRoomId: 'pub',
+        teamRoomId: 'team',
+        token: null
+      }
+    )
+    expect(env.CODESWIM_CHAT_PARTY_HOST).toBe('127.0.0.1:8788')
+    expect(env.CODESWIM_CHAT_SLUG).toBe('github.com/acme/triage')
+    expect(env.CODESWIM_CHAT_PUBLIC_ROOM_ID).toBe('pub')
+    expect(env.CODESWIM_CHAT_TEAM_ROOM_ID).toBe('team')
+    expect(env).not.toHaveProperty('CODESWIM_CHAT_TOKEN')
+  })
+
+  it('includes the GitHub token only when signed in', () => {
+    const { env } = buildSidecarEnv(
+      {},
+      XDG_ROOT,
+      {},
+      {
+        partyHost: 'h',
+        slug: 's',
+        publicRoomId: 'p',
+        teamRoomId: 't',
+        token: 'gh-token'
+      }
+    )
+    expect(env.CODESWIM_CHAT_TOKEN).toBe('gh-token')
+  })
 })

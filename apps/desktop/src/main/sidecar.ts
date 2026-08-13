@@ -10,7 +10,7 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { app } from 'electron'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { buildSidecarEnv } from './sidecar-env'
+import { buildSidecarEnv, type SidecarChatConfig } from './sidecar-env'
 
 export interface SidecarHandle {
   url: URL
@@ -83,6 +83,9 @@ interface ExitInfo {
 
 interface StartOptions {
   workspaceRoot: string
+  // Chat room identity/credential for this workspace, or null when there's
+  // no shared git remote to key a room on. See buildSidecarEnv.
+  chat?: SidecarChatConfig | null
   onStdout?: (line: string) => void
   onStderr?: (line: string) => void
   onExit?: (code: number | null, info: ExitInfo) => void
@@ -108,7 +111,8 @@ export async function startSidecar(opts: StartOptions): Promise<SidecarHandle> {
   const { env, xdgDirs } = buildSidecarEnv(
     process.env,
     path.join(app.getPath('userData'), 'opencode-xdg'),
-    config
+    config,
+    opts.chat
   )
   for (const dir of xdgDirs) mkdirSync(dir, { recursive: true })
 

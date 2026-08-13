@@ -10,16 +10,43 @@
 // Local dev:   npx wrangler dev          (ws://127.0.0.1:8787)
 // Deploy:      npx wrangler deploy        (to codeswim.<subdomain>.workers.dev)
 //
-// AUTH: gated by the REQUIRE_AUTH var (off locally, on in production).
-//   - REQUIRE_AUTH off: anyone connecting is admitted with the display name
-//     from the `?name=` query — frictionless local dev. Treat such rooms as
-//     world-readable.
-//   - REQUIRE_AUTH on: a connection is held unauthenticated until it sends an
-//     {type:'auth', token, slug} frame. The worker verifies the GitHub token
-//     grants access to `slug`'s repo AND that hash(slug) matches this room
-//     (so a token for repo A can't open repo B's room), then admits using the
-//     verified GitHub identity. Unauthenticated frames / timeouts are closed.
+// ROOMS: every repo gets two independent rooms (separate history/roster), a
+// "collab" room and a "public" room — see roomIdentityFromSlug in
+// packages/domain-github/src/room.ts, which derives both ids from the same
+// slug via domain-separated hashes (`collab:${slug}` / `public:${slug}`).
+// The connecting client picks which one to join with `?mode=collab|public`
+// on the websocket URL (default 'collab' if omitted/invalid).
+//
+//   - mode=public: always open, no auth, regardless of REQUIRE_AUTH — admits
+//     immediately with the display name from `?name=`. Anyone who knows the
+//     repo slug can lurk and post here. The client also sends `?slug=` so we
+//     can confirm hash('public:'+slug) actually matches the room being
+//     joined (defense against a client trying to reach the *collab* room's
+//     DO instance while claiming mode=public — SHA-256 domain separation
+//     means that only succeeds if the claimed slug is the real one, in which
+//     case it's the intentionally-public room anyway).
+//
+//   - mode=collab, gated by the REQUIRE_AUTH var (off locally, on in
+//     production):
+//       - REQUIRE_AUTH off: admitted immediately with the `?name=` display
+//         name — frictionless local dev. Treat such rooms as world-readable.
+//       - REQUIRE_AUTH on: the connection is held unauthenticated until it
+//         sends an {type:'auth', token, slug} frame. The worker verifies the
+//         GitHub token belongs to a listed collaborator of `slug`'s repo AND
+//         that hash('collab:'+slug) matches this room (so a token for repo A
+//         can't open repo B's room), then admits using the verified GitHub
+//         identity. Unauthenticated frames / timeouts are closed. This is
+//         collaborator-only even for public repos — read access alone (e.g.
+//         anyone forking a public repo) is not sufficient to join; use the
+//         public room for that.
 // The token arrives in a message, never the URL, so it stays out of edge logs.
+//
+// PLAIN HTTP: the same room also answers plain GET/POST (no websocket
+// upgrade) at the same URL — GET lists recent history, POST sends one
+// message. Same room/mode/slug query params, same auth rules (a collab POST
+// needs `Authorization: Bearer <token>` instead of the `auth` frame). See
+// http.ts. This is what a one-shot caller — e.g. the in-app agent's chat
+// tools — uses instead of holding a websocket open.
 
 import {
   Server,
@@ -35,6 +62,8 @@ import {
   type ChatUser,
   type ServerMessage
 } from '@codeswim/contract'
+import { roomIdForSlug, verifyAccess, type GitHubIdentity, type RoomKind } from './auth'
+import { handleRoomHttpRequest } from './http'
 
 interface Env {
   CodeswimRoom: DurableObjectNamespace
@@ -42,70 +71,10 @@ interface Env {
   REQUIRE_AUTH?: string
 }
 
-const UA = 'codeswim'
 const AUTH_TIMEOUT_MS = 10_000
 
 function randomId(): string {
   return crypto.randomUUID()
-}
-
-// Hex SHA-256 of `slug`, first 16 chars — must match roomIdentityFromSlug in
-// src/main/room.ts (which uses node:crypto for the identical digest).
-async function roomIdForSlug(slug: string): Promise<string> {
-  const bytes = new TextEncoder().encode(slug)
-  const digest = await crypto.subtle.digest('SHA-256', bytes)
-  return [...new Uint8Array(digest)]
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
-    .slice(0, 16)
-}
-
-interface GitHubIdentity {
-  id: number
-  login: string
-  name: string | null
-  avatarUrl: string | null
-}
-
-async function githubFetch(path: string, token: string): Promise<Response> {
-  return fetch(`https://api.github.com${path}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github+json',
-      'User-Agent': UA
-    }
-  })
-}
-
-// Verifies the token identifies a user AND grants access to the repo named by
-// `slug`. Returns the verified identity, or null to reject. For non-github
-// hosts we can only verify identity (GitHub can't speak to repo membership on
-// another forge), which is a weaker but non-anonymous guarantee.
-async function verifyAccess(token: string, slug: string): Promise<GitHubIdentity | null> {
-  const userRes = await githubFetch('/user', token)
-  if (!userRes.ok) return null
-  const u = (await userRes.json()) as {
-    id: number
-    login: string
-    name: string | null
-    avatar_url: string | null
-  }
-  const identity: GitHubIdentity = {
-    id: u.id,
-    login: u.login,
-    name: u.name,
-    avatarUrl: u.avatar_url
-  }
-
-  const parts = slug.split('/')
-  if (parts[0] === 'github.com' && parts.length >= 3) {
-    const repoRes = await githubFetch(
-      `/repos/${encodeURIComponent(parts[1])}/${encodeURIComponent(parts[2])}`,
-      token
-    )
-    if (!repoRes.ok) return null // 404/403 → no read access
-  }
-  return identity
 }
 
 export class CodeswimRoom extends Server<Env> {
@@ -143,7 +112,31 @@ export class CodeswimRoom extends Server<Env> {
     this.broadcastPresence()
   }
 
-  onConnect(conn: Connection, ctx: ConnectionContext): void {
+  async onConnect(conn: Connection, ctx: ConnectionContext): Promise<void> {
+    const url = new URL(ctx.request.url)
+    const mode: RoomKind = url.searchParams.get('mode') === 'public' ? 'public' : 'collab'
+    const name = (url.searchParams.get('name') || 'Anonymous').slice(0, 60)
+
+    if (mode === 'public') {
+      // Always open — no auth, independent of REQUIRE_AUTH. Just confirm the
+      // claimed slug actually hashes to the room we're connecting to (see the
+      // file header for why this matters).
+      const slug = url.searchParams.get('slug') || ''
+      const expected = await roomIdForSlug('public', slug)
+      if (expected !== this.name) {
+        const err: ServerMessage = {
+          type: 'error',
+          code: 'room-mismatch',
+          message: 'Room does not match the claimed repository.'
+        }
+        conn.send(JSON.stringify(err))
+        conn.close(4004, 'room-mismatch')
+        return
+      }
+      this.admit(conn, { id: conn.id, name, viewing: null })
+      return
+    }
+
     if (this.requireAuth()) {
       // Hold the connection until it proves access via an `auth` frame.
       const timer = setTimeout(() => {
@@ -159,9 +152,7 @@ export class CodeswimRoom extends Server<Env> {
       this.authTimers.set(conn.id, timer)
       return
     }
-    // Open room: admit immediately with the query-string display name.
-    const url = new URL(ctx.request.url)
-    const name = (url.searchParams.get('name') || 'Anonymous').slice(0, 60)
+    // Local dev (auth not required): admit immediately with the display name.
     this.admit(conn, { id: conn.id, name, viewing: null })
   }
 
@@ -175,12 +166,15 @@ export class CodeswimRoom extends Server<Env> {
       if (!this.requireAuth() || this.users.has(sender.id)) return
       let identity: GitHubIdentity | null = null
       try {
-        const expected = await roomIdForSlug(msg.slug)
+        const expected = await roomIdForSlug('collab', msg.slug)
         identity = expected === this.name ? await verifyAccess(msg.token, msg.slug) : null
       } catch (err) {
         // A thrown verify (e.g. network) must not leave the client hanging —
         // log it and fall through to auth-failed.
-        console.error('[auth] verify threw:', err instanceof Error ? (err.stack ?? err.message) : err)
+        console.error(
+          '[auth] verify threw:',
+          err instanceof Error ? (err.stack ?? err.message) : err
+        )
       }
       const timer = this.authTimers.get(sender.id)
       if (timer) {
@@ -214,21 +208,13 @@ export class CodeswimRoom extends Server<Env> {
     if (msg.type === 'chat') {
       const text = msg.text.trim().slice(0, 4000)
       if (!text) return
-      const message: ChatMessage = {
+      this.postMessage({
         id: randomId(),
         userId: user.id,
         name: user.name,
         text,
         sentAt: Date.now()
-      }
-      this.messages.push(message)
-      if (this.messages.length > MAX_ROOM_MESSAGES) {
-        this.messages = this.messages.slice(-MAX_ROOM_MESSAGES)
-      }
-      // Broadcast to everyone including the sender — clients render from the
-      // server echo rather than optimistically.
-      const out: ServerMessage = { type: 'message', message }
-      this.broadcast(JSON.stringify(out))
+      })
       return
     }
 
@@ -238,6 +224,20 @@ export class CodeswimRoom extends Server<Env> {
     }
   }
 
+  // Append to history and broadcast to live websocket connections. Shared by
+  // the websocket `chat` message and the plain-HTTP POST path (onRequest) —
+  // both funnel through here so message ordering has one writer.
+  private postMessage(message: ChatMessage): void {
+    this.messages.push(message)
+    if (this.messages.length > MAX_ROOM_MESSAGES) {
+      this.messages = this.messages.slice(-MAX_ROOM_MESSAGES)
+    }
+    // Broadcast to everyone including the sender — clients render from the
+    // server echo rather than optimistically.
+    const out: ServerMessage = { type: 'message', message }
+    this.broadcast(JSON.stringify(out))
+  }
+
   onClose(conn: Connection): void {
     const timer = this.authTimers.get(conn.id)
     if (timer) {
@@ -245,6 +245,21 @@ export class CodeswimRoom extends Server<Env> {
       this.authTimers.delete(conn.id)
     }
     if (this.users.delete(conn.id)) this.broadcastPresence()
+  }
+
+  // Plain-HTTP surface for one-shot reads/posts — no websocket handshake, so
+  // e.g. the in-app agent's chat tools can check/post without holding a
+  // connection open. See http.ts for the shared GET/POST decision logic.
+  async onRequest(request: Request): Promise<Response> {
+    const outcome = await handleRoomHttpRequest(request, {
+      roomName: this.name,
+      requireAuth: this.requireAuth(),
+      messages: this.messages,
+      randomId,
+      now: Date.now
+    })
+    if (outcome.appended) this.postMessage(outcome.appended)
+    return Response.json(outcome.body, { status: outcome.status })
   }
 }
 

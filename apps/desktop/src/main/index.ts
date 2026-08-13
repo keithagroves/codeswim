@@ -58,7 +58,12 @@ import {
   type GitHubUser,
   type MergeMethod
 } from './github'
-import { agentsDocPath, readAgentsDoc, writeAgentsDoc, type AgentsScope } from '@codeswim/domain-skills'
+import {
+  agentsDocPath,
+  readAgentsDoc,
+  writeAgentsDoc,
+  type AgentsScope
+} from '@codeswim/domain-skills'
 import {
   moveGitHubKanbanItem,
   readKanbanBoard,
@@ -67,6 +72,14 @@ import {
 } from '@codeswim/domain-kanban'
 import { readSourceExplanation, resolveWorkspaceFile } from '@codeswim/domain-skills'
 import type { AppStateSnapshot } from '@codeswim/contract'
+
+// Host of the deployed party server, no scheme. Mirrors the renderer's
+// VITE_PARTY_HOST (chat/connection.ts) — needed here too so the harness
+// subprocess's chat tools can reach the same server (see `harness:start`).
+const PARTY_HOST =
+  (import.meta.env as unknown as Record<string, string | undefined>).MAIN_VITE_PARTY_HOST ??
+  process.env.PARTY_HOST ??
+  '127.0.0.1:8788'
 
 let mainWindow: BrowserWindow | null = null
 let watcher: FSWatcher | null = null
@@ -716,11 +729,20 @@ app.whenReady().then(async () => {
       sidecarRoot = null
     }
     if (!sidecarStarting) {
+      const [identity, token] = await Promise.all([getRoomIdentity(rootPath), githubToken()])
       sidecarStarting = startSidecar({
         workspaceRoot: rootPath,
+        chat: identity
+          ? {
+              partyHost: PARTY_HOST,
+              slug: identity.slug,
+              publicRoomId: identity.publicRoomId,
+              teamRoomId: identity.roomId,
+              token
+            }
+          : null,
         onStdout: (line) => mainWindow?.webContents.send('harness:log', { stream: 'stdout', line }),
-        onStderr: (line) =>
-          mainWindow?.webContents.send('harness:log', { stream: 'stderr', line }),
+        onStderr: (line) => mainWindow?.webContents.send('harness:log', { stream: 'stderr', line }),
         onExit: (code, info) => {
           mainWindow?.webContents.send('harness:exit', {
             code,

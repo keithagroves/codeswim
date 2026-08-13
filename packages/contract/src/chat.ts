@@ -43,7 +43,10 @@ export type ServerMessage =
   | { type: 'auth-ok' }
   // Auth rejected (or required but not provided). The client should stop
   // reconnecting and prompt the user to sign in.
-  | { type: 'error'; code: 'auth-required' | 'auth-failed'; message: string }
+  // 'room-mismatch': the claimed room kind + slug didn't hash to the room
+  // being joined (client bug, or an attempt to reach the collab room's
+  // history via the public join path). Also terminal — stop reconnecting.
+  | { type: 'error'; code: 'auth-required' | 'auth-failed' | 'room-mismatch'; message: string }
   // Full state on join: recent history + current roster.
   | { type: 'init'; messages: ChatMessage[]; users: ChatUser[] }
   | { type: 'message'; message: ChatMessage }
