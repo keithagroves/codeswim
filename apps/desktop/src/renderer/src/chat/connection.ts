@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   parseServerMessage,
+  type AccessDenialReason,
   type ChatMessage,
   type ChatUser,
   type ClientMessage
@@ -53,6 +54,10 @@ function socketUrl(roomId: string, name: string, mode: RoomMode, slug: string | 
 
 export interface RoomChat {
   status: ChatStatus
+  // Set alongside status === 'denied' on a collab-room auth rejection — why,
+  // specifically (see AccessDenialReason). null for a room-mismatch denial
+  // or before any denial has happened.
+  deniedReason: AccessDenialReason | null
   messages: ChatMessage[]
   users: ChatUser[]
   send(text: string): void
@@ -73,6 +78,7 @@ export function useRoomChat(
   auth: RoomAuth | null = null
 ): RoomChat {
   const [status, setStatus] = useState<ChatStatus>('connecting')
+  const [deniedReason, setDeniedReason] = useState<AccessDenialReason | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [users, setUsers] = useState<ChatUser[]>([])
 
@@ -112,6 +118,7 @@ export function useRoomChat(
 
     const connect = (): void => {
       setStatus('connecting')
+      setDeniedReason(null)
       const ws = new WebSocket(socketUrl(roomId, name, mode, slug))
       wsRef.current = ws
 
@@ -132,6 +139,7 @@ export function useRoomChat(
         } else if (msg.type === 'error') {
           // Rejected — don't churn through reconnects against a closed door.
           closedByUs = true
+          setDeniedReason(msg.reason ?? null)
           setStatus('denied')
           ws.close()
         } else if (msg.type === 'init') {
@@ -182,5 +190,5 @@ export function useRoomChat(
     [sendRaw]
   )
 
-  return { status, messages, users, send, setViewing }
+  return { status, deniedReason, messages, users, send, setViewing }
 }

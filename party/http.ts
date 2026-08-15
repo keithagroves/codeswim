@@ -55,8 +55,9 @@ export async function handleRoomHttpRequest(
   if (mode === 'collab' && ctx.requireAuth) {
     const authHeader = request.headers.get('authorization') || ''
     const token = authHeader.replace(/^Bearer\s+/i, '')
-    const identity = token ? await verifyAccess(token, slug) : null
-    if (!identity) return { status: 403, body: { error: 'auth-failed' } }
+    const result = token ? await verifyAccess(token, slug) : { ok: false as const, reason: 'bad-token' as const }
+    if (!result.ok) return { status: 403, body: { error: 'auth-failed', reason: result.reason } }
+    const identity = result.identity
     name = identity.name || identity.login
     userId = `gh:${identity.id}`
   } else {

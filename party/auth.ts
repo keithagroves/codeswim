@@ -4,6 +4,8 @@
 // runtime). No Cloudflare-specific APIs here — just Web Crypto and fetch,
 // both available in Node too.
 
+import type { AccessDenialReason } from '@codeswim/contract'
+
 const UA = 'codeswim'
 
 export type RoomKind = 'collab' | 'public'
@@ -37,15 +39,24 @@ async function githubFetch(path: string, token: string): Promise<Response> {
   })
 }
 
+export type AccessResult =
+  | { ok: true; identity: GitHubIdentity }
+  | { ok: false; reason: AccessDenialReason; status?: number }
+
 // Verifies the token identifies a user AND that user is a listed collaborator
 // of the repo named by `slug` (owner, org member with access, or invited
 // outside collaborator — not merely "can read a public repo"). Returns the
-// verified identity, or null to reject. For non-github hosts we can only
-// verify identity (GitHub can't speak to repo membership on another forge),
-// which is a weaker but non-anonymous guarantee.
-export async function verifyAccess(token: string, slug: string): Promise<GitHubIdentity | null> {
+// verified identity, or a reason for rejection so the client can show
+// something more actionable than a flat "denied" — in particular
+// 'insufficient-scope' (GitHub 403 on the collaborator check, usually a token
+// that predates the `repo` OAuth scope) is a very different fix from
+// 'not-collaborator' (GitHub 404, a real "you don't have access"). For
+// non-github hosts we can only verify identity (GitHub can't speak to repo
+// membership on another forge), which is a weaker but non-anonymous
+// guarantee.
+export async function verifyAccess(token: string, slug: string): Promise<AccessResult> {
   const userRes = await githubFetch('/user', token)
-  if (!userRes.ok) return null
+  if (!userRes.ok) return { ok: false, reason: 'bad-token', status: userRes.status }
   const u = (await userRes.json()) as {
     id: number
     login: string
@@ -65,7 +76,15 @@ export async function verifyAccess(token: string, slug: string): Promise<GitHubI
       `/repos/${encodeURIComponent(parts[1])}/${encodeURIComponent(parts[2])}/collaborators/${encodeURIComponent(u.login)}`,
       token
     )
-    if (!collabRes.ok) return null // 404 → not a collaborator, 403 → token lacks scope
+    if (!collabRes.ok) {
+      const reason: AccessDenialReason =
+        collabRes.status === 403
+          ? 'insufficient-scope'
+          : collabRes.status === 404
+            ? 'not-collaborator'
+            : 'check-failed'
+      return { ok: false, reason, status: collabRes.status }
+    }
   }
-  return identity
+  return { ok: true, identity }
 }

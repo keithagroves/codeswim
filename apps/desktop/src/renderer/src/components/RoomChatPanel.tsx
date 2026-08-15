@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { useRoomChat, type RoomMode } from '../chat/connection'
 import { resolveRoomConnect } from '../chat/room-connect'
-import type { GitHubStatus, RoomIdentity } from '@codeswim/contract'
+import type { AccessDenialReason, GitHubStatus, RoomIdentity } from '@codeswim/contract'
 
 const NAME_KEY = 'codeswim:chatName'
 const ROOM_KIND_KEY = 'codeswim:chatRoomKind'
@@ -18,6 +18,26 @@ function shortPath(path: string): string {
 
 function timeLabel(sentAt: number): string {
   return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(sentAt)
+}
+
+// 'insufficient-scope' is the case worth calling out specifically: the token
+// itself is valid, but GitHub refused the collaborator check (a 403), which
+// in practice almost always means it predates the `repo` OAuth scope — even
+// the repo's own owner gets this if they signed in before the scope existed.
+// Signing out and back in re-requests scope and fixes it; a flat "you're not
+// a collaborator" would send someone down the wrong path entirely.
+function deniedMessage(kind: RoomMode, reason: AccessDenialReason | null): string {
+  if (kind !== 'collab') return "This room doesn't match the current repository."
+  switch (reason) {
+    case 'insufficient-scope':
+      return "Your GitHub sign-in doesn't have enough permission to check this repo's collaborator list (likely an old sign-in from before this app requested repo access). Sign out and sign back in to fix it."
+    case 'bad-token':
+      return 'Your GitHub sign-in has expired or is invalid. Sign out and sign back in.'
+    case 'not-collaborator':
+      return "GitHub confirmed you're not a collaborator on this repository."
+    default:
+      return "GitHub didn't grant access to this repository's team room — you need to be a collaborator."
+  }
 }
 
 export function RoomChatPanel(): React.JSX.Element {
@@ -112,7 +132,7 @@ export function RoomChatPanel(): React.JSX.Element {
     token,
     name
   })
-  const { status, messages, users, send, setViewing } = useRoomChat(
+  const { status, deniedReason, messages, users, send, setViewing } = useRoomChat(
     roomId,
     displayName,
     effectiveKind,
@@ -304,11 +324,7 @@ export function RoomChatPanel(): React.JSX.Element {
       {roomTabs}
 
       {status === 'denied' ? (
-        <div className="chat-error chat-denied">
-          {effectiveKind === 'collab'
-            ? "GitHub didn't grant access to this repository's team room — you need to be a collaborator."
-            : "This room doesn't match the current repository."}
-        </div>
+        <div className="chat-error chat-denied">{deniedMessage(effectiveKind, deniedReason)}</div>
       ) : null}
 
       {others.length > 0 ? (

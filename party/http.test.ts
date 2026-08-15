@@ -76,7 +76,7 @@ describe('handleRoomHttpRequest', () => {
     const req = new Request(`https://x/?mode=collab&slug=${encodeURIComponent(SLUG)}`)
     const outcome = await handleRoomHttpRequest(req, ctx)
     expect(outcome.status).toBe(403)
-    expect(outcome.body).toEqual({ error: 'auth-failed' })
+    expect(outcome.body).toEqual({ error: 'auth-failed', reason: 'bad-token' })
   })
 
   it('admits a verified collaborator into the collab room and uses their GitHub identity', async () => {

@@ -36,6 +36,22 @@ export type ClientMessage =
   | { type: 'chat'; text: string }
   | { type: 'viewing'; path: string | null }
 
+// Why a collab-room auth attempt was rejected — surfaced on 'auth-failed' so
+// the client can show something more actionable than a flat "denied":
+//   'bad-token'          — GET /user failed; the token is invalid/expired.
+//   'not-collaborator'   — the token identifies a real user who genuinely
+//                          isn't a collaborator on this repo (GitHub 404).
+//   'insufficient-scope' — the token's identity check for collaborator
+//                          status was itself refused (GitHub 403) — usually
+//                          means the token predates the `repo` OAuth scope.
+//   'check-failed'       — anything else (room/slug mismatch, network error,
+//                          unexpected GitHub response).
+export type AccessDenialReason =
+  | 'bad-token'
+  | 'not-collaborator'
+  | 'insufficient-scope'
+  | 'check-failed'
+
 // Server → client.
 export type ServerMessage =
   // Auth accepted; the client may now treat the connection as ready. Only sent
@@ -46,7 +62,12 @@ export type ServerMessage =
   // 'room-mismatch': the claimed room kind + slug didn't hash to the room
   // being joined (client bug, or an attempt to reach the collab room's
   // history via the public join path). Also terminal — stop reconnecting.
-  | { type: 'error'; code: 'auth-required' | 'auth-failed' | 'room-mismatch'; message: string }
+  | {
+      type: 'error'
+      code: 'auth-required' | 'auth-failed' | 'room-mismatch'
+      message: string
+      reason?: AccessDenialReason
+    }
   // Full state on join: recent history + current roster.
   | { type: 'init'; messages: ChatMessage[]; users: ChatUser[] }
   | { type: 'message'; message: ChatMessage }

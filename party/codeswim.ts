@@ -62,7 +62,7 @@ import {
   type ChatUser,
   type ServerMessage
 } from '@codeswim/contract'
-import { roomIdForSlug, verifyAccess, type GitHubIdentity, type RoomKind } from './auth'
+import { roomIdForSlug, verifyAccess, type AccessResult, type RoomKind } from './auth'
 import { handleRoomHttpRequest } from './http'
 
 interface Env {
@@ -164,10 +164,13 @@ export class CodeswimRoom extends Server<Env> {
     if (msg.type === 'auth') {
       // Only meaningful while unauthenticated on an auth-gated room.
       if (!this.requireAuth() || this.users.has(sender.id)) return
-      let identity: GitHubIdentity | null = null
+      let result: AccessResult
       try {
         const expected = await roomIdForSlug('collab', msg.slug)
-        identity = expected === this.name ? await verifyAccess(msg.token, msg.slug) : null
+        result =
+          expected === this.name
+            ? await verifyAccess(msg.token, msg.slug)
+            : { ok: false, reason: 'check-failed' }
       } catch (err) {
         // A thrown verify (e.g. network) must not leave the client hanging —
         // log it and fall through to auth-failed.
@@ -175,22 +178,30 @@ export class CodeswimRoom extends Server<Env> {
           '[auth] verify threw:',
           err instanceof Error ? (err.stack ?? err.message) : err
         )
+        result = { ok: false, reason: 'check-failed' }
       }
       const timer = this.authTimers.get(sender.id)
       if (timer) {
         clearTimeout(timer)
         this.authTimers.delete(sender.id)
       }
-      if (!identity) {
+      if (!result.ok) {
+        // Logged server-side (visible via `wrangler tail`) since the reason
+        // + GitHub status code is the fastest way to tell "token predates the
+        // repo scope" apart from "genuinely not a collaborator" apart from
+        // "room/slug mismatch" without the user having to guess.
+        console.error('[auth] denied:', result.reason, result.status ?? '')
         const err: ServerMessage = {
           type: 'error',
           code: 'auth-failed',
+          reason: result.reason,
           message: 'GitHub did not grant access to this repository.'
         }
         sender.send(JSON.stringify(err))
         sender.close(4003, 'auth-failed')
         return
       }
+      const identity = result.identity
       sender.send(JSON.stringify({ type: 'auth-ok' } satisfies ServerMessage))
       this.admit(sender, {
         id: `gh:${identity.id}`,

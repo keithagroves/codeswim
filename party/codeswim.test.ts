@@ -37,8 +37,8 @@ describe('verifyAccess', () => {
       'fetch',
       vi.fn().mockResolvedValue(jsonResponse({ message: 'Bad credentials' }, 401))
     )
-    const identity = await verifyAccess('bad-token', 'github.com/acme/triage')
-    expect(identity).toBeNull()
+    const result = await verifyAccess('bad-token', 'github.com/acme/triage')
+    expect(result).toEqual({ ok: false, reason: 'bad-token', status: 401 })
   })
 
   it('admits a listed collaborator of a github.com repo', async () => {
@@ -54,8 +54,11 @@ describe('verifyAccess', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    const identity = await verifyAccess('good-token', 'github.com/acme/triage')
-    expect(identity).toEqual({ id: 42, login: 'samc', name: 'Sam Carter', avatarUrl: 'a.png' })
+    const result = await verifyAccess('good-token', 'github.com/acme/triage')
+    expect(result).toEqual({
+      ok: true,
+      identity: { id: 42, login: 'samc', name: 'Sam Carter', avatarUrl: 'a.png' }
+    })
     // Confirms we check collaborator status, not just repo-read access.
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/repos/acme/triage/collaborators/samc'),
@@ -79,8 +82,28 @@ describe('verifyAccess', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    const identity = await verifyAccess('outsider-token', 'github.com/acme/triage')
-    expect(identity).toBeNull()
+    const result = await verifyAccess('outsider-token', 'github.com/acme/triage')
+    expect(result).toEqual({ ok: false, reason: 'not-collaborator', status: 404 })
+  })
+
+  it('distinguishes a scope-starved token (403) from a genuine non-collaborator (404)', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.endsWith('/user')) {
+        return jsonResponse({ id: 9, login: 'oldtoken', name: null, avatar_url: null })
+      }
+      if (url.includes('/collaborators/oldtoken')) {
+        // The identity check itself was refused — a token that predates the
+        // `repo` OAuth scope looks exactly like this, even for the repo's
+        // own owner.
+        return jsonResponse({ message: 'Forbidden' }, 403)
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await verifyAccess('scope-starved-token', 'github.com/acme/triage')
+    expect(result).toEqual({ ok: false, reason: 'insufficient-scope', status: 403 })
   })
 
   it('skips the collaborator check for non-github hosts (identity-only guarantee)', async () => {
@@ -93,8 +116,11 @@ describe('verifyAccess', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    const identity = await verifyAccess('token', 'gitlab.com/group/project')
-    expect(identity).toEqual({ id: 1, login: 'samc', name: 'Sam Carter', avatarUrl: null })
+    const result = await verifyAccess('token', 'gitlab.com/group/project')
+    expect(result).toEqual({
+      ok: true,
+      identity: { id: 1, login: 'samc', name: 'Sam Carter', avatarUrl: null }
+    })
     expect(fetchMock).toHaveBeenCalledTimes(1) // only /user, no collaborator probe
   })
 })
