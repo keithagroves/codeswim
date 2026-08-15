@@ -19,3 +19,6 @@ pitch/
 # Added by codeswim sync
 flyer-web/
 .archive/
+
+# Added by codeswim sync
+.codeswim/agent-state.json
