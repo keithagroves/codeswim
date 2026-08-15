@@ -23,6 +23,9 @@ export interface KanbanCard {
   labels: string[]
   linkedPath?: string
   github?: KanbanGitHubItem
+  // IDs of other cards that must reach the board's last column before this
+  // one is eligible for "Run all". Ordering only — not enforced elsewhere.
+  dependsOn?: string[]
   createdAt: number
   updatedAt: number
 }
@@ -170,6 +173,15 @@ export function normalizeKanbanBoard(value: unknown, fallbackTitle = 'Project bo
             : undefined
 
           const priority = card.priority
+          const dependsOn = Array.isArray(card.dependsOn)
+            ? [
+                ...new Set(
+                  card.dependsOn.filter(
+                    (dep): dep is string => typeof dep === 'string' && dep.trim() !== '' && dep !== id
+                  )
+                )
+              ]
+            : []
           return {
             id,
             title,
@@ -186,6 +198,7 @@ export function normalizeKanbanBoard(value: unknown, fallbackTitle = 'Project bo
               : [],
             linkedPath: stringValue(card.linkedPath).trim() || undefined,
             github: github?.itemId ? github : undefined,
+            dependsOn: dependsOn.length > 0 ? dependsOn : undefined,
             createdAt: numberValue(card.createdAt, now),
             updatedAt: numberValue(card.updatedAt, now)
           }

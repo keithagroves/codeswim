@@ -48,7 +48,7 @@ function TabStrip(): React.JSX.Element {
       })}
       <button
         className="agents-tab-new"
-        onClick={openAgentTab}
+        onClick={() => openAgentTab()}
         title="New agent"
         aria-label="New agent"
       >
@@ -161,7 +161,7 @@ export function AgentsView(): React.JSX.Element {
       ) : (
         <div className="agents-empty">
           <p>Run several agents side by side, each in its own tab.</p>
-          <button className="primary" onClick={openAgentTab}>
+          <button className="primary" onClick={() => openAgentTab()}>
             + New agent
           </button>
         </div>

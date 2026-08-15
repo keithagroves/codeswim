@@ -1,4 +1,5 @@
 import type { KanbanBoard } from './kanban'
+import type { PersistedAgentTabs } from './agent-tabs'
 
 export interface ScriptOutputPayload {
   name: string
@@ -252,6 +253,15 @@ export interface DiagramNavApi {
     cardId: string,
     columnId: string
   ): Promise<void>
+  // "Run all": creates an isolated git worktree + branch for a card so its
+  // agent run can't collide with the main working tree or another card's
+  // worktree. The branch is left for manual review — nothing auto-merges.
+  kanbanWorktreeCreate(
+    rootPath: string,
+    cardId: string,
+    cardTitle: string
+  ): Promise<{ path: string; branch: string }>
+  kanbanWorktreeRemove(rootPath: string, cardId: string): Promise<void>
   watch(rootPath: string): Promise<void>
   unwatch(): Promise<void>
   onFileChanged(cb: (absPath: string) => void): () => void
@@ -350,6 +360,10 @@ export interface DiagramNavApi {
   // Publishes the renderer's current UI state so the agent's get_app_state tool
   // can read what the user is looking at. Best-effort, fire-and-forget.
   publishAgentState(rootPath: string, snapshot: AppStateSnapshot): Promise<void>
+  // Agents-view tab strip persistence (id/sessionId/title only — see
+  // PersistedAgentTabs). null from read means no file yet / unreadable.
+  agentTabsRead(rootPath: string): Promise<PersistedAgentTabs | null>
+  agentTabsWrite(rootPath: string, data: PersistedAgentTabs): Promise<void>
   // App auto-update: main checks + downloads on its own; the renderer listens
   // for status and calls installUpdate to restart into the new version.
   onUpdateStatus(cb: (payload: UpdateStatusPayload) => void): () => void

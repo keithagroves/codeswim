@@ -1,8 +1,19 @@
 import { afterEach, describe, it, expect } from 'vitest'
+import { execFile } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { parseBranchLine, parseStatusLine, ensureGitignore, parseGitLog } from './git'
+import { promisify } from 'node:util'
+import {
+  parseBranchLine,
+  parseStatusLine,
+  ensureGitignore,
+  parseGitLog,
+  gitWorktreeAdd,
+  gitWorktreeRemove
+} from './git'
+
+const execFileAsync = promisify(execFile)
 
 const F = '\u001f' // field separator, matches git.ts LOG_FIELD
 const R = '\u001e' // record separator, matches git.ts LOG_RECORD
@@ -93,6 +104,52 @@ describe('ensureGitignore', () => {
     const dir = await tmp()
     expect(await ensureGitignore(dir)).toBe(true)
     expect(await ensureGitignore(dir)).toBe(false)
+  })
+})
+
+describe('gitWorktreeAdd / gitWorktreeRemove', () => {
+  const dirs: string[] = []
+
+  afterEach(async () => {
+    for (const d of dirs.splice(0)) {
+      await fs.rm(d, { recursive: true, force: true }).catch(() => {})
+    }
+  })
+
+  const repo = async (): Promise<string> => {
+    const d = await fs.mkdtemp(path.join(os.tmpdir(), 'codeswim-gwt-'))
+    dirs.push(d)
+    await execFileAsync('git', ['init', '-q'], { cwd: d })
+    await execFileAsync('git', ['config', 'user.email', 'test@example.com'], { cwd: d })
+    await execFileAsync('git', ['config', 'user.name', 'Test'], { cwd: d })
+    await fs.writeFile(path.join(d, 'README.md'), 'hi\n', 'utf-8')
+    await execFileAsync('git', ['add', '-A'], { cwd: d })
+    await execFileAsync('git', ['commit', '-q', '-m', 'initial'], { cwd: d })
+    return d
+  }
+
+  it('checks out a new branch into a fresh directory', async () => {
+    const root = await repo()
+    const worktreePath = path.join(os.tmpdir(), `codeswim-gwt-out-${Date.now()}`)
+    dirs.push(worktreePath)
+    const result = await gitWorktreeAdd(root, worktreePath, 'Fix the thing!')
+    expect(result.path).toBe(worktreePath)
+    expect(result.branch).toMatch(/^codeswim\/fix-the-thing-[a-z0-9]+$/)
+    expect(await fs.readFile(path.join(worktreePath, 'README.md'), 'utf-8')).toBe('hi\n')
+
+    const { stdout } = await execFileAsync('git', ['branch', '--list', result.branch], { cwd: root })
+    expect(stdout).toContain(result.branch)
+  })
+
+  it('removes the worktree but leaves the branch for review', async () => {
+    const root = await repo()
+    const worktreePath = path.join(os.tmpdir(), `codeswim-gwt-out-${Date.now()}`)
+    const result = await gitWorktreeAdd(root, worktreePath, 'Task')
+    await gitWorktreeRemove(root, worktreePath)
+
+    await expect(fs.access(worktreePath)).rejects.toThrow()
+    const { stdout } = await execFileAsync('git', ['branch', '--list', result.branch], { cwd: root })
+    expect(stdout).toContain(result.branch)
   })
 })
 

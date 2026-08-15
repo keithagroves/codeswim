@@ -2,7 +2,7 @@ import { createContext, useContext } from 'react'
 import type { PendingQuestion } from './agent'
 import type { CommitMessage } from '@codeswim/commit'
 import type { SyncPlan } from '@codeswim/commit'
-import type { GitIgnoreResult, PullRequest } from '@codeswim/contract'
+import type { GitIgnoreResult, KanbanCard, PullRequest } from '@codeswim/contract'
 import type { LineRange } from './path-utils'
 
 export type { LineRange } from './path-utils'
@@ -107,6 +107,10 @@ export interface AgentTab {
   error: string | null
   messages: ChatMessage[]
   pendingQuestion: PendingQuestion | null
+  // Overrides rootPath as the opencode session's working directory — set for
+  // tabs opened by Kanban "Run all", which run in an isolated git worktree
+  // rather than the main workspace. null for ordinary tabs.
+  directory: string | null
 }
 
 // Flatten the file tree to a list of root-relative file paths, for resolving
@@ -287,10 +291,21 @@ export interface StoreApi {
   // Called after a merge so the badge updates without reopening the workspace.
   refreshOpenPrCount(): Promise<void>
   // Agents view (browser-style tabs, one opencode session per tab).
-  openAgentTab(): void
+  // Returns the new tab's id. `directory` scopes the session to a git
+  // worktree instead of rootPath (used by Kanban "Run all"); `title`
+  // overrides the default "Agent N" placeholder.
+  openAgentTab(opts?: { directory?: string; title?: string }): string
   closeAgentTab(tabId: string): void
   activateAgentTab(tabId: string): void
   sendAgentChat(tabId: string, text: string): Promise<void>
+  // Kanban "Start" button: opens a new agent tab, switches to the Agents
+  // view, and sends the card as the first prompt.
+  startAgentFromCard(card: KanbanCard): void
+  // Kanban "Run all": same as startAgentFromCard but runs in an isolated git
+  // worktree and does NOT switch the workspace view — the point is to keep
+  // working while it runs in the background. Returns once the agent's first
+  // reply has landed (or errored), so a caller can sequence dependent cards.
+  startAgentInWorktree(card: KanbanCard, directory: string): Promise<void>
 }
 
 export const StoreContext = createContext<StoreApi | null>(null)

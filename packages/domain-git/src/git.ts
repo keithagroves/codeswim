@@ -529,6 +529,48 @@ export async function gitAddToGitignore(
   return { added, untracked }
 }
 
+export interface GitWorktree {
+  path: string
+  branch: string
+}
+
+// Slugify a card title for the branch name — lowercase, ascii-alnum only,
+// collapsed dashes. Falls back to 'task' so an all-symbol title still
+// produces a usable branch.
+function slugify(input: string): string {
+  const slug = input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+  return slug || 'task'
+}
+
+// Creates an isolated git worktree + branch at `worktreePath`, checked out
+// from the current HEAD, so a background agent run can write files without
+// colliding with the main working tree (or with another card's worktree).
+// `worktreePath` must not already exist — the caller owns cleanup of stale
+// directories before calling this. The branch name is uniqued with a short
+// timestamp suffix so re-running the same card twice doesn't collide with a
+// leftover branch from a previous run.
+export async function gitWorktreeAdd(rootPath: string, worktreePath: string, label: string): Promise<GitWorktree> {
+  const branch = `codeswim/${slugify(label)}-${Date.now().toString(36)}`
+  await git(rootPath, ['worktree', 'add', '-b', branch, worktreePath, 'HEAD'])
+  return { path: worktreePath, branch }
+}
+
+// Removes a worktree created by gitWorktreeAdd. Leaves the branch itself
+// intact (it's the reviewable artifact of the agent's work) — only the
+// checked-out directory and its worktree registration are removed. Safe to
+// call even if the directory was already deleted by hand.
+export async function gitWorktreeRemove(rootPath: string, worktreePath: string): Promise<void> {
+  try {
+    await git(rootPath, ['worktree', 'remove', '--force', worktreePath])
+  } catch {
+    await git(rootPath, ['worktree', 'prune']).catch(() => {})
+  }
+}
+
 export async function gitCommit(rootPath: string, subject: string, body: string): Promise<string> {
   const trimmedSubject = subject.trim()
   if (!trimmedSubject) throw new Error('commit subject is empty')

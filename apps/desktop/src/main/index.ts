@@ -45,6 +45,8 @@ import {
   gitLog
 } from '@codeswim/domain-git'
 import { getRoomIdentity } from '@codeswim/domain-github'
+import { readAgentTabsFile, writeAgentTabsFile } from './agent-tabs-file'
+import { createCardWorktree, removeCardWorktree } from './kanban-worktree'
 import {
   getStatus as githubStatus,
   getToken as githubToken,
@@ -71,7 +73,7 @@ import {
   writeKanbanBoard
 } from '@codeswim/domain-kanban'
 import { readSourceExplanation, resolveWorkspaceFile } from '@codeswim/domain-skills'
-import type { AppStateSnapshot } from '@codeswim/contract'
+import type { AppStateSnapshot, PersistedAgentTabs } from '@codeswim/contract'
 
 // Host of the deployed party server, no scheme. Mirrors the renderer's
 // VITE_PARTY_HOST (chat/connection.ts) — needed here too so the harness
@@ -696,6 +698,17 @@ app.whenReady().then(async () => {
     }
   )
 
+  ipcMain.handle(
+    'kanban:worktree-create',
+    async (_event, rootPath: string, cardId: string, cardTitle: string) => {
+      return createCardWorktree(rootPath, cardId, cardTitle)
+    }
+  )
+
+  ipcMain.handle('kanban:worktree-remove', async (_event, rootPath: string, cardId: string) => {
+    await removeCardWorktree(rootPath, cardId)
+  })
+
   ipcMain.handle('watch', async (_event, rootPath: string) => {
     startWatching(rootPath)
   })
@@ -966,6 +979,14 @@ app.whenReady().then(async () => {
       await fs.rename(temp, file)
     }
   )
+
+  ipcMain.handle('agent-tabs:read', async (_event, rootPath: string) => {
+    return readAgentTabsFile(rootPath)
+  })
+
+  ipcMain.handle('agent-tabs:write', async (_event, rootPath: string, data: PersistedAgentTabs) => {
+    await writeAgentTabsFile(rootPath, data)
+  })
 
   ipcMain.handle('terminal:create', (_event, cwd?: string, command?: string) => {
     const id = String(++terminalIdCounter)

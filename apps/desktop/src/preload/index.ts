@@ -1,6 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import type { AppStateSnapshot, KanbanBoard, UpdateStatusPayload } from '@codeswim/contract'
+import type {
+  AppStateSnapshot,
+  KanbanBoard,
+  PersistedAgentTabs,
+  UpdateStatusPayload
+} from '@codeswim/contract'
 
 export type {
   KanbanBoard,
@@ -228,6 +233,14 @@ const api = {
     cardId: string,
     columnId: string
   ): Promise<void> => ipcRenderer.invoke('kanban:github-move', rootPath, board, cardId, columnId),
+  kanbanWorktreeCreate: (
+    rootPath: string,
+    cardId: string,
+    cardTitle: string
+  ): Promise<{ path: string; branch: string }> =>
+    ipcRenderer.invoke('kanban:worktree-create', rootPath, cardId, cardTitle),
+  kanbanWorktreeRemove: (rootPath: string, cardId: string): Promise<void> =>
+    ipcRenderer.invoke('kanban:worktree-remove', rootPath, cardId),
   watch: (rootPath: string): Promise<void> => ipcRenderer.invoke('watch', rootPath),
   unwatch: (): Promise<void> => ipcRenderer.invoke('unwatch'),
   onFileChanged: (cb: (absPath: string) => void): (() => void) => {
@@ -414,6 +427,10 @@ const api = {
   },
   publishAgentState: (rootPath: string, snapshot: AppStateSnapshot): Promise<void> =>
     ipcRenderer.invoke('agent:publish-state', rootPath, snapshot),
+  agentTabsRead: (rootPath: string): Promise<PersistedAgentTabs | null> =>
+    ipcRenderer.invoke('agent-tabs:read', rootPath),
+  agentTabsWrite: (rootPath: string, data: PersistedAgentTabs): Promise<void> =>
+    ipcRenderer.invoke('agent-tabs:write', rootPath, data),
   onUpdateStatus: (cb: (payload: UpdateStatusPayload) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: UpdateStatusPayload): void =>
       cb(payload)

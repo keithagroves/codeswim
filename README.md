@@ -20,7 +20,17 @@
 
 ## What it is
 
-codeswim is a desktop app (Electron) that opens a folder and renders the markdown files inside it as a navigable diagram tree. Click a node to drill into a child diagram or read the companion explanation for the source file it represents. An AI agent panel keeps the diagrams aligned with the code as you change either side.
+codeswim is a desktop app (Electron) that opens a folder and renders the markdown files inside it as a navigable diagram tree. Click a node to drill into a child diagram or read the companion explanation for the source file it represents.
+
+Around that core there's a sidebar of tools for keeping the diagrams and the code in sync:
+
+- **Agent** — chat with a coding agent (via [opencode](https://opencode.ai)) about the open workspace; open multiple agent sessions as tabs in the Agents view, which persist across restarts.
+- **Diagram coverage** — audits which source files are actually reachable from `overview.md` and hands drift straight to the agent to fix.
+- **Commit** — stages changes, drafts commit messages, and shows history without leaving the app.
+- **Pull requests** — browse and review GitHub PRs for the open repo.
+- **Kanban** — a lightweight board (`.codeswim/board.json`) for tracking work; clicking **Start** on a card opens a new Agents-view tab and hands the card to the agent as a prompt.
+- **Chat** — a team chat room scoped to the repo, gated to verified GitHub collaborators, plus an unauthenticated public room.
+- **Terminal**, **Search**, **Files** — the usual complement of workspace tools.
 
 ## Try it
 

@@ -9,6 +9,7 @@ import {
   type ProviderAuthMap
 } from './agent'
 import { runCoverage, buildSyncPrompt } from './coverage/run'
+import { buildCardPrompt } from './kanban-prompt'
 import {
   buildCommitSynthesisPrompt,
   composeCommitBody,
@@ -17,7 +18,7 @@ import {
 } from '@codeswim/commit'
 import { buildTriagePrompt, parseSyncPlan, type SyncPlan } from '@codeswim/commit'
 import { extname, parseTarget, relativeToRoot, resolveRelative, toPosix } from './path-utils'
-import type { AgentViewAction, AppStateSnapshot, PullRequest } from '@codeswim/contract'
+import type { AgentViewAction, AppStateSnapshot, KanbanCard, PullRequest } from '@codeswim/contract'
 import {
   prDiffLabel,
   StoreContext,
@@ -183,10 +184,13 @@ type Action =
   | { type: 'agent-tab-open'; tab: AgentTab }
   | { type: 'agent-tab-close'; tabId: string }
   | { type: 'agent-tab-activate'; tabId: string }
+  // Replaces the whole tab strip wholesale — used to rehydrate tabs
+  // persisted from a previous run of this workspace (see ensureAgent).
+  | { type: 'agent-tabs-restore'; tabs: AgentTab[]; activeAgentTabId: string | null }
   | {
       type: 'agent-tab-patch'
       tabId: string
-      patch: Partial<Pick<AgentTab, 'sessionId' | 'title' | 'status' | 'error'>>
+      patch: Partial<Pick<AgentTab, 'sessionId' | 'title' | 'status' | 'error' | 'messages'>>
     }
   | { type: 'agent-tab-add-message'; tabId: string; message: ChatMessage }
   // Routed by opencode session id (part updates arrive off the shared event
@@ -485,6 +489,8 @@ function reducer(state: AppState, action: Action): AppState {
     }
     case 'agent-tab-activate':
       return { ...state, activeAgentTabId: action.tabId }
+    case 'agent-tabs-restore':
+      return { ...state, agentTabs: action.tabs, activeAgentTabId: action.activeAgentTabId }
     case 'agent-tab-patch':
       return {
         ...state,
@@ -552,6 +558,13 @@ let agentTabSeq = 1
 export function StoreProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const [state, dispatch] = useReducer(reducer, initialState)
   const agentRef = useRef<AgentClient | null>(null)
+  // rootPath for which the agentTabs persistence effect is safe to write.
+  // `set-root` resets agentTabs to [] synchronously, well before ensureAgent
+  // gets a chance to read the persisted tabs back — without this guard, the
+  // write effect would see that transient empty array and delete the very
+  // data ensureAgent is about to restore. Set once ensureAgent has read
+  // (successfully or not) for a given rootPath.
+  const agentTabsRestoredForRef = useRef<string | null>(null)
   const stateRef = useRef(state)
   stateRef.current = state
   // Bridges agent-driven view actions (off the part stream) to the navigation
@@ -676,6 +689,61 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
         .catch(() => {
           // best-effort; missing pending questions are non-fatal
         })
+
+      // Restore Agents-view tabs left over from a previous run of this
+      // workspace. Only id/sessionId/title were persisted (to
+      // .codeswim/agent-tabs.json via the main process — not localStorage,
+      // whose writes aren't reliably flushed before the app exits) — history
+      // itself lives in opencode, so each tab with a session is rehydrated
+      // via loadMessages below. The hydration loop below is fire-and-forget:
+      // the tab strip shows up immediately (empty/"connecting"), and the
+      // main session above isn't held up waiting on it.
+      const persisted = await window.api.agentTabsRead(rootPath).catch(() => null)
+      agentTabsRestoredForRef.current = rootPath
+      if (persisted) {
+        const restoredTabs: AgentTab[] = persisted.tabs.map((t) => ({
+          id: t.id,
+          sessionId: t.sessionId,
+          title: t.title,
+          status: t.sessionId ? 'connecting' : 'idle',
+          error: null,
+          messages: [],
+          pendingQuestion: null,
+          directory: t.directory ?? null
+        }))
+        dispatch({
+          type: 'agent-tabs-restore',
+          tabs: restoredTabs,
+          activeAgentTabId: persisted.activeAgentTabId
+        })
+        // Keep new tabs' default "Agent N" title from colliding with a
+        // restored one.
+        for (const t of restoredTabs) {
+          const m = /^Agent (\d+)$/.exec(t.title)
+          if (m) agentTabSeq = Math.max(agentTabSeq, Number(m[1]) + 1)
+        }
+
+        for (const t of restoredTabs) {
+          if (!t.sessionId) continue
+          const sessionId = t.sessionId
+          void agent
+            .loadMessages(sessionId, t.directory ?? undefined)
+            .then((messages) => {
+              dispatch({
+                type: 'agent-tab-patch',
+                tabId: t.id,
+                patch: { messages: toChatMessages(messages), status: 'ready' }
+              })
+            })
+            .catch(() => {
+              dispatch({
+                type: 'agent-tab-patch',
+                tabId: t.id,
+                patch: { status: 'error', error: "Couldn't load this session's history." }
+              })
+            })
+        }
+      }
 
       dispatch({ type: 'chat-status', status: 'ready' })
       return agent
@@ -864,20 +932,33 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
 
   // --- Agents view (browser-style tabs, one opencode session per tab) ---
 
-  const openAgentTab = useCallback(() => {
+  const openAgentTab = useCallback((opts?: { directory?: string; title?: string }): string => {
     const n = agentTabSeq++
-    dispatch({
-      type: 'agent-tab-open',
-      tab: {
-        id: `tab-${Date.now()}-${n}`,
-        sessionId: null,
-        title: `Agent ${n}`,
-        status: 'idle',
-        error: null,
-        messages: [],
-        pendingQuestion: null
-      }
-    })
+    const id = `tab-${Date.now()}-${n}`
+    const tab: AgentTab = {
+      id,
+      sessionId: null,
+      title: opts?.title || `Agent ${n}`,
+      status: 'idle',
+      error: null,
+      messages: [],
+      pendingQuestion: null,
+      directory: opts?.directory ?? null
+    }
+    // Patch stateRef synchronously, ahead of the dispatch taking effect.
+    // Callers that open a tab and immediately send to it in the same tick
+    // (Kanban's "Start in background"/"Run all", which don't wait for a
+    // render between the two) would otherwise have sendAgentChat's
+    // `stateRef.current.agentTabs.find(...)` miss the brand-new tab and
+    // silently no-op — the tab would open but never actually receive its
+    // prompt.
+    stateRef.current = {
+      ...stateRef.current,
+      agentTabs: [...stateRef.current.agentTabs, tab],
+      activeAgentTabId: id
+    }
+    dispatch({ type: 'agent-tab-open', tab })
+    return id
   }, [])
 
   const closeAgentTab = useCallback((tabId: string) => {
@@ -901,6 +982,9 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
       if (!agent) return
       const tab = stateRef.current.agentTabs.find((t) => t.id === tabId)
       if (!tab) return
+      // Worktree-scoped tabs (Kanban "Run all") point their session at an
+      // isolated git worktree instead of rootPath.
+      const directory = tab.directory ?? root
 
       const patch = (
         p: Partial<Pick<AgentTab, 'sessionId' | 'title' | 'status' | 'error'>>
@@ -911,7 +995,7 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
         let sessionId = tab.sessionId
         if (!sessionId) {
           patch({ status: 'connecting' })
-          const created = await agent.createSession()
+          const created = await agent.createSession(directory)
           sessionId = created.id
           patch({ sessionId })
         }
@@ -924,14 +1008,17 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
         })
         patch({ status: 'thinking', error: null })
 
-        const reply = await agent.send(sessionId, trimmed)
+        const reply = await agent.send(sessionId, trimmed, directory)
         for (const part of reply.parts) {
           dispatch({ type: 'agent-tab-upsert-part', sessionId, messageID: reply.messageID, part })
         }
         patch({ status: 'ready' })
 
         // opencode auto-titles the session from the first prompt; adopt it as
-        // the tab title once available.
+        // the tab title once available. Skipped for worktree-scoped tabs —
+        // they already carry the card's title, which is more useful than
+        // whatever opencode derives from the synthesized prompt text.
+        if (tab.directory) return
         void agent.listSessions().then((sessions) => {
           dispatch({ type: 'sessions-set', sessions })
           const info = sessions.find((s) => s.id === sessionId)
@@ -946,6 +1033,32 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
       }
     },
     [ensureAgent, toast]
+  )
+
+  // Kanban "Start" button: opens a fresh agent tab, switches to the Agents
+  // view so it's immediately visible, and sends the card as the first
+  // message. Fire-and-forget from the caller's perspective — sendAgentChat
+  // reports its own errors via toast.
+  const startAgentFromCard = useCallback(
+    (card: KanbanCard) => {
+      const tabId = openAgentTab()
+      dispatch({ type: 'set-workspace-view', view: 'agents' })
+      void sendAgentChat(tabId, buildCardPrompt(card))
+    },
+    [openAgentTab, sendAgentChat]
+  )
+
+  // Kanban "Run all": same as startAgentFromCard, but scoped to an isolated
+  // git worktree and deliberately doesn't touch workspaceView — the whole
+  // point is to keep running while the user stays wherever they were. Awaits
+  // the first reply so the caller (the run-all scheduler) can sequence cards
+  // that depend on this one.
+  const startAgentInWorktree = useCallback(
+    async (card: KanbanCard, directory: string): Promise<void> => {
+      const tabId = openAgentTab({ directory, title: card.title })
+      await sendAgentChat(tabId, buildCardPrompt(card))
+    },
+    [openAgentTab, sendAgentChat]
   )
 
   const setActiveSection = useCallback(
@@ -1796,6 +1909,40 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
     }
   }, [state.activityOrder])
 
+  // Persist the Agents-view tab strip (id/sessionId/title only — see
+  // PersistedAgentTabs in @codeswim/contract) to .codeswim/agent-tabs.json
+  // via the main process, so it survives a restart. Keyed off a lightweight
+  // signature rather than `state.agentTabs` directly so a token streaming in
+  // mid-conversation doesn't trigger a write on every delta.
+  const agentTabsSignature = useMemo(
+    () =>
+      state.agentTabs
+        .map((t) => `${t.id}:${t.sessionId ?? ''}:${t.title}:${t.directory ?? ''}`)
+        .join('|'),
+    [state.agentTabs]
+  )
+  useEffect(() => {
+    if (!state.rootPath) return
+    // Guards against the transient empty agentTabs a `set-root` reset
+    // produces before ensureAgent has had a chance to restore — see the
+    // comment on agentTabsRestoredForRef above.
+    if (agentTabsRestoredForRef.current !== state.rootPath) return
+    void window.api
+      .agentTabsWrite(state.rootPath, {
+        tabs: state.agentTabs.map((t) => ({
+          id: t.id,
+          sessionId: t.sessionId,
+          title: t.title,
+          directory: t.directory
+        })),
+        activeAgentTabId: state.activeAgentTabId
+      })
+      .catch(() => {
+        // best-effort — a failed write just means tabs won't restore next time
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.rootPath, agentTabsSignature, state.activeAgentTabId])
+
   const api = useMemo<StoreApi>(
     () => ({
       state,
@@ -1850,7 +1997,9 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       openAgentTab,
       closeAgentTab,
       activateAgentTab,
-      sendAgentChat
+      sendAgentChat,
+      startAgentFromCard,
+      startAgentInWorktree
     }),
     [
       state,
@@ -1905,7 +2054,9 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       openAgentTab,
       closeAgentTab,
       activateAgentTab,
-      sendAgentChat
+      sendAgentChat,
+      startAgentFromCard,
+      startAgentInWorktree
     ]
   )
 

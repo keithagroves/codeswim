@@ -68,10 +68,15 @@ export type QuestionEvent =
   | { kind: 'closed'; sessionID: string; requestID: string }
 
 export interface AgentClient {
-  listSessions(): Promise<SessionInfo[]>
-  createSession(): Promise<SessionInfo>
-  loadMessages(sessionId: string): Promise<LoadedMessage[]>
-  send(sessionId: string, text: string): Promise<AgentSendResult>
+  // `directory` overrides the connection's default (rootPath) for a single
+  // call — used to run a session against a Kanban "Run all" git worktree
+  // instead of the main workspace. The underlying opencode server is
+  // directory-aware per request, so one connection can drive sessions across
+  // several directories at once.
+  listSessions(directory?: string): Promise<SessionInfo[]>
+  createSession(directory?: string): Promise<SessionInfo>
+  loadMessages(sessionId: string, directory?: string): Promise<LoadedMessage[]>
+  send(sessionId: string, text: string, directory?: string): Promise<AgentSendResult>
   subscribeParts(handler: (update: PartUpdate) => void): () => void
   subscribeQuestions(handler: (event: QuestionEvent) => void): () => void
   listPendingQuestions(sessionId?: string): Promise<PendingQuestion[]>
@@ -197,8 +202,8 @@ export async function setApiKey(
   })
 }
 
-export async function connectAgent(url: string, directory: string): Promise<AgentClient> {
-  const client = createOpencodeClient({ baseUrl: url, directory })
+export async function connectAgent(url: string, defaultDirectory: string): Promise<AgentClient> {
+  const client = createOpencodeClient({ baseUrl: url, directory: defaultDirectory })
 
   const providers = await client.config.providers({ throwOnError: true })
   const list = (providers.data as { providers?: Array<{ id?: string }> })?.providers ?? []
@@ -276,7 +281,7 @@ export async function connectAgent(url: string, directory: string): Promise<Agen
   }
 
   return {
-    async listSessions(): Promise<SessionInfo[]> {
+    async listSessions(directory = defaultDirectory): Promise<SessionInfo[]> {
       const result = await client.session.list({
         query: { directory },
         throwOnError: true,
@@ -288,7 +293,7 @@ export async function connectAgent(url: string, directory: string): Promise<Agen
         .sort((a, b) => b.updatedAt - a.updatedAt)
     },
 
-    async createSession(): Promise<SessionInfo> {
+    async createSession(directory = defaultDirectory): Promise<SessionInfo> {
       const result = await client.session.create({
         query: { directory },
         throwOnError: true,
@@ -297,7 +302,7 @@ export async function connectAgent(url: string, directory: string): Promise<Agen
       return toSessionInfo(result.data as RawSession)
     },
 
-    async loadMessages(sessionId: string): Promise<LoadedMessage[]> {
+    async loadMessages(sessionId: string, directory = defaultDirectory): Promise<LoadedMessage[]> {
       const result = await client.session.messages({
         path: { id: sessionId },
         query: { directory },
@@ -314,7 +319,7 @@ export async function connectAgent(url: string, directory: string): Promise<Agen
       }))
     },
 
-    async send(sessionId: string, text: string): Promise<AgentSendResult> {
+    async send(sessionId: string, text: string, directory = defaultDirectory): Promise<AgentSendResult> {
       const result = await client.session.prompt({
         path: { id: sessionId },
         query: { directory },
@@ -349,7 +354,7 @@ export async function connectAgent(url: string, directory: string): Promise<Agen
 
     async listPendingQuestions(sessionId?: string): Promise<PendingQuestion[]> {
       // v1 SDK doesn't surface /question as a named method — hit it raw.
-      const params = new URLSearchParams({ directory })
+      const params = new URLSearchParams({ directory: defaultDirectory })
       const res = await fetch(`${url}/question?${params}`, { signal: abort.signal })
       if (!res.ok) {
         throw new Error(`GET /question → ${res.status} ${res.statusText}`)
@@ -362,7 +367,7 @@ export async function connectAgent(url: string, directory: string): Promise<Agen
     },
 
     async replyToQuestion(requestID: string, answers: string[][]): Promise<void> {
-      const params = new URLSearchParams({ directory })
+      const params = new URLSearchParams({ directory: defaultDirectory })
       const res = await fetch(`${url}/question/${encodeURIComponent(requestID)}/reply?${params}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -376,7 +381,7 @@ export async function connectAgent(url: string, directory: string): Promise<Agen
     },
 
     async rejectQuestion(requestID: string): Promise<void> {
-      const params = new URLSearchParams({ directory })
+      const params = new URLSearchParams({ directory: defaultDirectory })
       const res = await fetch(
         `${url}/question/${encodeURIComponent(requestID)}/reject?${params}`,
         { method: 'POST', signal: abort.signal }

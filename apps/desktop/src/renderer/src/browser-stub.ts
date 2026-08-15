@@ -254,6 +254,8 @@ The companion document belongs at \`${documentPath}\`.
     },
     kanbanGitHubSync: notInBrowser<KanbanBoard>('GitHub Projects sync'),
     kanbanGitHubMove: notInBrowser<void>('GitHub Projects status updates'),
+    kanbanWorktreeCreate: notInBrowser<{ path: string; branch: string }>('Run all (git worktrees)'),
+    kanbanWorktreeRemove: notInBrowser<void>('Run all (git worktrees)'),
     watch: () => Promise.resolve(),
     unwatch: () => Promise.resolve(),
     onFileChanged: noopUnsub,
@@ -387,6 +389,8 @@ The companion document belongs at \`${documentPath}\`.
     onTerminalData: () => () => {},
     onTerminalExit: () => () => {},
     publishAgentState: async () => {},
+    agentTabsRead: async () => null,
+    agentTabsWrite: async () => {},
     onUpdateStatus: () => () => {},
     installUpdate: async () => {}
   }

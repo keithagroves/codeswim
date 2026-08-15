@@ -12,6 +12,10 @@ pitch/
 !.env.example
 .wrangler/
 
+# Personal, local-only Agents-view tab state (opencode session ids) — not
+# project content, would just be merge-conflict noise if shared.
+.codeswim/agent-tabs.json
+
 # Added by codeswim sync
 flyer-web/
 .archive/
