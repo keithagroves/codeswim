@@ -115,7 +115,16 @@ flowchart TD
 - [CodeSnippetCard.tsx](../apps/desktop/src/renderer/src/components/CodeSnippetCard.tsx) — inline CodeMirror editor that renders a line-range slice of a source file inside [MarkdownProse](../apps/desktop/src/renderer/src/components/MarkdownProse.tsx).
 - [CodeView.tsx](../apps/desktop/src/renderer/src/components/CodeView.tsx) — full-page read-only CodeMirror editor with line highlighting; rendered by [App](../apps/desktop/src/renderer/src/App.tsx) when a source file is the current file.
 
+### Kanban
+
+- [kanban-prompt.ts](../apps/desktop/src/renderer/src/kanban-prompt.ts) — builds the first message sent to a freshly-opened agent tab when a card's "Start" is clicked (title, description, priority, labels, linked path).
+- [kanban-prompt.test.ts](../apps/desktop/src/renderer/src/kanban-prompt.test.ts) — covers the card prompt builder.
+- [kanban-run-all.ts](../apps/desktop/src/renderer/src/kanban-run-all.ts) — pure dependency scheduling for "Run all": which cards in a column are runnable given `dependsOn`, which are cyclic, and the done/next-column rules. Orchestration (worktrees, agent tabs) lives in [KanbanView](../apps/desktop/src/renderer/src/components/KanbanView.tsx).
+- [kanban-run-all.test.ts](../apps/desktop/src/renderer/src/kanban-run-all.test.ts) — covers runnable/cyclic card detection and column advancement.
+
 ### Chat & collaboration
 
 - [connection.ts](../apps/desktop/src/renderer/src/chat/connection.ts) — WebSocket chat connection and `useRoomChat` hook.
+- [room-connect.ts](../apps/desktop/src/renderer/src/chat/room-connect.ts) — pure decision logic for which room to join and how (public vs collab, auth, display name), extracted from RoomChatPanel for testability.
+- [room-connect.test.ts](../apps/desktop/src/renderer/src/chat/room-connect.test.ts) — covers the room-join decision logic.
 - [RoomChatPanel.tsx](../apps/desktop/src/renderer/src/components/RoomChatPanel.tsx) — per-room chat side panel.

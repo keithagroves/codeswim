@@ -20,8 +20,10 @@ flowchart TD
     Main --> Sidecar[Agent Harness<br/>opencode sidecar]
     Renderer --> Coverage[Coverage<br/>checker]
     Renderer --> Commit[Prompt Commits<br/>synthesized messages]
+    Renderer --> Party[Party Server<br/>chat rooms]
     Commit --> Main
     Sidecar -.->|edits| FS
+    Sidecar -.->|chat_read / chat_send| Party
 
     click User call navigate("./overview.md")
     click FS call navigate("./overview.md")
@@ -31,6 +33,7 @@ flowchart TD
     click Sidecar call navigate("./architecture/agent-harness.md")
     click Coverage call navigate("./architecture/coverage.md")
     click Commit call navigate("./architecture/prompt-commits.md")
+    click Party call navigate("./architecture/party.md")
 ```
 
 ## Subsystems
@@ -41,6 +44,7 @@ flowchart TD
 - [Agent harness](./architecture/agent-harness.md) — the `opencode` sidecar plus its diagram-first plugin and chat UI.
 - [Coverage](./architecture/coverage.md) — the diagram/source drift checker that this very file is meant to satisfy.
 - [Prompt Commits](./architecture/prompt-commits.md) — the Commit side-panel that synthesizes the prompt-that-regenerates-the-diff as the commit message, gated on coverage.
+- [Party server](./architecture/party.md) — the Cloudflare Workers PartyServer powering per-project chat rooms (public + GitHub-collaborator-gated).
 
 ## Conventions
 
@@ -52,7 +56,6 @@ These files cut across subsystems and aren't owned by any one architecture doc:
 - [apps/desktop/src/renderer/src/browser-stub.ts](apps/desktop/src/renderer/src/browser-stub.ts) — no-op `window.api` for running the renderer outside Electron (Playwright, UI review).
 - `apps/desktop/src/renderer/src/assets/main.css` — global styles.
 - `apps/desktop/src/renderer/src/assets/codeswim.svg` — app logo.
-- [party/codeswim.ts](party/codeswim.ts) — party-mode easter egg (confetti, etc.).
 
 ## Testing
 

@@ -57,6 +57,7 @@ flowchart TD
 - [apps/desktop/src/main/index.ts](../apps/desktop/src/main/index.ts) — process entry, BrowserWindow, every IPC handler, chokidar watcher, npm script runner.
 - [packages/domain-skills/src/skills.ts](../packages/domain-skills/src/skills.ts) — discovers global + workspace SKILL.md files and exposes a read API to the renderer.
 - [packages/domain-kanban/src/kanban.ts](../packages/domain-kanban/src/kanban.ts) — Kanban board read/write and GitHub issue sync.
+- [apps/desktop/src/main/kanban-worktree.ts](../apps/desktop/src/main/kanban-worktree.ts) — per-card git worktrees for Kanban "Run all": isolated checkouts under userData (keyed by a hash of the workspace root) so parallel agent runs can't stomp each other's edits, and never show up in the watched tree.
 - [packages/domain-github/src/pull-requests.ts](../packages/domain-github/src/pull-requests.ts) — GitHub pull request listing and merging via the API.
 - [packages/domain-github/src/room.ts](../packages/domain-github/src/room.ts) — room identity management for chat.
 - [packages/domain-skills/src/source-explanations.ts](../packages/domain-skills/src/source-explanations.ts) — companion explanation path resolution and read.
@@ -75,6 +76,7 @@ flowchart TD
 ### Testing
 
 - [packages/domain-kanban/src/kanban.test.ts](../packages/domain-kanban/src/kanban.test.ts) — covers the main-process kanban operations.
+- [packages/contract/src/kanban.test.ts](../packages/contract/src/kanban.test.ts) — covers the shared kanban type normalizer.
 - [packages/domain-github/src/room.test.ts](../packages/domain-github/src/room.test.ts) — covers the room identity logic.
 - [packages/domain-skills/src/source-explanations.test.ts](../packages/domain-skills/src/source-explanations.test.ts) — covers explanation path resolution.
 - [apps/desktop/src/main/updater.test.ts](../apps/desktop/src/main/updater.test.ts) — covers the updater's event-to-status mapping and install IPC against mocked electron modules.

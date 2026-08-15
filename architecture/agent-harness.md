@@ -25,6 +25,9 @@ flowchart LR
     Server --> Plugin[plugin.ts]
     Plugin --> Tool[diagram_edit]
     Plugin --> Kanban[kanban_add]
+    Plugin --> Chat[chat_read / chat_send]
+    Chat --> ChatImpl[tool/chat.ts]
+    ChatImpl --> Party[(Party server<br/>plain HTTP)]
     Plugin --> Gate[session-gate.ts]
     Gate -.->|blocks until<br/>diagram edited| Mutating[write / edit /<br/>apply_patch]
     Plugin --> System[prompt/system.txt]
@@ -52,6 +55,9 @@ flowchart LR
     click Kanban call navigate("../packages/harness/src/tool/kanban-add.ts")
     click KanbanImpl call navigate("../packages/harness/src/tool/kanban-add.ts")
     click KanbanBoard call navigate("../packages/domain-kanban/src/kanban.ts")
+    click Chat call navigate("../packages/harness/src/tool/chat.ts")
+    click ChatImpl call navigate("../packages/harness/src/tool/chat.ts")
+    click Party call navigate("../architecture/party.md")
     click Mutating call navigate("../overview.md")
     click AppTools call navigate("../packages/harness/src/plugin.ts")
     click AppViewImpl call navigate("../packages/harness/src/tool/app-view.ts")
@@ -80,9 +86,15 @@ flowchart LR
 - [packages/harness/src/prompt/mdd-fixes.md](../packages/harness/src/prompt/mdd-fixes.md) — additional MDD repair guidance the agent loads when fixing drift.
 - [apps/desktop/src/renderer/src/agent.ts](../apps/desktop/src/renderer/src/agent.ts) — renderer-side session-aware SDK wrapper.
 - [apps/desktop/src/renderer/src/components/ChatPanel.tsx](../apps/desktop/src/renderer/src/components/ChatPanel.tsx) — the chat UI itself.
+- [packages/harness/src/tool/chat.ts](../packages/harness/src/tool/chat.ts) — pure implementation of the `chat_read` / `chat_send` tools: room resolution from env, request building, response formatting; I/O is injected via `ChatIo`.
+- [apps/desktop/src/main/agent-tabs-file.ts](../apps/desktop/src/main/agent-tabs-file.ts) — persists the Agents-view tab strip to `.codeswim/agent-tabs.json` (atomic temp-file + rename; gitignored session state).
+- [packages/contract/src/agent-tabs.ts](../packages/contract/src/agent-tabs.ts) — `PersistedAgentTab` / `PersistedAgentTabs` types and the `normalizePersistedAgentTabs` parser shared by main and renderer.
 
 ### Testing
 
 - [packages/harness/src/tool/kanban-add.test.ts](../packages/harness/src/tool/kanban-add.test.ts) — covers the kanban_add tool implementation.
 - [packages/harness/src/tool/app-view.test.ts](../packages/harness/src/tool/app-view.test.ts) — covers path/view validation and app state formatting.
 - [packages/harness/src/plugin.test.ts](../packages/harness/src/plugin.test.ts) — covers the opencode plugin entry point and tool registration.
+- [packages/harness/src/tool/chat.test.ts](../packages/harness/src/tool/chat.test.ts) — covers the chat_read / chat_send tool implementation (config resolution, auth gating, request shaping).
+- [apps/desktop/src/main/agent-tabs-file.test.ts](../apps/desktop/src/main/agent-tabs-file.test.ts) — covers persisted tab read/write (round-trip, empty-tab cleanup, malformed input).
+- [packages/contract/src/agent-tabs.test.ts](../packages/contract/src/agent-tabs.test.ts) — covers the persisted-tabs normalizer.
