@@ -1,6 +1,6 @@
 {
   "name": "@codeswim/desktop",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Diagram-first code navigator: browse a codebase as a hierarchy of mermaid diagrams.",
   "main": "./out/main/index.js",
   "author": "Keith Groves",
