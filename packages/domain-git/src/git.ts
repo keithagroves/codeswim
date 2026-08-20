@@ -571,6 +571,37 @@ export async function gitWorktreeRemove(rootPath: string, worktreePath: string):
   }
 }
 
+// Every worktree git currently knows about for this repo (the main
+// checkout included), parsed from `git worktree list --porcelain`. Used to
+// validate that a path an out-of-process caller claims as "my worktree" is
+// actually one git recognizes for this root — reconciling against the
+// source of truth rather than trusting whatever was recorded earlier,
+// since a worktree can be removed by hand outside the app.
+export async function gitWorktreeList(rootPath: string): Promise<GitWorktree[]> {
+  const stdout = await git(rootPath, ['worktree', 'list', '--porcelain'])
+  const worktrees: GitWorktree[] = []
+  let wtPath: string | null = null
+  let branch = ''
+  const flush = (): void => {
+    if (wtPath) worktrees.push({ path: wtPath, branch })
+  }
+  for (const line of stdout.split('\n')) {
+    if (line.startsWith('worktree ')) {
+      flush()
+      wtPath = line.slice('worktree '.length).trim()
+      branch = ''
+    } else if (line.startsWith('branch ')) {
+      // "refs/heads/codeswim/foo-bar" -> "codeswim/foo-bar"
+      branch = line.slice('branch '.length).trim().replace(/^refs\/heads\//, '')
+    } else if (line === '') {
+      flush()
+      wtPath = null
+    }
+  }
+  flush()
+  return worktrees
+}
+
 export async function gitCommit(rootPath: string, subject: string, body: string): Promise<string> {
   const trimmedSubject = subject.trim()
   if (!trimmedSubject) throw new Error('commit subject is empty')

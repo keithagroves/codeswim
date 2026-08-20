@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CodeswimPlugin, GATE_NOTE } from './plugin'
 
 // The plugin factory doesn't read its input at construction time (it only wires
@@ -21,11 +21,15 @@ interface ToolOutput {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const asOutput = (r: any): ToolOutput => r as ToolOutput
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ctx = (worktree?: string): any => ({ worktree })
+const ctx = (worktree = '/wt', sessionID = 's1'): any => ({ worktree, sessionID })
 
 const tmpDirs: string[] = []
+const envKeys = ['CODESWIM_COMMAND_URL', 'CODESWIM_COMMAND_TOKEN'] as const
+
 afterEach(async () => {
   await Promise.all(tmpDirs.splice(0).map((d) => rm(d, { recursive: true, force: true })))
+  for (const key of envKeys) delete process.env[key]
+  vi.unstubAllGlobals()
 })
 
 describe('tool.definition hook', () => {
@@ -46,28 +50,130 @@ describe('tool.definition hook', () => {
   })
 })
 
-describe('open_file tool', () => {
-  it('emits an open_file action for a valid path', async () => {
-    const hooks = await loadHooks()
-    const result = asOutput(await hooks.tool!.open_file.execute({ file: 'flows/login.md' }, ctx()))
-    expect(result.metadata).toEqual({
-      codeswim_action: { type: 'open_file', path: 'flows/login.md' }
-    })
-  })
+function stubCommandBridge(): void {
+  process.env.CODESWIM_COMMAND_URL = 'http://127.0.0.1:5173'
+  process.env.CODESWIM_COMMAND_TOKEN = 'cap-token'
+}
 
-  it('rejects a traversal path without emitting an action', async () => {
+describe('when the command bridge is unavailable (no CODESWIM_COMMAND_* env)', () => {
+  it('does not register open_file, find_command, or run_command', async () => {
     const hooks = await loadHooks()
-    const result = asOutput(await hooks.tool!.open_file.execute({ file: '../secret' }, ctx()))
-    expect(result.output).toMatch(/error/)
-    expect(result.metadata).toBeUndefined()
+    expect(hooks.tool!.open_file).toBeUndefined()
+    expect(hooks.tool!.find_command).toBeUndefined()
+    expect(hooks.tool!.run_command).toBeUndefined()
   })
 })
 
-describe('set_view tool', () => {
-  it('emits a set_view action', async () => {
+describe('open_file tool', () => {
+  it('calls nav.navigateAbsolute through the bridge and reports a real result', async () => {
+    stubCommandBridge()
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(url).toBe('http://127.0.0.1:5173/run')
+      expect(JSON.parse(init!.body as string)).toEqual({
+        sessionId: 's1',
+        worktree: '/wt',
+        id: 'nav.navigateAbsolute',
+        args: { relPath: 'flows/login.md', pushBreadcrumb: true }
+      })
+      return new Response(JSON.stringify({ ok: true, value: undefined }), { status: 200 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
     const hooks = await loadHooks()
-    const result = asOutput(await hooks.tool!.set_view.execute({ view: 'kanban' }, ctx()))
-    expect(result.metadata).toEqual({ codeswim_action: { type: 'set_view', view: 'kanban' } })
+    const result = asOutput(await hooks.tool!.open_file.execute({ file: 'flows/login.md' }, ctx()))
+    expect(result.output).toMatch(/Opened flows\/login\.md/)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects a traversal path locally, without calling the bridge', async () => {
+    stubCommandBridge()
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const hooks = await loadHooks()
+    const result = asOutput(await hooks.tool!.open_file.execute({ file: '../secret' }, ctx()))
+    expect(result.output).toMatch(/error/)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('surfaces a bridge-side rejection as an error, not a thrown exception', async () => {
+    stubCommandBridge()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ ok: false, code: 'invalid-args', message: 'relPath: must be relative' }),
+            { status: 200 }
+          )
+      )
+    )
+
+    const hooks = await loadHooks()
+    const result = asOutput(await hooks.tool!.open_file.execute({ file: 'ok.md' }, ctx()))
+    expect(result.output).toMatch(/error: relPath: must be relative/)
+  })
+})
+
+describe('find_command tool', () => {
+  it('forwards the query and formats the matched commands', async () => {
+    stubCommandBridge()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        expect(url).toBe('http://127.0.0.1:5173/find')
+        return new Response(
+          JSON.stringify({
+            commands: [
+              { id: 'nav.setWorkspaceView', domain: 'nav', title: 'x', description: 'Switch tab', schema: {}, agent: 'listed' }
+            ]
+          }),
+          { status: 200 }
+        )
+      })
+    )
+
+    const hooks = await loadHooks()
+    const result = asOutput(await hooks.tool!.find_command.execute({ query: 'view' }, ctx()))
+    expect(result.output).toContain('nav.setWorkspaceView: Switch tab')
+  })
+})
+
+describe('run_command tool', () => {
+  it('forwards id/args and reports the bridge result', async () => {
+    stubCommandBridge()
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      expect(JSON.parse(init!.body as string)).toMatchObject({
+        id: 'nav.setWorkspaceView',
+        args: { view: 'kanban' }
+      })
+      return new Response(JSON.stringify({ ok: true, value: undefined }), { status: 200 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const hooks = await loadHooks()
+    const result = asOutput(
+      await hooks.tool!.run_command.execute({ id: 'nav.setWorkspaceView', args: { view: 'kanban' } }, ctx())
+    )
+    expect(result.output).toMatch(/Ran nav\.setWorkspaceView/)
+  })
+
+  it('a command an agent origin is forbidden from still comes back as an error, not a thrown exception', async () => {
+    stubCommandBridge()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ ok: false, code: 'forbidden-origin', message: 'command not available to agents: nav.goBack' }),
+            { status: 200 }
+          )
+      )
+    )
+
+    const hooks = await loadHooks()
+    const result = asOutput(await hooks.tool!.run_command.execute({ id: 'nav.goBack' }, ctx()))
+    expect(result.output).toMatch(/error: command not available to agents/)
   })
 })
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatAppState, validateOpenFilePath, validateViewName } from './app-view'
+import { formatAppState, validateOpenFilePath } from './app-view'
 
 describe('validateOpenFilePath', () => {
   it('accepts a relative posix path', () => {
@@ -10,16 +10,6 @@ describe('validateOpenFilePath', () => {
     expect(validateOpenFilePath('/etc/passwd')).toMatch(/relative/)
     expect(validateOpenFilePath('../secrets.md')).toMatch(/\.\./)
     expect(validateOpenFilePath(42)).toMatch(/required/)
-  })
-})
-
-describe('validateViewName', () => {
-  it('accepts the two known views', () => {
-    expect(validateViewName('navigator')).toBeNull()
-    expect(validateViewName('kanban')).toBeNull()
-  })
-  it('rejects anything else', () => {
-    expect(validateViewName('output')).toMatch(/navigator/)
   })
 })
 

@@ -12,12 +12,7 @@ import path from 'node:path'
 import { tool, type Plugin } from '@opencode-ai/plugin'
 import { diagramEdit, validateContent, validatePath, type DiagramFs } from './tool/diagram-edit'
 import { kanbanAdd, validateKanbanAdd, type KanbanFs } from './tool/kanban-add'
-import {
-  AGENT_STATE_FILE,
-  formatAppState,
-  validateOpenFilePath,
-  validateViewName
-} from './tool/app-view'
+import { AGENT_STATE_FILE, formatAppState, validateOpenFilePath } from './tool/app-view'
 import {
   defaultRoom,
   formatMessages,
@@ -28,6 +23,13 @@ import {
   type ChatIo,
   type ChatRoom
 } from './tool/chat'
+import {
+  findCommand,
+  formatCommandList,
+  resolveCommandConfig,
+  runCommand,
+  type CommandIo
+} from './tool/command'
 import { createSessionGate } from './session-gate'
 
 const CODE_MUTATING_TOOLS = new Set(['write', 'edit', 'apply_patch'])
@@ -44,11 +46,15 @@ export const GATE_NOTE =
 
 const OPEN_FILE_DESCRIPTION = `Open a file in the user's diagram navigator so they can see it.
 
-Use this to *show* the user something — a diagram, a doc, or a source file — rather than only describing it in chat. The path is a POSIX path relative to the workspace root. \`.md\` targets open as a diagram/doc; source files open with their companion explanation. This switches the app to the navigator tab automatically and is not gated.`
+Use this to *show* the user something — a diagram, a doc, or a source file — rather than only describing it in chat. The path is a POSIX path relative to the workspace root. \`.md\` targets open as a diagram/doc; source files open with their companion explanation. This switches the app to the navigator tab automatically and is not gated. Returns a real result — if the path doesn't resolve, you'll see the error, not just an optimistic message.`
 
-const SET_VIEW_DESCRIPTION = `Switch the user's active workspace tab.
+const FIND_COMMAND_DESCRIPTION = `Search the app's command registry for something you can invoke with run_command.
 
-\`navigator\` shows the diagram/file navigator; \`kanban\` shows the project board. Use it when the user asks to see the board or get back to diagrams. Not gated.`
+Covers the long tail of app actions beyond the tools listed here directly — e.g. switching the workspace tab, or stepping through navigation history. Returns matching command ids, titles, and argument shapes. Most everyday "show the user a file" requests should use open_file instead of searching for a nav command.`
+
+const RUN_COMMAND_DESCRIPTION = `Invoke a command by id, typically one found via find_command.
+
+Pass the command's id and an args object matching its schema. Returns the command's real result, or an error if the args are invalid or the command isn't available to agents — destructive or workspace-mutating commands stay human-only and will be rejected here regardless of id.`
 
 const GET_APP_STATE_DESCRIPTION = `Read what the user is currently looking at in the app.
 
@@ -116,6 +122,7 @@ function kanbanFsFor(workspaceRoot: string): KanbanFs {
 }
 
 const chatIo: ChatIo = { fetch: (url, init) => fetch(url, init) }
+const commandIo: CommandIo = { fetch: (url, init) => fetch(url, init) }
 
 export const CodeswimPlugin: Plugin = async () => {
   const gate = createSessionGate()
@@ -124,6 +131,11 @@ export const CodeswimPlugin: Plugin = async () => {
   // is always scoped to the current workspace's room. null means this
   // workspace has no shared git remote to key a chat room on.
   const chatConfig = resolveChatConfig(process.env)
+  // Same lifetime/scoping as chatConfig — resolved once per subprocess, and
+  // null only if the host somehow started the sidecar without a command
+  // bridge capability (main always issues one alongside every harness start,
+  // so this is a defensive gate rather than an expected steady state).
+  const commandConfig = resolveCommandConfig(process.env)
 
   return {
     tool: {
@@ -256,37 +268,78 @@ export const CodeswimPlugin: Plugin = async () => {
           }
         : {}),
 
-      open_file: tool({
-        description: OPEN_FILE_DESCRIPTION,
-        args: {
-          file: tool.schema
-            .string()
-            .describe('POSIX path relative to workspace root to open in the navigator')
-        },
-        async execute(args) {
-          const err = validateOpenFilePath(args.file)
-          if (err) return { output: `error: ${err}` }
-          return {
-            output: `Opening ${args.file} in the navigator for the user.`,
-            metadata: { codeswim_action: { type: 'open_file', path: args.file } }
-          }
-        }
-      }),
+      ...(commandConfig
+        ? {
+            open_file: tool({
+              description: OPEN_FILE_DESCRIPTION,
+              args: {
+                file: tool.schema
+                  .string()
+                  .describe('POSIX path relative to workspace root to open in the navigator')
+              },
+              async execute(args, ctx) {
+                const err = validateOpenFilePath(args.file)
+                if (err) return { output: `error: ${err}` }
+                const result = await runCommand(
+                  'nav.navigateAbsolute',
+                  { relPath: args.file, pushBreadcrumb: true },
+                  ctx.sessionID,
+                  ctx.worktree,
+                  commandConfig,
+                  commandIo
+                )
+                if (!result.ok) return { output: `error: ${result.error}` }
+                return { output: `Opened ${args.file} in the navigator for the user.` }
+              }
+            }),
 
-      set_view: tool({
-        description: SET_VIEW_DESCRIPTION,
-        args: {
-          view: tool.schema.enum(['navigator', 'kanban']).describe('Which workspace tab to show')
-        },
-        async execute(args) {
-          const err = validateViewName(args.view)
-          if (err) return { output: `error: ${err}` }
-          return {
-            output: `Switching to the ${args.view === 'kanban' ? 'Kanban board' : 'diagram navigator'}.`,
-            metadata: { codeswim_action: { type: 'set_view', view: args.view } }
+            find_command: tool({
+              description: FIND_COMMAND_DESCRIPTION,
+              args: {
+                query: tool.schema
+                  .string()
+                  .describe('Search text — matched against command id, title, description, and domain')
+              },
+              async execute(args, ctx) {
+                const result = await findCommand(
+                  args.query,
+                  ctx.sessionID,
+                  ctx.worktree,
+                  commandConfig,
+                  commandIo
+                )
+                if (!result.ok) return { output: `error: ${result.error}` }
+                return {
+                  output: formatCommandList(result.value),
+                  metadata: { count: result.value.length }
+                }
+              }
+            }),
+
+            run_command: tool({
+              description: RUN_COMMAND_DESCRIPTION,
+              args: {
+                id: tool.schema.string().describe('Command id, e.g. "nav.setWorkspaceView"'),
+                args: tool.schema
+                  .record(tool.schema.string(), tool.schema.any())
+                  .optional()
+                  .describe("The command's args, matching the schema find_command returned for it")
+              },
+              async execute(args, ctx) {
+                const result = await runCommand(
+                  args.id,
+                  args.args ?? {},
+                  ctx.sessionID,
+                  ctx.worktree,
+                  commandConfig,
+                  commandIo
+                )
+                if (!result.ok) return { output: `error: ${result.error}` }
+                return { output: `Ran ${args.id}.`, metadata: { value: result.value } }
+              }
+            })
           }
-        }
-      }),
+        : {}),
 
       get_app_state: tool({
         description: GET_APP_STATE_DESCRIPTION,

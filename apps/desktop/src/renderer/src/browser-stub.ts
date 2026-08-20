@@ -336,6 +336,10 @@ The companion document belongs at \`${documentPath}\`.
     stopHarness: () => Promise.resolve(),
     onHarnessLog: noopUnsub,
     onHarnessExit: noopUnsub,
+    // The command bridge is a main-process HTTP server; there's nothing to
+    // proxy in the browser preview build, so no request ever arrives.
+    onCommandRequest: noopUnsub,
+    replyCommand: () => Promise.resolve(),
     onMenuOpenFolder: noopUnsub,
     newProject: notInBrowser<NewProjectResult | null>('newProject'),
     openDemo: notInBrowser<string>('openDemo'),

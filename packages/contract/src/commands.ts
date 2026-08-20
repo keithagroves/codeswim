@@ -76,3 +76,24 @@ export interface CommandErrorPayload {
 }
 
 export type CommandOutcome<R = unknown> = CommandResult<R> | CommandErrorPayload
+
+// The main<->renderer proxy protocol behind the command bridge
+// (apps/desktop/src/main/command-server.ts): main asks over the
+// 'command:request' IPC event, the renderer answers by invoking
+// 'command:reply' with the same `id`. Correlates a loopback HTTP request
+// from the harness sidecar's find_command/run_command tools
+// (packages/harness/src/tool/command.ts) to the renderer's own
+// CommandRegistry, which is the only place a command actually runs.
+export type CommandRendererRequest =
+  | { id: string; kind: 'find'; query: string }
+  | {
+      id: string
+      kind: 'run'
+      commandId: string
+      args: unknown
+      origin: { kind: 'agent'; sessionId: string; worktree: string }
+    }
+
+export type CommandRendererResponse =
+  | { id: string; kind: 'find'; commands: CommandDescriptor[] }
+  | { id: string; kind: 'run'; outcome: CommandOutcome }

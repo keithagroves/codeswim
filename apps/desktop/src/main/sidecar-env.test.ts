@@ -88,4 +88,18 @@ describe('buildSidecarEnv', () => {
     )
     expect(env.CODESWIM_CHAT_TOKEN).toBe('gh-token')
   })
+
+  it('adds no CODESWIM_COMMAND_* vars when command is omitted or null', () => {
+    const { env } = buildSidecarEnv({}, XDG_ROOT, {}, null, null)
+    expect(Object.keys(env).some((k) => k.startsWith('CODESWIM_COMMAND_'))).toBe(false)
+  })
+
+  it('threads the command bridge capability into CODESWIM_COMMAND_* vars', () => {
+    const { env } = buildSidecarEnv({}, XDG_ROOT, {}, null, {
+      url: 'http://127.0.0.1:54321',
+      token: 'cap-token'
+    })
+    expect(env.CODESWIM_COMMAND_URL).toBe('http://127.0.0.1:54321')
+    expect(env.CODESWIM_COMMAND_TOKEN).toBe('cap-token')
+  })
 })

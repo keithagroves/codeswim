@@ -8,7 +8,15 @@ import type { AppState } from '../store'
 const HUMAN: CommandOrigin = { kind: 'human' }
 const AGENT: CommandOrigin = { kind: 'agent', sessionId: 's1', worktree: '/wt/card-1' }
 
-function makeHarness(overrides: Partial<AppState> = {}) {
+interface Harness {
+  registry: CommandRegistry
+  dispatched: unknown[]
+  readWorkspaceFile: ReturnType<typeof vi.fn>
+  readSourceExplanation: ReturnType<typeof vi.fn>
+  state: AppState
+}
+
+function makeHarness(overrides: Partial<AppState> = {}): Harness {
   const state: AppState = {
     rootPath: '/root',
     currentFile: 'overview.md',

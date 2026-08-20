@@ -46,6 +46,7 @@ import {
 } from '@codeswim/domain-git'
 import { getRoomIdentity } from '@codeswim/domain-github'
 import { readAgentTabsFile, writeAgentTabsFile } from './agent-tabs-file'
+import { CommandServer, type CommandRendererResponse } from './command-server'
 import { createCardWorktree, listCardWorktrees, removeCardWorktree } from './kanban-worktree'
 import {
   getStatus as githubStatus,
@@ -98,6 +99,11 @@ let sidecar: SidecarHandle | null = null
 let sidecarRoot: string | null = null
 let sidecarStarting: Promise<SidecarHandle> | null = null
 
+// Loopback bridge for the harness's find_command/run_command/open_file
+// tools — one instance for the app's lifetime; issueCapability/revoke rotate
+// which workspace (if any) it currently trusts. See command-server.ts.
+const commandServer = new CommandServer(() => mainWindow)
+
 const terminals = new Map<string, pty.IPty>()
 let terminalIdCounter = 0
 
@@ -124,6 +130,7 @@ function createWindow(): void {
 
   mainWindow.on('closed', () => {
     mainWindow = null
+    commandServer.rejectAllPending('renderer window closed')
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -758,9 +765,14 @@ app.whenReady().then(async () => {
       await sidecar.stop()
       sidecar = null
       sidecarRoot = null
+      commandServer.revoke()
     }
     if (!sidecarStarting) {
-      const [identity, token] = await Promise.all([getRoomIdentity(rootPath), githubToken()])
+      const [identity, token, capability] = await Promise.all([
+        getRoomIdentity(rootPath),
+        githubToken(),
+        commandServer.issueCapability(rootPath)
+      ])
       sidecarStarting = startSidecar({
         workspaceRoot: rootPath,
         chat: identity
@@ -772,6 +784,7 @@ app.whenReady().then(async () => {
               token
             }
           : null,
+        command: capability,
         onStdout: (line) => mainWindow?.webContents.send('harness:log', { stream: 'stdout', line }),
         onStderr: (line) => mainWindow?.webContents.send('harness:log', { stream: 'stderr', line }),
         onExit: (code, info) => {
@@ -782,6 +795,7 @@ app.whenReady().then(async () => {
           })
           sidecar = null
           sidecarRoot = null
+          commandServer.revoke()
         }
       }).finally(() => {
         sidecarStarting = null
@@ -793,10 +807,16 @@ app.whenReady().then(async () => {
   })
 
   ipcMain.handle('harness:stop', async () => {
+    commandServer.revoke()
     if (!sidecar) return
     await sidecar.stop()
     sidecar = null
     sidecarRoot = null
+  })
+
+  // The renderer's reply to a 'command:request' event — see command-server.ts.
+  ipcMain.handle('command:reply', (_event, response: CommandRendererResponse) => {
+    commandServer.resolveReply(response)
   })
 
   ipcMain.handle('skills:list', async (_event, rootPath: string | null) => {
@@ -1075,6 +1095,7 @@ app.on('before-quit', () => {
   stopWatching()
   killActiveRun()
   killTerminals()
+  void commandServer.close()
   if (sidecar) {
     void sidecar.stop()
     sidecar = null

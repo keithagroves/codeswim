@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type {
   AppStateSnapshot,
+  CommandRendererRequest,
+  CommandRendererResponse,
   KanbanBoard,
   KanbanWorktreeInfo,
   PersistedAgentTabs,
@@ -289,6 +291,18 @@ const api = {
     ipcRenderer.on('harness:exit', listener)
     return () => ipcRenderer.removeListener('harness:exit', listener)
   },
+  // Main asking the renderer to run something against its command registry
+  // on the agent's behalf — see main/command-server.ts. The renderer runs
+  // the request and answers with replyCommand; there's no result here to
+  // return, the reply IS the result.
+  onCommandRequest: (cb: (request: CommandRendererRequest) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, request: CommandRendererRequest): void =>
+      cb(request)
+    ipcRenderer.on('command:request', listener)
+    return () => ipcRenderer.removeListener('command:request', listener)
+  },
+  replyCommand: (response: CommandRendererResponse): Promise<void> =>
+    ipcRenderer.invoke('command:reply', response),
   onMenuOpenFolder: (cb: () => void): (() => void) => {
     const listener = (): void => cb()
     ipcRenderer.on('menu:open-folder', listener)

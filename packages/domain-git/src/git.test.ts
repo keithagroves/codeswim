@@ -10,6 +10,7 @@ import {
   ensureGitignore,
   parseGitLog,
   gitWorktreeAdd,
+  gitWorktreeList,
   gitWorktreeRemove
 } from './git'
 
@@ -150,6 +151,57 @@ describe('gitWorktreeAdd / gitWorktreeRemove', () => {
     await expect(fs.access(worktreePath)).rejects.toThrow()
     const { stdout } = await execFileAsync('git', ['branch', '--list', result.branch], { cwd: root })
     expect(stdout).toContain(result.branch)
+  })
+})
+
+describe('gitWorktreeList', () => {
+  const dirs: string[] = []
+
+  afterEach(async () => {
+    for (const d of dirs.splice(0)) {
+      await fs.rm(d, { recursive: true, force: true }).catch(() => {})
+    }
+  })
+
+  const repo = async (): Promise<string> => {
+    const d = await fs.mkdtemp(path.join(os.tmpdir(), 'codeswim-gwl-'))
+    dirs.push(d)
+    await execFileAsync('git', ['init', '-q'], { cwd: d })
+    await execFileAsync('git', ['config', 'user.email', 'test@example.com'], { cwd: d })
+    await execFileAsync('git', ['config', 'user.name', 'Test'], { cwd: d })
+    await fs.writeFile(path.join(d, 'README.md'), 'hi\n', 'utf-8')
+    await execFileAsync('git', ['add', '-A'], { cwd: d })
+    await execFileAsync('git', ['commit', '-q', '-m', 'initial'], { cwd: d })
+    return d
+  }
+
+  it('lists the main checkout alone when no worktrees exist', async () => {
+    const root = await repo()
+    const list = await gitWorktreeList(root)
+    expect(list).toHaveLength(1)
+    expect(list[0].path).toBe(await fs.realpath(root))
+  })
+
+  it('lists an added worktree with its branch, alongside the main checkout', async () => {
+    const root = await repo()
+    const worktreePath = path.join(os.tmpdir(), `codeswim-gwl-out-${Date.now()}`)
+    const added = await gitWorktreeAdd(root, worktreePath, 'Task')
+
+    const list = await gitWorktreeList(root)
+    expect(list).toHaveLength(2)
+    const realWorktreePath = await fs.realpath(worktreePath)
+    const entry = list.find((w) => w.path === realWorktreePath)
+    expect(entry?.branch).toBe(added.branch)
+  })
+
+  it('drops a removed worktree from the list', async () => {
+    const root = await repo()
+    const worktreePath = path.join(os.tmpdir(), `codeswim-gwl-out-${Date.now()}`)
+    await gitWorktreeAdd(root, worktreePath, 'Task')
+    await gitWorktreeRemove(root, worktreePath)
+
+    const list = await gitWorktreeList(root)
+    expect(list).toHaveLength(1)
   })
 })
 

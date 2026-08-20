@@ -25,6 +25,16 @@ export interface SidecarChatConfig {
   token: string | null
 }
 
+// Command-bridge capability for this sidecar run (see
+// apps/desktop/src/main/command-server.ts). Threaded into the harness's
+// find_command/run_command/open_file tools (packages/harness/src/tool/
+// command.ts). Unlike chat, this is issued unconditionally on every harness
+// start — there's no "no shared git remote" case that leaves it null.
+export interface SidecarCommandConfig {
+  url: string
+  token: string
+}
+
 // Build the spawn env for `opencode serve`.
 //
 // - Isolates opencode's on-disk state under `xdgRoot` (in practice Electron's
@@ -44,7 +54,8 @@ export function buildSidecarEnv(
   baseEnv: NodeJS.ProcessEnv,
   xdgRoot: string,
   config: unknown,
-  chat?: SidecarChatConfig | null
+  chat?: SidecarChatConfig | null,
+  command?: SidecarCommandConfig | null
 ): SidecarEnvResult {
   const xdg = {
     XDG_DATA_HOME: path.join(xdgRoot, 'data'),
@@ -61,10 +72,14 @@ export function buildSidecarEnv(
         ...(chat.token ? { CODESWIM_CHAT_TOKEN: chat.token } : {})
       }
     : {}
+  const commandEnv: NodeJS.ProcessEnv = command
+    ? { CODESWIM_COMMAND_URL: command.url, CODESWIM_COMMAND_TOKEN: command.token }
+    : {}
   const env: NodeJS.ProcessEnv = {
     ...baseEnv,
     ...xdg,
     ...chatEnv,
+    ...commandEnv,
     OPENCODE_CONFIG_CONTENT: JSON.stringify(config)
   }
   delete env.OPENCODE_SERVER_PASSWORD

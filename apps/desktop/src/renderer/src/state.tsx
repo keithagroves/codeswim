@@ -19,13 +19,13 @@ import {
 import { buildTriagePrompt, parseSyncPlan, type SyncPlan } from '@codeswim/commit'
 import { extname, relativeToRoot, toPosix } from './path-utils'
 import type {
-  AgentViewAction,
   AppStateSnapshot,
   CommandOrigin,
+  CommandOutcome,
   KanbanCard,
   PullRequest
 } from '@codeswim/contract'
-import { CommandRegistry } from './commands/registry'
+import { CommandRegistry, CommandRegistryError } from './commands/registry'
 import { registerNavCommands } from './commands/nav'
 import type { CommandCtxFactory } from './commands/context'
 import {
@@ -584,12 +584,6 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
   const agentTabsRestoredForRef = useRef<string | null>(null)
   const stateRef = useRef(state)
   stateRef.current = state
-  // Bridges agent-driven view actions (off the part stream) to the navigation
-  // thunks, which are defined later in this component. Assigned in an effect.
-  const viewActionRef = useRef<((action: AgentViewAction) => void) | null>(null)
-  // Tool parts stream several updates (running → completed); dispatch each
-  // action once, keyed by part id.
-  const handledActionsRef = useRef(new Set<string>())
 
   const toast = useCallback((message: string, kind: 'info' | 'error' = 'info') => {
     const id = toastSeq++
@@ -623,6 +617,43 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
     commandsRef.current = registry
   }
   const commands = commandsRef.current
+
+  // Answers main's 'command:request' events (the harness's find_command/
+  // run_command/open_file tools, proxied over IPC by
+  // main/command-server.ts) by running them against this same registry with
+  // an agent origin, then replying with the real outcome. One subscription
+  // for the provider's lifetime — command requests are workspace-agnostic at
+  // this layer; executionRoot is derived per-call from the request's own
+  // origin.worktree, not from whatever root happens to be open right now.
+  useEffect(() => {
+    const unsubscribe = window.api.onCommandRequest((request) => {
+      void (async () => {
+        if (request.kind === 'find') {
+          await window.api.replyCommand({
+            id: request.id,
+            kind: 'find',
+            commands: commands.find(request.query)
+          })
+          return
+        }
+        try {
+          const value = await commands.run(request.commandId, request.args, request.origin)
+          await window.api.replyCommand({ id: request.id, kind: 'run', outcome: { ok: true, value } })
+        } catch (err) {
+          const outcome: CommandOutcome =
+            err instanceof CommandRegistryError
+              ? { ok: false, code: err.code, message: err.message }
+              : {
+                  ok: false,
+                  code: 'handler-error',
+                  message: err instanceof Error ? err.message : String(err)
+                }
+          await window.api.replyCommand({ id: request.id, kind: 'run', outcome })
+        }
+      })()
+    })
+    return unsubscribe
+  }, [commands])
 
   // Converts opencode's `LoadedMessage[]` into our `ChatMessage[]` for the
   // chat list. Filters out empty messages (no displayable parts).
@@ -662,17 +693,6 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
         }
         if (sessionID !== stateRef.current.currentSessionId) return
         dispatch({ type: 'chat-upsert-part', messageID, part })
-
-        // The agent drives the navigator by returning `codeswim_action` metadata
-        // from open_file/set_view tools. Act on it once the call completes.
-        if (part.kind === 'tool' && part.status === 'completed') {
-          const action = (part.metadata as { codeswim_action?: AgentViewAction } | undefined)
-            ?.codeswim_action
-          if (action && !handledActionsRef.current.has(part.id)) {
-            handledActionsRef.current.add(part.id)
-            viewActionRef.current?.(action)
-          }
-        }
       })
 
       // Forward question events for the current session. We only ever
@@ -1638,22 +1658,6 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
     },
     [commands]
   )
-
-  // Apply an agent-driven view action. Wired into the part-stream handler via a
-  // ref so that handler (created on connect) can reach these later thunks.
-  const applyViewAction = useCallback(
-    (action: AgentViewAction) => {
-      if (action.type === 'open_file') {
-        void navigateAbsolute(action.path, true)
-      } else {
-        setWorkspaceView(action.view)
-      }
-    },
-    [navigateAbsolute, setWorkspaceView]
-  )
-  useEffect(() => {
-    viewActionRef.current = applyViewAction
-  }, [applyViewAction])
 
   // Publish a snapshot of what the user is looking at so the agent's
   // get_app_state tool can read it. Debounced; best-effort.

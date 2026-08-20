@@ -1,10 +1,10 @@
-// Helpers for the app-aware tools (`open_file`, `set_view`, `get_app_state`).
+// Helpers for the app-aware tools (`open_file`, `get_app_state`).
 //
-// `open_file` / `set_view` are pure signal emitters: they validate their args
-// and return `codeswim_action` metadata that the renderer dispatches off the
-// live part stream (see apps/desktop/src/renderer/src/state.tsx). `get_app_state`
-// reads the snapshot the renderer publishes to `.codeswim/agent-state.json` and
-// formats it for the model.
+// `open_file` validates its `file` arg before it ever reaches the command
+// bridge (tool/command.ts) — this is a cheap client-side rejection, not the
+// containment boundary; the bridge's own commands re-validate on the main/
+// renderer side regardless. `get_app_state` reads the snapshot the renderer
+// publishes to `.codeswim/agent-state.json` and formats it for the model.
 
 import type { AppStateSnapshot } from '@codeswim/contract'
 
@@ -16,12 +16,6 @@ export function validateOpenFilePath(file: unknown): string | null {
   if (file.startsWith('/')) return 'file must be a path relative to the workspace root'
   if (file.split('/').includes('..')) return 'file must not contain ".."'
   return null
-}
-
-export function validateViewName(view: unknown): string | null {
-  return view === 'navigator' || view === 'kanban'
-    ? null
-    : `view must be "navigator" or "kanban" (got ${JSON.stringify(view)})`
 }
 
 // Parses the published snapshot (or null/garbage) into a compact, model-readable

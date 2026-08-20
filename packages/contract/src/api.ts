@@ -1,5 +1,6 @@
 import type { KanbanBoard } from './kanban'
 import type { PersistedAgentTabs } from './agent-tabs'
+import type { CommandRendererRequest, CommandRendererResponse } from './commands'
 
 export interface ScriptOutputPayload {
   name: string
@@ -242,12 +243,6 @@ export interface AppStateSnapshot {
   runningScript: string | null
 }
 
-// Actions the agent emits (as tool-result metadata under `codeswim_action`) to
-// drive the navigator. The renderer dispatches these off the live part stream.
-export type AgentViewAction =
-  | { type: 'open_file'; path: string }
-  | { type: 'set_view'; view: 'navigator' | 'kanban' }
-
 export interface DiagramNavApi {
   pickFolder(): Promise<string | null>
   readFile(absPath: string): Promise<string>
@@ -295,6 +290,11 @@ export interface DiagramNavApi {
   stopHarness(): Promise<void>
   onHarnessLog(cb: (payload: HarnessLogPayload) => void): () => void
   onHarnessExit(cb: (payload: HarnessExitPayload) => void): () => void
+  // Command bridge (main/command-server.ts): main proxies the harness's
+  // find_command/run_command/open_file HTTP calls to the renderer's command
+  // registry over this request/reply pair, correlated by CommandRendererRequest.id.
+  onCommandRequest(cb: (request: CommandRendererRequest) => void): () => void
+  replyCommand(response: CommandRendererResponse): Promise<void>
   onMenuOpenFolder(cb: () => void): () => void
   newProject(): Promise<NewProjectResult | null>
   // Copies the bundled example project into userData (first time) and returns
