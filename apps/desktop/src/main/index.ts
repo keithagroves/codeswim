@@ -46,7 +46,7 @@ import {
 } from '@codeswim/domain-git'
 import { getRoomIdentity } from '@codeswim/domain-github'
 import { readAgentTabsFile, writeAgentTabsFile } from './agent-tabs-file'
-import { createCardWorktree, removeCardWorktree } from './kanban-worktree'
+import { createCardWorktree, listCardWorktrees, removeCardWorktree } from './kanban-worktree'
 import {
   getStatus as githubStatus,
   getToken as githubToken,
@@ -707,6 +707,10 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('kanban:worktree-remove', async (_event, rootPath: string, cardId: string) => {
     await removeCardWorktree(rootPath, cardId)
+  })
+
+  ipcMain.handle('kanban:worktree-list', async (_event, rootPath: string) => {
+    return listCardWorktrees(rootPath)
   })
 
   ipcMain.handle('watch', async (_event, rootPath: string) => {

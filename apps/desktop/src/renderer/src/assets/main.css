@@ -4197,6 +4197,53 @@ body.is-panning .diagram-canvas-wrap {
   line-height: 1.5;
 }
 
+/* Sync target switcher: the workspace plus one chip per Kanban card worktree
+   holding uncommitted agent work. */
+.git-targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 10px 0;
+  flex-shrink: 0;
+}
+
+.git-target {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 3px 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-target:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--pastel-lavender) 50%, var(--border));
+}
+
+.git-target.is-active {
+  color: var(--pastel-lavender);
+  border-color: var(--pastel-lavender);
+  background: color-mix(in srgb, var(--pastel-lavender) 12%, transparent);
+}
+
+.git-target-count {
+  background: color-mix(in srgb, var(--pastel-lavender) 22%, transparent);
+  border-radius: 999px;
+  font-size: 10.5px;
+  padding: 0 5px;
+}
+
 .git-tabs {
   display: flex;
   gap: 2px;

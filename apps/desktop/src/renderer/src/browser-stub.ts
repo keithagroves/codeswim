@@ -256,6 +256,7 @@ The companion document belongs at \`${documentPath}\`.
     kanbanGitHubMove: notInBrowser<void>('GitHub Projects status updates'),
     kanbanWorktreeCreate: notInBrowser<{ path: string; branch: string }>('Run all (git worktrees)'),
     kanbanWorktreeRemove: notInBrowser<void>('Run all (git worktrees)'),
+    kanbanWorktreeList: async () => [],
     watch: () => Promise.resolve(),
     unwatch: () => Promise.resolve(),
     onFileChanged: noopUnsub,

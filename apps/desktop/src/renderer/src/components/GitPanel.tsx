@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
-import type { GitStatus, GitCommitEntry, GitSyncResult } from '@codeswim/contract'
+import type {
+  GitStatus,
+  GitCommitEntry,
+  GitSyncResult,
+  KanbanWorktreeInfo
+} from '@codeswim/contract'
 import { runCoverage } from '../coverage/run'
 import type { CoverageReport } from '@codeswim/coverage'
 import type { SyncPlan } from '@codeswim/commit'
@@ -81,10 +86,31 @@ function flattenChanges(git: GitStatus): SimpleChange[] {
     .sort((a, b) => a.path.localeCompare(b.path))
 }
 
+// A card worktree's branch reads as `codeswim/<slug>-<base36 timestamp>`
+// (see gitWorktreeAdd). Strip the prefix and that uniquing suffix back into
+// something close to the card title for the target switcher. The suffix test
+// requires a digit so a slug ending in a real word ("update-parser") keeps it.
+function branchLabel(w: KanbanWorktreeInfo): string {
+  if (!w.branch) return w.cardId
+  const slug = w.branch
+    .replace(/^codeswim\//, '')
+    .replace(/-(?=[0-9a-z]{7,9}$)(?=[0-9a-z]*\d)[0-9a-z]+$/, '')
+  return slug.replace(/-/g, ' ') || w.branch
+}
+
 export function GitPanel(): React.JSX.Element {
   const { state, toast, planSync, commitGroup, addToGitignore, syncDiagrams, showFileDiff } =
     useStore()
   const root = state.rootPath
+  // Kanban "Run all" leaves each card's agent output uncommitted in its own
+  // worktree, on purpose — nothing auto-commits. The Sync panel is where that
+  // work becomes visible: pick a card branch as the target and the same
+  // triage → commit → push flow runs there instead of the workspace.
+  const [worktrees, setWorktrees] = useState<KanbanWorktreeInfo[]>([])
+  const [targetCardId, setTargetCardId] = useState<string | null>(null)
+  const target = worktrees.find((w) => w.cardId === targetCardId) ?? null
+  // Everything below operates on `dir`: the workspace root, or a card worktree.
+  const dir = target?.path ?? root
   const [git, setGit] = useState<GitStatus | null>(null)
   const [statusError, setStatusError] = useState<string | null>(null)
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
@@ -97,27 +123,27 @@ export function GitPanel(): React.JSX.Element {
   const rowRefs = useRef<Array<HTMLButtonElement | null>>([])
 
   const refreshStatus = useCallback(async () => {
-    if (!root) return
+    if (!dir) return
     try {
-      const s = await window.api.gitStatus(root)
+      const s = await window.api.gitStatus(dir)
       setGit(s)
       setStatusError(null)
     } catch (err) {
       setStatusError(err instanceof Error ? err.message : String(err))
       setGit(null)
     }
-  }, [root])
+  }, [dir])
 
   // Load on mount / when the workspace changes, and whenever the file tree
   // shifts. Inlined (rather than calling refreshStatus) so the only setState
   // calls happen after an await — keeps the effect off the cascading-render
   // path.
   useEffect(() => {
-    if (!root) return
+    if (!dir) return
     let cancelled = false
     void (async () => {
       try {
-        const s = await window.api.gitStatus(root)
+        const s = await window.api.gitStatus(dir)
         if (!cancelled) {
           setGit(s)
           setStatusError(null)
@@ -132,16 +158,51 @@ export function GitPanel(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [root, state.tree])
+  }, [dir, state.tree])
+
+  // Card worktrees. Refreshed alongside status, but note that a "Run all"
+  // launch — or an agent editing files inside a worktree — changes nothing in
+  // the watched workspace tree, so the ↻ button is the reliable way to pick up
+  // new branches and change counts. If the selected worktree has gone away
+  // (removed by hand, or the run was cleaned up), fall back to the workspace
+  // rather than showing a dead target.
+  const refreshWorktrees = useCallback(async () => {
+    if (!root) return
+    try {
+      const list = await window.api.kanbanWorktreeList(root)
+      setWorktrees(list)
+      setTargetCardId((id) => (id && !list.some((w) => w.cardId === id) ? null : id))
+    } catch {
+      setWorktrees([])
+    }
+  }, [root])
+
+  useEffect(() => {
+    if (!root) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const list = await window.api.kanbanWorktreeList(root)
+        if (cancelled) return
+        setWorktrees(list)
+        setTargetCardId((id) => (id && !list.some((w) => w.cardId === id) ? null : id))
+      } catch {
+        if (!cancelled) setWorktrees([])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [root, state.tree, historyNonce])
 
   // Load commit history when the History tab is active (and after each new
   // commit, via historyNonce).
   useEffect(() => {
-    if (tab !== 'history' || !root) return
+    if (tab !== 'history' || !dir) return
     let cancelled = false
     void (async () => {
       try {
-        const log = await window.api.gitLog(root, 200)
+        const log = await window.api.gitLog(dir, 200)
         if (!cancelled) {
           setCommits(log)
           setHistoryError(null)
@@ -156,7 +217,7 @@ export function GitPanel(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [tab, root, historyNonce])
+  }, [tab, dir, historyNonce])
 
   // Commit every group in a plan, sequentially, then back the commits up to the
   // remote (pull + push). The commits are saved locally before we touch the
@@ -164,12 +225,12 @@ export function GitPanel(): React.JSX.Element {
   // screen just reports "saved here" instead of "backed up online".
   const commitPlan = useCallback(
     async (plan: SyncPlan) => {
-      if (!root) return
+      if (!dir) return
       setPhase({ kind: 'working', label: 'Saving…' })
       const done: Array<{ subject: string; sha: string }> = []
       try {
         for (const g of plan.groups) {
-          const sha = await commitGroup(g.paths, g.subject, g.body)
+          const sha = await commitGroup(g.paths, g.subject, g.body, dir)
           done.push({ subject: g.subject, sha })
         }
       } catch (err) {
@@ -179,7 +240,7 @@ export function GitPanel(): React.JSX.Element {
       setPhase({ kind: 'working', label: 'Backing up online…' })
       let sync: GitSyncResult
       try {
-        sync = await window.api.gitPush(root)
+        sync = await window.api.gitPush(dir)
       } catch (err) {
         sync = {
           remote: true,
@@ -193,7 +254,7 @@ export function GitPanel(): React.JSX.Element {
       setHistoryNonce((n) => n + 1)
       await refreshStatus()
     },
-    [root, commitGroup, refreshStatus]
+    [dir, commitGroup, refreshStatus]
   )
 
   // The Sync button. Coverage-gates first (for diagram repos), then asks the
@@ -201,28 +262,34 @@ export function GitPanel(): React.JSX.Element {
   // on the review screen.
   const onSync = useCallback(
     async (instruction?: string) => {
-      if (!root) return
+      if (!dir) return
       setPhase({ kind: 'working', label: 'Looking at your changes…' })
 
-      // 1. Coverage gate — only for codeswim-style repos that have diagrams.
-      let report: CoverageReport
-      try {
-        report = await runCoverage(root)
-      } catch (err) {
-        setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
-        return
-      }
-      if (report.totals.diagrams > 0 && coverageIssueCount(report) > 0) {
-        setPhase({ kind: 'blocked', report })
-        return
+      // 1. Coverage gate — only for codeswim-style repos that have diagrams,
+      // and only for the workspace itself. A card branch is reviewed (and
+      // gated) when it lands back on the workspace; blocking here would ask
+      // the user to fix diagrams in a checkout they aren't looking at, and the
+      // "let the agent fix it" action runs against the workspace anyway.
+      if (!target) {
+        let report: CoverageReport
+        try {
+          report = await runCoverage(dir)
+        } catch (err) {
+          setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
+          return
+        }
+        if (report.totals.diagrams > 0 && coverageIssueCount(report) > 0) {
+          setPhase({ kind: 'blocked', report })
+          return
+        }
       }
 
       // 2. Gather the working picture.
       let status: GitStatus
       let diff: string
       try {
-        status = await window.api.gitStatus(root)
-        diff = await window.api.gitWorkingDiff(root)
+        status = await window.api.gitStatus(dir)
+        diff = await window.api.gitWorkingDiff(dir)
       } catch (err) {
         setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
         return
@@ -275,7 +342,7 @@ export function GitPanel(): React.JSX.Element {
       }
       setPhase({ kind: 'plan', plan })
     },
-    [root, planSync, commitPlan]
+    [dir, target, planSync, commitPlan]
   )
 
   const onInit = useCallback(async () => {
@@ -299,7 +366,7 @@ export function GitPanel(): React.JSX.Element {
   const onIgnore = useCallback(
     async (patterns: string[]) => {
       try {
-        await addToGitignore(patterns)
+        await addToGitignore(patterns, dir ?? undefined)
         toast(`Now ignoring ${patterns.join(', ')}.`, 'info')
         await refreshStatus()
         // Re-triage so the ignored files drop out of the plan.
@@ -308,7 +375,7 @@ export function GitPanel(): React.JSX.Element {
         toast(err instanceof Error ? err.message : String(err), 'error')
       }
     },
-    [addToGitignore, toast, refreshStatus, onSync]
+    [addToGitignore, dir, toast, refreshStatus, onSync]
   )
 
   if (!root) {
@@ -362,13 +429,45 @@ export function GitPanel(): React.JSX.Element {
         {git?.branch ? <span className="git-branch">{git.branch}</span> : null}
         <button
           className="sidebar-icon-btn git-refresh"
-          onClick={() => void refreshStatus()}
+          onClick={() => {
+            void refreshStatus()
+            void refreshWorktrees()
+          }}
           title="Refresh"
           aria-label="Refresh"
         >
           ↻
         </button>
       </div>
+
+      {/* Target switcher — only once "Run all" has left card worktrees behind.
+          Each card branch holds uncommitted agent work until it's synced. */}
+      {worktrees.length > 0 ? (
+        <div className="git-targets" role="group" aria-label="What to sync">
+          <button
+            type="button"
+            className={`git-target ${target === null ? 'is-active' : ''}`}
+            onClick={() => setTargetCardId(null)}
+            title="Your own changes in the workspace"
+          >
+            Workspace
+          </button>
+          {worktrees.map((w) => (
+            <button
+              key={w.cardId}
+              type="button"
+              className={`git-target ${target?.cardId === w.cardId ? 'is-active' : ''}`}
+              onClick={() => setTargetCardId(w.cardId)}
+              title={`Agent work for "${branchLabel(w)}" on ${w.branch ?? 'its own branch'} — ${
+                w.changeCount
+              } change(s) waiting`}
+            >
+              {branchLabel(w)}
+              {w.changeCount > 0 ? <span className="git-target-count">{w.changeCount}</span> : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <div className="git-tabs" role="tablist">
         <button
@@ -406,7 +505,11 @@ export function GitPanel(): React.JSX.Element {
                 <span>Changes ({changes.length})</span>
               </div>
               {changes.length === 0 ? (
-                <div className="sidebar-empty">Everything’s saved — nothing to sync.</div>
+                <div className="sidebar-empty">
+                  {target
+                    ? 'This task’s work is saved — nothing left to sync.'
+                    : 'Everything’s saved — nothing to sync.'}
+                </div>
               ) : (
                 <ul
                   className="git-file-list"
@@ -422,7 +525,7 @@ export function GitPanel(): React.JSX.Element {
                     const next = Math.min(changes.length - 1, Math.max(0, current + delta))
                     if (next === current || !changes[next]) return
                     rowRefs.current[next]?.focus()
-                    void showFileDiff(changes[next].path)
+                    void showFileDiff(changes[next].path, dir ?? undefined)
                   }}
                 >
                   {changes.map((c, idx) => {
@@ -436,7 +539,7 @@ export function GitPanel(): React.JSX.Element {
                           }}
                           className={`git-file-row ${active ? 'is-active' : ''}`}
                           title={`${c.path} — click to view changes`}
-                          onClick={() => void showFileDiff(c.path)}
+                          onClick={() => void showFileDiff(c.path, dir ?? undefined)}
                         >
                           <span className={`git-file-badge git-verb-${c.verb}`}>{c.verb[0]}</span>
                           <span className="git-file-path">{c.path}</span>

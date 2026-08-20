@@ -124,6 +124,17 @@ export interface GitStatus {
   clean: boolean
 }
 
+// A Kanban "Run all" worktree that still exists on disk, with how much
+// uncommitted agent work is sitting in it. Nothing auto-commits these — the
+// user syncs a card branch when they're ready, from the Sync panel.
+export interface KanbanWorktreeInfo {
+  cardId: string
+  path: string
+  branch: string | null
+  // Staged + unstaged + untracked paths, so the UI can say "4 changes".
+  changeCount: number
+}
+
 export interface GitInitResult {
   createdGitignore: boolean
 }
@@ -262,6 +273,9 @@ export interface DiagramNavApi {
     cardTitle: string
   ): Promise<{ path: string; branch: string }>
   kanbanWorktreeRemove(rootPath: string, cardId: string): Promise<void>
+  // Every card worktree currently on disk for this workspace. Used by the Sync
+  // panel to offer each card branch as a sync target.
+  kanbanWorktreeList(rootPath: string): Promise<KanbanWorktreeInfo[]>
   watch(rootPath: string): Promise<void>
   unwatch(): Promise<void>
   onFileChanged(cb: (absPath: string) => void): () => void

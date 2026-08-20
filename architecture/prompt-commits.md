@@ -9,7 +9,7 @@ tags: [git, commits, plan, mdd]
 > the commit message from the staged diff, lets the user edit it, and
 > commits. Phase 2 (session enrichment + regex secret-scrub pre-pass) is
 > still pending. One deviation from the original plan: the synthesis
-> *prompt* is built in a renderer module ([commit/synthesize.ts](../packages/commit/src/synthesize.ts)),
+> _prompt_ is built in a renderer module ([commit/synthesize.ts](../packages/commit/src/synthesize.ts)),
 > mirroring `buildSyncPrompt`, rather than a `commit-synthesis.txt` harness
 > file — it is a per-commit user prompt, not a system prompt.
 
@@ -17,24 +17,24 @@ tags: [git, commits, plan, mdd]
 
 [plan.md](../plan.md) argues that as AI generates the implementation,
 humans should curate **intent**, not generated output. Codeswim already
-applies that to *reading* a codebase (diagrams-as-navigation). Prompt
-commits apply the same move to *history*: a commit message stops being
+applies that to _reading_ a codebase (diagrams-as-navigation). Prompt
+commits apply the same move to _history_: a commit message stops being
 "what bytes changed" and becomes **the prompt that would regenerate this
 diff**. Same artifact — captured intent — at a different altitude.
 
 The commit message is a **specification record**, not a migration. LLM
 generation is non-deterministic and model-versioned, so replaying a
-message regenerates *equivalent* code, never byte-identical code. We sell
+message regenerates _equivalent_ code, never byte-identical code. We sell
 it as executable intent (a human or agent could reconstruct equivalent
 code from it), not as a deterministic, reversible migration.
 
 ## Decisions locked
 
-| Decision | Choice | Consequence |
-|---|---|---|
-| Prompt source | **Diff-first, sessions enrich** | Always synthesize from the staged diff; pull recent in-workspace agent sessions in as evidence when they exist. Hand-written commits still get a spec. |
-| Replay ambition (v1) | **Spec record only** | The message is a high-quality reconstructable prompt + provenance trailers. Replay is a north star, not built in v1. |
-| Diagram drift at commit | **Block the commit** | Coverage runs *before* synthesis; if diagrams drift from the source tree, the commit is refused until the author aligns them. Code and diagrams land together or not at all. |
+| Decision                | Choice                          | Consequence                                                                                                                                                                  |
+| ----------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Prompt source           | **Diff-first, sessions enrich** | Always synthesize from the staged diff; pull recent in-workspace agent sessions in as evidence when they exist. Hand-written commits still get a spec.                       |
+| Replay ambition (v1)    | **Spec record only**            | The message is a high-quality reconstructable prompt + provenance trailers. Replay is a north star, not built in v1.                                                         |
+| Diagram drift at commit | **Block the commit**            | Coverage runs _before_ synthesis; if diagrams drift from the source tree, the commit is refused until the author aligns them. Code and diagrams land together or not at all. |
 
 ## The artifact: commit message format
 
@@ -107,13 +107,40 @@ commit exactly as for any later commit.
 Two consequences worth stating:
 
 - **The coverage gate only fires for diagram repos.** It blocks when
-  `report.totals.diagrams > 0` *and* there is drift. A freshly-initialized
+  `report.totals.diagrams > 0` _and_ there is drift. A freshly-initialized
   plain project (no diagrams, e.g. a game or a script) has nothing to keep
   aligned, so compose goes straight to synthesis — the prompt-commit value
   (intent-as-history) still applies even without diagrams.
 - **The unborn-branch header is parsed.** A fresh repo reports
   `## No commits yet on main`; `parseBranchLine` handles that case so the
   branch label is right before the first commit exists.
+
+## Syncing a task branch
+
+Kanban's **Run all** gives each card its own git worktree + branch under
+`userData` (see [main process](./main-process.md)), and deliberately
+**never commits**: the agent's output sits uncommitted in that worktree
+until a human decides it's worth keeping. Left there, that work would be
+invisible — the panel would report "everything's saved" while N cards'
+worth of edits sat outside the workspace.
+
+So the Sync panel is _target-aware_. When card worktrees exist, a switcher
+appears above the tabs: **Workspace** plus one chip per card branch, each
+badged with its uncommitted change count. Picking a target repoints the
+whole flow — status, file diffs, triage, commit, push — at that directory.
+Nothing else changes: every `git.ts` helper already takes the repo path as
+its first argument, and a worktree is just another repo path.
+
+Two deliberate asymmetries:
+
+- **The coverage gate only runs for the workspace.** Blocking a card
+  branch would ask the user to fix diagrams in a checkout they aren't
+  looking at, and the "let the agent fix it" action runs against the
+  workspace anyway. The branch is gated when it lands back on the
+  workspace.
+- **Push uses the branch's own upstream.** `gitPushCurrent` on a worktree
+  pushes `codeswim/<slug>-<ts>` with `-u`, so a synced card branch is a
+  real reviewable remote branch. Nothing auto-merges — that stays manual.
 
 ## Browsing history — the payoff
 
@@ -135,13 +162,16 @@ flowchart TD
     Panel --> Cov[coverage/run.ts<br/>MDD gate]
     Panel --> Agent[agent.ts<br/>synthesis call]
     Agent --> Prompt[prompt/commit-synthesis.txt<br/>reconstruct + scrub]
+    Panel -->|kanban:worktree-list| WT[card worktrees<br/>uncommitted agent work]
     GitMod --> Repo[(git repo<br/>workspace root)]
+    WT -.->|sync target| GitMod
     Cov -.->|block on drift| Panel
 
     click Bar call navigate("../apps/desktop/src/renderer/src/components/ActivityBar.tsx")
     click Panel call navigate("../apps/desktop/src/renderer/src/components/GitPanel.tsx")
     click GitMod call navigate("../packages/domain-git/src/git.ts")
     click Repo call navigate("./main-process.md")
+    click WT call navigate("../apps/desktop/src/main/kanban-worktree.ts")
     click Cov call navigate("../apps/desktop/src/renderer/src/coverage/run.ts")
     click Agent call navigate("../apps/desktop/src/renderer/src/agent.ts")
     click Prompt call navigate("../packages/commit/src/synthesize.ts")
@@ -159,15 +189,15 @@ Per [CLAUDE.md](../CLAUDE.md), the IPC surface in
 interface — each new method touches all three processes (main handler,
 preload bridge, renderer caller).
 
-| Method | Returns | Notes |
-|---|---|---|
-| `git:status` | porcelain status | staged/unstaged/untracked split; `isRepo: false` when not a repo |
-| `git:staged-diff` | unified diff string | input to synthesis |
-| `git:commit` | new commit sha | `subject`, `body` args; trailers appended by caller |
-| `git:init` | `{ createdGitignore }` | `git init` + seed `.gitignore`; offered when `isRepo` is false |
-| `git:stage-all` | void | `git add -A`; assembles the working tree (incl. first commit) |
-| `git:unstage-all` | void | unstage everything (keeps the work tree); clears the index directly on an unborn branch |
-| `git:log` | recent commits | powers the **History** tab; each entry carries `synthesized` |
+| Method            | Returns                | Notes                                                                                   |
+| ----------------- | ---------------------- | --------------------------------------------------------------------------------------- |
+| `git:status`      | porcelain status       | staged/unstaged/untracked split; `isRepo: false` when not a repo                        |
+| `git:staged-diff` | unified diff string    | input to synthesis                                                                      |
+| `git:commit`      | new commit sha         | `subject`, `body` args; trailers appended by caller                                     |
+| `git:init`        | `{ createdGitignore }` | `git init` + seed `.gitignore`; offered when `isRepo` is false                          |
+| `git:stage-all`   | void                   | `git add -A`; assembles the working tree (incl. first commit)                           |
+| `git:unstage-all` | void                   | unstage everything (keeps the work tree); clears the index directly on an unborn branch |
+| `git:log`         | recent commits         | powers the **History** tab; each entry carries `synthesized`                            |
 
 ## Side panel integration
 
@@ -177,12 +207,12 @@ The commit UI is a new **activity-bar section** (`git`), peer to
 section string is a union repeated in a few places rather than a single
 shared type, so adding `git` is mechanical but touches several spots:
 
-| File | Change |
-|---|---|
-| [ActivityBar.tsx](../apps/desktop/src/renderer/src/components/ActivityBar.tsx) | Add `'git'` to the local `Section` type, a `GitIcon` (24×24, 1.5px stroke), and an `ITEM_BY_KEY` entry. |
-| [store.ts](../apps/desktop/src/renderer/src/store.ts) | Add `'git'` to the section union in `activeSection`, `lastActiveSection`, `activityOrder`, `setActiveSection`, `toggleActiveSection`. |
-| [state.tsx](../apps/desktop/src/renderer/src/state.tsx) | Add `'git'` to the default `activityOrder` and to the `set-activity-order` reducer (type, filter guard, **re-add list**). |
-| [App.tsx](../apps/desktop/src/renderer/src/App.tsx) | Render `<GitPanel />` when `activeSection === 'git'`. |
+| File                                                                           | Change                                                                                                                                |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| [ActivityBar.tsx](../apps/desktop/src/renderer/src/components/ActivityBar.tsx) | Add `'git'` to the local `Section` type, a `GitIcon` (24×24, 1.5px stroke), and an `ITEM_BY_KEY` entry.                               |
+| [store.ts](../apps/desktop/src/renderer/src/store.ts)                          | Add `'git'` to the section union in `activeSection`, `lastActiveSection`, `activityOrder`, `setActiveSection`, `toggleActiveSection`. |
+| [state.tsx](../apps/desktop/src/renderer/src/state.tsx)                        | Add `'git'` to the default `activityOrder` and to the `set-activity-order` reducer (type, filter guard, **re-add list**).             |
+| [App.tsx](../apps/desktop/src/renderer/src/App.tsx)                            | Render `<GitPanel />` when `activeSection === 'git'`.                                                                                 |
 
 **Migration is free.** The `set-activity-order` reducer already re-adds any
 known section missing from a stored order at the end of the list — so
@@ -193,6 +223,7 @@ versioning or migration code needed.
 ## Phasing
 
 **Phase 1 — vertical slice, diff-only, end to end. ✅ shipped.**
+
 - [packages/domain-git/src/git.ts](../packages/domain-git/src/git.ts): `gitStatus`, `gitStagedDiff`, `gitCommit` (safe `execFile`, no shell).
 - [packages/contract/src/api.ts](../packages/contract/src/api.ts) + [apps/desktop/src/preload/index.ts](../apps/desktop/src/preload/index.ts): `git:*` bridge.
 - [apps/desktop/src/main/index.ts](../apps/desktop/src/main/index.ts): `git:status` / `git:staged-diff` / `git:commit` IPC handlers.
@@ -204,6 +235,7 @@ versioning or migration code needed.
   on the store.
 
 **Phase 2 — sessions enrich + scrubbing hardening (pending).**
+
 - Pull recent in-workspace `loadMessages()` transcripts (see
   [agent.ts](../apps/desktop/src/renderer/src/agent.ts)) as additional evidence so the
   reconstruction matches what was actually asked.
@@ -220,11 +252,11 @@ see "Browsing history" above.
   intent rather than quoting, scrubbing is natural — but it is a hard
   requirement (prompt instruction in phase 1, regex pre-pass in phase 2),
   not a hope. This matters double for public repos.
-- **Provenance honesty.** The message is a *post-hoc reconstruction*, not
+- **Provenance honesty.** The message is a _post-hoc reconstruction_, not
   a verbatim record of what was typed. The `Codeswim-Synthesized: true`
   trailer labels it so nobody mistakes the log for an audit trail.
 - **Non-determinism.** Framed as a spec record, not a migration — see
-  Thesis. Replay (if built later) is a fidelity *test*, not a guarantee.
+  Thesis. Replay (if built later) is a fidelity _test_, not a guarantee.
 - **Mixed authorship.** Diff-first means hand-typed commits with no
   conversation still get a spec, just lower-fidelity. The feature degrades
   gracefully instead of only working for agent-authored code.
@@ -246,6 +278,7 @@ see "Browsing history" above.
 - [apps/desktop/src/renderer/src/agent.ts](../apps/desktop/src/renderer/src/agent.ts) — session-aware SDK wrapper; `listSessions` / `loadMessages` feed the phase-2 enrichment and the synthesis call.
 - [packages/contract/src/api.ts](../packages/contract/src/api.ts) — the IPC contract the `git:*` methods extend.
 - [apps/desktop/src/main/index.ts](../apps/desktop/src/main/index.ts) — where the `git:*` handlers register, alongside the existing npm script runner whose spawn discipline `git.ts` mirrors.
+
 ## Source (this feature)
 
 - [packages/domain-git/src/git.ts](../packages/domain-git/src/git.ts) — `git` operations via safe `execFile` (status, staged diff, commit).

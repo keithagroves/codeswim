@@ -3,6 +3,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 import type {
   AppStateSnapshot,
   KanbanBoard,
+  KanbanWorktreeInfo,
   PersistedAgentTabs,
   UpdateStatusPayload
 } from '@codeswim/contract'
@@ -241,6 +242,8 @@ const api = {
     ipcRenderer.invoke('kanban:worktree-create', rootPath, cardId, cardTitle),
   kanbanWorktreeRemove: (rootPath: string, cardId: string): Promise<void> =>
     ipcRenderer.invoke('kanban:worktree-remove', rootPath, cardId),
+  kanbanWorktreeList: (rootPath: string): Promise<KanbanWorktreeInfo[]> =>
+    ipcRenderer.invoke('kanban:worktree-list', rootPath),
   watch: (rootPath: string): Promise<void> => ipcRenderer.invoke('watch', rootPath),
   unwatch: (): Promise<void> => ipcRenderer.invoke('unwatch'),
   onFileChanged: (cb: (absPath: string) => void): (() => void) => {

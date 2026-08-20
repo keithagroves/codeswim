@@ -1601,23 +1601,23 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
   )
 
   const commitGroup = useCallback(
-    async (paths: string[], subject: string, body: string): Promise<string> => {
-      const root = stateRef.current.rootPath
-      if (!root) throw new Error('Open a folder first.')
+    async (paths: string[], subject: string, body: string, dir?: string): Promise<string> => {
+      const target = dir ?? stateRef.current.rootPath
+      if (!target) throw new Error('Open a folder first.')
       const fullBody = composeCommitBody(body, { coveragePassed: true })
-      return window.api.gitCommitGroup(root, paths, subject, fullBody)
+      return window.api.gitCommitGroup(target, paths, subject, fullBody)
     },
     []
   )
 
-  const addToGitignore = useCallback(async (patterns: string[]) => {
-    const root = stateRef.current.rootPath
-    if (!root) throw new Error('Open a folder first.')
-    return window.api.gitAddToGitignore(root, patterns)
+  const addToGitignore = useCallback(async (patterns: string[], dir?: string) => {
+    const target = dir ?? stateRef.current.rootPath
+    if (!target) throw new Error('Open a folder first.')
+    return window.api.gitAddToGitignore(target, patterns)
   }, [])
 
-  const showFileDiff = useCallback(async (path: string): Promise<void> => {
-    const root = stateRef.current.rootPath
+  const showFileDiff = useCallback(async (path: string, dir?: string): Promise<void> => {
+    const root = dir ?? stateRef.current.rootPath
     if (!root) return
     // Switch the main panel to the diff view immediately (loading), then fill it
     // in once git returns. The reducer ignores stale results whose path no

@@ -275,11 +275,14 @@ export interface StoreApi {
   planSync(diff: string, changedPaths: string[], instruction?: string): Promise<SyncPlan>
   // Commits exactly the given paths as one isolated commit (subject + body),
   // returning the new sha. Sequential calls build up a multi-commit sync.
-  commitGroup(paths: string[], subject: string, body: string): Promise<string>
+  // `dir` targets a Kanban card worktree instead of the workspace root.
+  commitGroup(paths: string[], subject: string, body: string, dir?: string): Promise<string>
   // Appends patterns to .gitignore and stops tracking anything already tracked.
-  addToGitignore(patterns: string[]): Promise<GitIgnoreResult>
+  // `dir` targets a Kanban card worktree instead of the workspace root.
+  addToGitignore(patterns: string[], dir?: string): Promise<GitIgnoreResult>
   // Loads a single file's working-tree diff and shows it in the main panel.
-  showFileDiff(path: string): Promise<void>
+  // `dir` targets a Kanban card worktree instead of the workspace root.
+  showFileDiff(path: string, dir?: string): Promise<void>
   // Closes the main-panel diff viewer, returning to the previous view.
   hideDiff(): void
   // Opens the agent panel and asks it to review the given pull request,
