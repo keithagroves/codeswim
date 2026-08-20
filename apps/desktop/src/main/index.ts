@@ -7,7 +7,7 @@ import {
   Menu,
   type MenuItemConstructorOptions
 } from 'electron'
-import { join, basename, dirname } from 'path'
+import { join, basename, dirname, sep } from 'path'
 import { promises as fs } from 'fs'
 import { spawn, ChildProcess } from 'child_process'
 import chokidar, { FSWatcher } from 'chokidar'
@@ -654,6 +654,20 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('read-file', async (_event, absPath: string) => {
     return fs.readFile(absPath, 'utf-8')
+  })
+
+  // Root-scoped read for the command bus: resolveWorkspaceFile rejects a
+  // syntactically-escaping relPath, but a symlink inside the root can still
+  // point outside it — this is the read path a generic run_command call can
+  // reach, so it needs the realpath check that resolveWorkspaceFile's other
+  // caller (opening a file in the OS editor) doesn't bother with.
+  ipcMain.handle('workspace:read-file', async (_event, rootPath: string, relPath: string) => {
+    const abs = resolveWorkspaceFile(rootPath, relPath)
+    const [real, rootReal] = await Promise.all([fs.realpath(abs), fs.realpath(rootPath)])
+    if (real !== rootReal && !real.startsWith(`${rootReal}${sep}`)) {
+      throw new Error('path escapes the workspace')
+    }
+    return fs.readFile(real, 'utf-8')
   })
 
   ipcMain.handle(

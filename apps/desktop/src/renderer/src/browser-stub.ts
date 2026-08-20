@@ -126,6 +126,9 @@ export function installBrowserApiStub(): void {
       const data = (await res.json()) as { type: string; content: string }
       return data.content
     },
+    readWorkspaceFile: async (rootPath: string, relPath: string) => {
+      return stub.readFile(`${rootPath.replace(/\/$/, '')}/${relPath}`)
+    },
     readSourceExplanation: async (
       _rootPath: string,
       sourcePath: string

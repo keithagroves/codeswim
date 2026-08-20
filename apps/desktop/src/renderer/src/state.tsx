@@ -17,8 +17,17 @@ import {
   type CommitMessage
 } from '@codeswim/commit'
 import { buildTriagePrompt, parseSyncPlan, type SyncPlan } from '@codeswim/commit'
-import { extname, parseTarget, relativeToRoot, resolveRelative, toPosix } from './path-utils'
-import type { AgentViewAction, AppStateSnapshot, KanbanCard, PullRequest } from '@codeswim/contract'
+import { extname, relativeToRoot, toPosix } from './path-utils'
+import type {
+  AgentViewAction,
+  AppStateSnapshot,
+  CommandOrigin,
+  KanbanCard,
+  PullRequest
+} from '@codeswim/contract'
+import { CommandRegistry } from './commands/registry'
+import { registerNavCommands } from './commands/nav'
+import type { CommandCtxFactory } from './commands/context'
 import {
   prDiffLabel,
   StoreContext,
@@ -44,6 +53,11 @@ import {
 // Canonical section order + the single source of truth for which sections
 // exist. Used for the default activity-bar order and to sanitize a stale
 // saved order (drop unknowns, re-append any missing).
+// Every StoreApi method that now delegates to the command registry is a
+// human-initiated call; the agent reaches commands through its own bridge
+// (Phase 2), never through these wrappers.
+const HUMAN_ORIGIN: CommandOrigin = { kind: 'human' }
+
 const DEFAULT_ACTIVITY_ORDER: Section[] = [
   'agent',
   'files',
@@ -97,7 +111,10 @@ const initialState: AppState = {
   activeAgentTabId: null
 }
 
-type Action =
+// Exported so commands/context.ts can type CommandCtx.dispatch precisely —
+// the command layer dispatches these same actions, it just does so from
+// commands/nav.ts instead of inline in this component.
+export type Action =
   | { type: 'set-root'; rootPath: string }
   | { type: 'clear-root' }
   | {
@@ -579,6 +596,33 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
     dispatch({ type: 'add-toast', toast: { id, message, kind } })
     setTimeout(() => dispatch({ type: 'remove-toast', id }), 4000)
   }, [])
+
+  // The command registry — one instance for the lifetime of this provider.
+  // buildCtx reads stateRef/dispatch/toast at call time (all stable refs or
+  // stable useCallback identities), so every command sees live state
+  // regardless of when the registry itself was constructed.
+  const commandsRef = useRef<CommandRegistry | null>(null)
+  if (!commandsRef.current) {
+    const buildCtx: CommandCtxFactory = (origin) => ({
+      getState: () => stateRef.current,
+      dispatch,
+      api: window.api,
+      toast,
+      origin,
+      activeRoot: stateRef.current.rootPath,
+      executionRoot: origin.kind === 'agent' ? origin.worktree : stateRef.current.rootPath,
+      confirm: async (_danger, summary) => {
+        // Agent-origin dangerous commands are denied by default until the
+        // Phase 4 approval service can grant a scoped exception.
+        if (origin.kind === 'agent') return false
+        return window.confirm(summary)
+      }
+    })
+    const registry = new CommandRegistry(buildCtx)
+    registerNavCommands(registry)
+    commandsRef.current = registry
+  }
+  const commands = commandsRef.current
 
   // Converts opencode's `LoadedMessage[]` into our `ChatMessage[]` for the
   // chat list. Filters out empty messages (no displayable parts).
@@ -1118,6 +1162,8 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
     [ensureAgent]
   )
 
+  // Still used directly by `reload` below, which re-reads the current file
+  // in place rather than navigating — not part of the nav.* command slice.
   const readFileSafe = useCallback(
     async (
       rootPath: string,
@@ -1156,139 +1202,47 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
     [toast]
   )
 
+  // Navigation is now the command registry's nav.* commands
+  // (commands/nav.ts); these are thin delegating wrappers kept for every
+  // existing caller (StoreApi consumers, applyViewAction) so no component
+  // changes were required to land the registry.
   const navigateAbsolute = useCallback(
-    async (relPath: string, pushBreadcrumb: boolean, markdownView?: 'diagram' | 'read') => {
-      if (!state.rootPath) return
-      // The path may carry a #L10-L22 line ref; peel it off before reading.
-      // This path always lands on the explanation view, so the range has
-      // nowhere to apply — use openSourceCode to open raw source at a range.
-      const { path } = parseTarget(relPath)
-      dispatch({ type: 'set-loading', loading: true })
-      const previous = state.currentFile
-      const result = await readFileSafe(state.rootPath, path, markdownView)
-      if (!result) {
-        dispatch({ type: 'set-loading', loading: false })
-        return
-      }
-      dispatch({
-        type: 'load-success',
-        file: path,
-        contents: result.contents,
-        view: result.view,
-        pushBreadcrumb,
-        previous,
-        revealNavigator: true,
-        documentPath: result.documentPath,
-        sourceExplanationExists: result.sourceExplanationExists
-      })
-    },
-    [readFileSafe, state.rootPath, state.currentFile]
+    (relPath: string, pushBreadcrumb: boolean, markdownView?: 'diagram' | 'read') =>
+      commands.run<void>('nav.navigateAbsolute', { relPath, pushBreadcrumb, markdownView }, HUMAN_ORIGIN),
+    [commands]
   )
 
   const inspectFile = useCallback(
-    (relPath: string): Promise<void> => navigateAbsolute(relPath, true, 'read'),
-    [navigateAbsolute]
+    (relPath: string): Promise<void> => commands.run<void>('nav.inspectFile', { relPath }, HUMAN_ORIGIN),
+    [commands]
   )
 
   const openSourceCode = useCallback(
-    async (relPath: string, range: LineRange | null): Promise<void> => {
-      if (!state.rootPath) return
-      dispatch({ type: 'set-loading', loading: true })
-      const previous = state.currentFile
-      try {
-        const abs = `${toPosix(state.rootPath).replace(/\/$/, '')}/${relPath}`
-        const contents = await window.api.readFile(abs)
-        dispatch({
-          type: 'load-success',
-          file: relPath,
-          contents,
-          view: 'code',
-          pushBreadcrumb: true,
-          previous,
-          revealNavigator: true,
-          documentPath: relPath,
-          sourceExplanationExists: true,
-          range
-        })
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        toast(`Could not open ${relPath}: ${msg}`, 'error')
-        dispatch({ type: 'set-loading', loading: false })
-      }
-    },
-    [state.rootPath, state.currentFile, toast]
+    (relPath: string, range: LineRange | null): Promise<void> =>
+      commands.run<void>('nav.openSourceCode', { relPath, range }, HUMAN_ORIGIN),
+    [commands]
   )
 
   const navigateRelative = useCallback(
-    async (target: string) => {
-      const baseFile = state.currentDocumentPath ?? state.currentFile
-      if (!baseFile) return
-      // Peel off any legacy line ref so resolveRelative doesn't try to make
-      // the fragment part of the path.
-      const { path } = parseTarget(target)
-      await navigateAbsolute(resolveRelative(baseFile, path), true)
-    },
-    [navigateAbsolute, state.currentDocumentPath, state.currentFile]
+    (target: string): Promise<void> =>
+      commands.run<void>('nav.navigateRelative', { target }, HUMAN_ORIGIN),
+    [commands]
   )
 
   const popTo = useCallback(
-    async (index: number) => {
-      if (!state.rootPath) return
-      const stack = state.breadcrumbs
-      if (index < 0 || index >= stack.length) return
-      const target = stack[index]
-      const result = await readFileSafe(state.rootPath, target)
-      if (!result) return
-      dispatch({
-        type: 'pop-to',
-        index,
-        file: target,
-        contents: result.contents,
-        view: result.view,
-        documentPath: result.documentPath,
-        sourceExplanationExists: result.sourceExplanationExists
-      })
-    },
-    [readFileSafe, state.rootPath, state.breadcrumbs]
+    (index: number): Promise<void> => commands.run<void>('nav.popTo', { index }, HUMAN_ORIGIN),
+    [commands]
   )
 
-  const goBack = useCallback(async () => {
-    if (!state.rootPath) return
-    const stack = state.breadcrumbs
-    if (stack.length === 0) return
-    const target = stack[stack.length - 1]
-    const previous = state.currentFile
-    const result = await readFileSafe(state.rootPath, target)
-    if (!result) return
-    dispatch({
-      type: 'nav-back',
-      file: target,
-      previous,
-      contents: result.contents,
-      view: result.view,
-      documentPath: result.documentPath,
-      sourceExplanationExists: result.sourceExplanationExists
-    })
-  }, [readFileSafe, state.rootPath, state.breadcrumbs, state.currentFile])
+  const goBack = useCallback(
+    (): Promise<void> => commands.run<void>('nav.goBack', {}, HUMAN_ORIGIN),
+    [commands]
+  )
 
-  const goForward = useCallback(async () => {
-    if (!state.rootPath) return
-    const stack = state.forward
-    if (stack.length === 0) return
-    const target = stack[stack.length - 1]
-    const previous = state.currentFile
-    const result = await readFileSafe(state.rootPath, target)
-    if (!result) return
-    dispatch({
-      type: 'nav-forward',
-      file: target,
-      previous,
-      contents: result.contents,
-      view: result.view,
-      documentPath: result.documentPath,
-      sourceExplanationExists: result.sourceExplanationExists
-    })
-  }, [readFileSafe, state.rootPath, state.forward, state.currentFile])
+  const goForward = useCallback(
+    (): Promise<void> => commands.run<void>('nav.goForward', {}, HUMAN_ORIGIN),
+    [commands]
+  )
 
   const findEntryFile = useCallback(async (rootPath: string): Promise<string | null> => {
     const files = await window.api.listMarkdown(rootPath)
@@ -1679,8 +1633,10 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
   const hideOutput = useCallback(() => dispatch({ type: 'hide-output' }), [])
   const toggleSidebar = useCallback(() => dispatch({ type: 'toggle-sidebar' }), [])
   const setWorkspaceView = useCallback(
-    (view: WorkspaceView) => dispatch({ type: 'set-workspace-view', view }),
-    []
+    (view: WorkspaceView) => {
+      void commands.run<void>('nav.setWorkspaceView', { view }, HUMAN_ORIGIN)
+    },
+    [commands]
   )
 
   // Apply an agent-driven view action. Wired into the part-stream handler via a
@@ -1946,6 +1902,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
   const api = useMemo<StoreApi>(
     () => ({
       state,
+      commands,
       pickRoot,
       navigateRelative,
       navigateAbsolute,
@@ -2003,6 +1960,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
     }),
     [
       state,
+      commands,
       pickRoot,
       navigateRelative,
       navigateAbsolute,

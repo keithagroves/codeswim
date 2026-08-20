@@ -2,7 +2,13 @@ import { createContext, useContext } from 'react'
 import type { PendingQuestion } from './agent'
 import type { CommitMessage } from '@codeswim/commit'
 import type { SyncPlan } from '@codeswim/commit'
-import type { GitIgnoreResult, KanbanCard, PullRequest } from '@codeswim/contract'
+import type {
+  CommandDescriptor,
+  CommandOrigin,
+  GitIgnoreResult,
+  KanbanCard,
+  PullRequest
+} from '@codeswim/contract'
 import type { LineRange } from './path-utils'
 
 export type { LineRange } from './path-utils'
@@ -209,8 +215,19 @@ export interface AppState {
   activeAgentTabId: string | null
 }
 
+// Structural shape of the command registry (apps/desktop/src/renderer/src/
+// commands/registry.ts) exposed through StoreApi. Declared here rather than
+// importing CommandRegistry directly so store.ts — imported by nearly
+// everything — doesn't pull in the command layer's implementation.
+export interface CommandBus {
+  run<R = unknown>(id: string, args: unknown, origin: CommandOrigin): Promise<R>
+  find(query: string): CommandDescriptor[]
+  describe(id: string): CommandDescriptor | undefined
+}
+
 export interface StoreApi {
   state: AppState
+  commands: CommandBus
   pickRoot(): Promise<void>
   navigateRelative(relativePathFromCurrent: string): Promise<void>
   navigateAbsolute(relativeToRoot: string, pushBreadcrumb: boolean): Promise<void>

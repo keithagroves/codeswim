@@ -251,6 +251,12 @@ export type AgentViewAction =
 export interface DiagramNavApi {
   pickFolder(): Promise<string | null>
   readFile(absPath: string): Promise<string>
+  // Root-scoped read: relPath is resolved inside rootPath and rejected if it
+  // escapes (symlinks included). This is the read path exposed to the
+  // command bus's generic run_command — readFile above takes an unrestricted
+  // absolute path and must never be reachable from a command an agent can
+  // invoke by id.
+  readWorkspaceFile(rootPath: string, relPath: string): Promise<string>
   readSourceExplanation(rootPath: string, sourcePath: string): Promise<SourceExplanation>
   openWorkspaceFile(rootPath: string, relPath: string): Promise<void>
   listMarkdown(rootPath: string): Promise<string[]>

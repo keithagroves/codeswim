@@ -215,6 +215,8 @@ export interface PullRequestDiff {
 const api = {
   pickFolder: (): Promise<string | null> => ipcRenderer.invoke('pick-folder'),
   readFile: (absPath: string): Promise<string> => ipcRenderer.invoke('read-file', absPath),
+  readWorkspaceFile: (rootPath: string, relPath: string): Promise<string> =>
+    ipcRenderer.invoke('workspace:read-file', rootPath, relPath),
   readSourceExplanation: (rootPath: string, sourcePath: string): Promise<SourceExplanation> =>
     ipcRenderer.invoke('source-explanation:read', rootPath, sourcePath),
   openWorkspaceFile: (rootPath: string, relPath: string): Promise<void> =>

@@ -3,4 +3,5 @@
 export * from './api'
 export * from './agent-tabs'
 export * from './chat'
+export * from './commands'
 export * from './kanban'
