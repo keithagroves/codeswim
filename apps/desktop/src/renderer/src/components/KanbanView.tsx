@@ -3,6 +3,7 @@ import type { KanbanBoard, KanbanCard, KanbanPriority } from '@codeswim/contract
 import { relativeToRoot, toPosix } from '../path-utils'
 import { useStore, type TreeNode } from '../store'
 import { cyclicCards, nextColumnId, runnableCards } from '../kanban-run-all'
+import { useSurfaceContext } from '../context/useSurfaceContext'
 
 interface CardDraft {
   id?: string
@@ -336,6 +337,21 @@ export function KanbanView(): React.JSX.Element {
   useEffect(() => {
     boardRef.current = board
   }, [board])
+
+  useSurfaceContext(
+    'kanban',
+    board
+      ? {
+          columns: board.columns.map((col) => ({
+            id: col.id,
+            name: col.name,
+            cardCount: board.cards.filter((c) => c.columnId === col.id).length
+          })),
+          openCardId: cardEditor?.id ?? null,
+          runningCardIds: [...runningCardIds]
+        }
+      : null
+  )
 
   const loadBoard = useCallback(async () => {
     if (!rootPath) return

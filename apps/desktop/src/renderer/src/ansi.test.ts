@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseAnsi } from './ansi'
+import { boundedTail, parseAnsi, stripAnsiToPlainLines } from './ansi'
 
 const ESC = '\u001b'
 
@@ -52,5 +52,44 @@ describe('parseAnsi', () => {
   it('carries style across the colour codes within a line', () => {
     const out = parseAnsi(`${ESC}[32mok${ESC}[39m done`)
     expect(out).toEqual([[{ text: 'ok', fg: '#3fb950' }, { text: ' done' }]])
+  })
+})
+
+describe('stripAnsiToPlainLines', () => {
+  it('strips styling and keeps the text, one entry per line', () => {
+    expect(stripAnsiToPlainLines(`${ESC}[32mok${ESC}[39m done\nsecond line`)).toEqual([
+      'ok done',
+      'second line'
+    ])
+  })
+
+  it('collapses a spinner rewrite to its final frame', () => {
+    expect(stripAnsiToPlainLines('loading...\rdone')).toEqual(['done'])
+  })
+})
+
+describe('boundedTail', () => {
+  it('keeps only the most recent maxLines', () => {
+    const lines = ['a', 'b', 'c', 'd', 'e']
+    expect(boundedTail(lines, 2, 1000)).toEqual(['d', 'e'])
+  })
+
+  it('returns everything when under both caps', () => {
+    expect(boundedTail(['a', 'b'], 10, 1000)).toEqual(['a', 'b'])
+  })
+
+  it('drops older lines once the byte budget is exceeded, keeping the tail', () => {
+    const lines = ['x'.repeat(10), 'y'.repeat(10), 'z'.repeat(10)]
+    // Budget for ~2 lines worth of bytes.
+    expect(boundedTail(lines, 10, 21)).toEqual(['y'.repeat(10), 'z'.repeat(10)])
+  })
+
+  it('always keeps at least the last line, even if it alone exceeds maxBytes', () => {
+    const huge = 'z'.repeat(50)
+    expect(boundedTail(['a', huge], 10, 5)).toEqual([huge])
+  })
+
+  it('returns an empty array for empty input', () => {
+    expect(boundedTail([], 10, 1000)).toEqual([])
   })
 })

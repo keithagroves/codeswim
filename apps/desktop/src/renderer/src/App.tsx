@@ -101,7 +101,7 @@ function SidePanel(): React.JSX.Element | null {
           className="terminal-host"
           style={{ display: state.activeSection === 'claude' ? 'flex' : 'none' }}
         >
-          <TerminalPanel command="claude" labelPrefix="Claude" />
+          <TerminalPanel command="claude" labelPrefix="Claude" surfaceId="claude" />
         </div>
       ) : null}
       <div

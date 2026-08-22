@@ -74,7 +74,7 @@ import {
   writeKanbanBoard
 } from '@codeswim/domain-kanban'
 import { readSourceExplanation, resolveWorkspaceFile } from '@codeswim/domain-skills'
-import type { AppStateSnapshot, PersistedAgentTabs } from '@codeswim/contract'
+import type { PersistedAgentTabs, ScreenContextV2 } from '@codeswim/contract'
 
 // Host of the deployed party server, no scheme. Mirrors the renderer's
 // VITE_PARTY_HOST (chat/connection.ts) — needed here too so the harness
@@ -1008,12 +1008,12 @@ app.whenReady().then(async () => {
   // and atomic (temp + rename) so the tool never reads a half-written file.
   ipcMain.handle(
     'agent:publish-state',
-    async (_event, rootPath: string, snapshot: AppStateSnapshot) => {
+    async (_event, rootPath: string, context: ScreenContextV2) => {
       const dir = join(rootPath, '.codeswim')
       await fs.mkdir(dir, { recursive: true })
       const file = join(dir, 'agent-state.json')
       const temp = `${file}.tmp`
-      await fs.writeFile(temp, JSON.stringify(snapshot, null, 2), 'utf-8')
+      await fs.writeFile(temp, JSON.stringify(context, null, 2), 'utf-8')
       await fs.rename(temp, file)
     }
   )

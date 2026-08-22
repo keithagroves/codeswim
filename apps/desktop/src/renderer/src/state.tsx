@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useSyncExternalStore,
+  type ReactNode
+} from 'react'
 import {
   connectAgent,
   getProviderAuthMethods,
@@ -18,16 +26,12 @@ import {
 } from '@codeswim/commit'
 import { buildTriagePrompt, parseSyncPlan, type SyncPlan } from '@codeswim/commit'
 import { extname, relativeToRoot, toPosix } from './path-utils'
-import type {
-  AppStateSnapshot,
-  CommandOrigin,
-  CommandOutcome,
-  KanbanCard,
-  PullRequest
-} from '@codeswim/contract'
+import type { CommandOrigin, CommandOutcome, KanbanCard, PullRequest } from '@codeswim/contract'
 import { CommandRegistry, CommandRegistryError } from './commands/registry'
 import { registerNavCommands } from './commands/nav'
 import type { CommandCtxFactory } from './commands/context'
+import { SurfaceContextRegistry } from './context/surface-context'
+import { composeScreenContext } from './context/compose-screen-context'
 import {
   prDiffLabel,
   StoreContext,
@@ -617,6 +621,22 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
     commandsRef.current = registry
   }
   const commands = commandsRef.current
+
+  // Registry of context blocks contributed by mounted surfaces (see
+  // useSurfaceContext) — one instance for the provider's lifetime, same
+  // pattern as commandsRef above.
+  const surfaceContextRef = useRef<SurfaceContextRegistry | null>(null)
+  if (!surfaceContextRef.current) {
+    surfaceContextRef.current = new SurfaceContextRegistry()
+  }
+  const surfaceContext = surfaceContextRef.current
+  const surfaceBlocks = useSyncExternalStore(surfaceContext.subscribe, surfaceContext.getSnapshot)
+
+  // A block keyed by e.g. a card id belongs to the workspace that produced
+  // it — meaningless (and potentially misleading) once the root changes.
+  useEffect(() => {
+    surfaceContext.clear()
+  }, [state.rootPath, surfaceContext])
 
   // Answers main's 'command:request' events (the harness's find_command/
   // run_command/open_file tools, proxied over IPC by
@@ -1659,21 +1679,18 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
     [commands]
   )
 
-  // Publish a snapshot of what the user is looking at so the agent's
-  // get_app_state tool can read it. Debounced; best-effort.
+  // Publish a versioned snapshot of what the user is looking at so the
+  // agent's get_app_state tool can read it — reducer state plus whatever
+  // surface blocks are currently registered (composeScreenContext). Debounced;
+  // best-effort. Re-fires on either state or surfaceBlocks changing, since a
+  // component-local block (a mermaid render error, an open kanban card) can
+  // change without any reducer action at all.
   useEffect(() => {
     const { rootPath } = state
     if (!rootPath) return
-    const snapshot: AppStateSnapshot = {
-      workspaceView: state.workspaceView,
-      currentFile: state.currentFile,
-      currentDocumentPath: state.currentDocumentPath,
-      view: state.view,
-      breadcrumbs: state.breadcrumbs,
-      runningScript: state.runningScript?.name ?? null
-    }
+    const context = composeScreenContext(state, surfaceBlocks)
     const id = setTimeout(() => {
-      void window.api.publishAgentState(rootPath, snapshot).catch(() => {
+      void window.api.publishAgentState(rootPath, context).catch(() => {
         // best-effort; the tool degrades gracefully when the file is absent
       })
     }, 150)
@@ -1684,8 +1701,13 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
     state.currentFile,
     state.currentDocumentPath,
     state.view,
+    state.diffPath,
+    state.diffContent,
+    state.activeSection,
+    state.activeAgentTabId,
     state.breadcrumbs,
-    state.runningScript
+    state.runningScript,
+    surfaceBlocks
   ])
 
   // Live reload: re-read the current file when it changes on disk.
@@ -1907,6 +1929,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
     () => ({
       state,
       commands,
+      surfaceContext,
       pickRoot,
       navigateRelative,
       navigateAbsolute,
@@ -1965,6 +1988,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
     [
       state,
       commands,
+      surfaceContext,
       pickRoot,
       navigateRelative,
       navigateAbsolute,

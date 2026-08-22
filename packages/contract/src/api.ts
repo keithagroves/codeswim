@@ -1,6 +1,7 @@
 import type { KanbanBoard } from './kanban'
 import type { PersistedAgentTabs } from './agent-tabs'
 import type { CommandRendererRequest, CommandRendererResponse } from './commands'
+import type { ScreenContextV2 } from './screen-context'
 
 export interface ScriptOutputPayload {
   name: string
@@ -231,9 +232,11 @@ export interface PullRequestDiff {
   message?: string
 }
 
-// Snapshot of the renderer's UI state, published to `.codeswim/agent-state.json`
-// so the harness `get_app_state` tool (a separate process) can read what the
-// user is currently looking at. Paths are POSIX-relative to the workspace root.
+// The legacy (unversioned) shape published to `.codeswim/agent-state.json`
+// before ScreenContextV2 (packages/contract/src/screen-context.ts). Kept for
+// one release purely so formatAppState (packages/harness/src/tool/app-view.ts)
+// can still parse a snapshot written by an older build — nothing writes this
+// shape anymore.
 export interface AppStateSnapshot {
   workspaceView: 'navigator' | 'kanban' | 'agents'
   currentFile: string | null
@@ -377,9 +380,10 @@ export interface DiagramNavApi {
   terminalDestroy(id: string): void
   onTerminalData(cb: (id: string, data: string) => void): () => void
   onTerminalExit(cb: (id: string) => void): () => void
-  // Publishes the renderer's current UI state so the agent's get_app_state tool
-  // can read what the user is looking at. Best-effort, fire-and-forget.
-  publishAgentState(rootPath: string, snapshot: AppStateSnapshot): Promise<void>
+  // Publishes the renderer's current screen context so the agent's
+  // get_app_state tool can read what the user is looking at. Best-effort,
+  // fire-and-forget.
+  publishAgentState(rootPath: string, context: ScreenContextV2): Promise<void>
   // Agents-view tab strip persistence (id/sessionId/title only — see
   // PersistedAgentTabs). null from read means no file yet / unreadable.
   agentTabsRead(rootPath: string): Promise<PersistedAgentTabs | null>

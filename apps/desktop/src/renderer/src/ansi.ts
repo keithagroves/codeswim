@@ -234,3 +234,27 @@ export function parseAnsi(input: string): AnsiSegment[][] {
   lines.push(line)
   return lines
 }
+
+// Plain-text lines (styling discarded) — for contexts that need the text
+// content, not a renderable representation, e.g. the ScreenContextV2
+// script-output block published for the agent.
+export function stripAnsiToPlainLines(input: string): string[] {
+  return parseAnsi(input).map((segments) => segments.map((s) => s.text).join(''))
+}
+
+// Keeps the most recent lines, bounded by both a line count and a total byte
+// size — a single very long line (an unbroken progress bar, say) shouldn't
+// blow the byte budget just because it's "one line". Always keeps at least
+// the last line, even if it alone exceeds maxBytes.
+export function boundedTail(lines: string[], maxLines: number, maxBytes: number): string[] {
+  const recent = lines.slice(-maxLines)
+  const out: string[] = []
+  let bytes = 0
+  for (let i = recent.length - 1; i >= 0; i--) {
+    const lineBytes = new TextEncoder().encode(recent[i]).length
+    if (bytes + lineBytes > maxBytes && out.length > 0) break
+    out.unshift(recent[i])
+    bytes += lineBytes
+  }
+  return out
+}

@@ -4,6 +4,7 @@ import { parseMarkdown } from '../parse'
 import { useStore } from '../store'
 import { MarkdownProse } from './MarkdownProse'
 import { MermaidErrorBanner } from './MermaidErrorBanner'
+import { useSurfaceContext } from '../context/useSurfaceContext'
 
 let mermaidInitialized = false
 function ensureMermaidInitialized(): void {
@@ -101,7 +102,7 @@ interface ViewTransform {
 // Renders one mermaid block with its own independent pan/zoom canvas. A
 // document can embed several diagrams (e.g. a flow plus a state chart) —
 // each gets its own viewport so zooming one doesn't affect the others.
-function MermaidCanvas({ source }: { source: string }): React.JSX.Element {
+function MermaidCanvas({ source, index }: { source: string; index: number }): React.JSX.Element {
   const canvasRef = useRef<HTMLDivElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -116,6 +117,11 @@ function MermaidCanvas({ source }: { source: string }): React.JSX.Element {
   }, [view])
   const navigationTargets = useMemo(() => extractNavigationTargets(source), [source])
   const errorMessage = renderError && renderError.source === source ? renderError.message : null
+
+  // Surfaced to ScreenContextV2.surfaces.navigator.diagramErrors — see
+  // compose-screen-context.ts's diagramErrorsFrom, which aggregates every
+  // `navigator:diagram:*` block by key prefix.
+  useSurfaceContext(`navigator:diagram:${index}`, errorMessage ? { error: errorMessage } : null)
 
   // Compute fit-to-viewport. Mermaid sometimes emits an SVG whose viewBox
   // is much larger than the actual content, so fitting against viewBox
@@ -332,7 +338,9 @@ export function DiagramView({ source }: { source: string }): React.JSX.Element {
       {parsed.mermaidBlocks.length === 0 ? (
         <div className="banner warning">This file has no mermaid code block.</div>
       ) : (
-        parsed.mermaidBlocks.map((block, index) => <MermaidCanvas key={index} source={block} />)
+        parsed.mermaidBlocks.map((block, index) => (
+          <MermaidCanvas key={index} source={block} index={index} />
+        ))
       )}
 
       {parsed.prose ? (

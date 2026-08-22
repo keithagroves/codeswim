@@ -10,6 +10,7 @@ import type {
   PullRequest
 } from '@codeswim/contract'
 import type { LineRange } from './path-utils'
+import type { SurfaceContextRegistry } from './context/surface-context'
 
 export type { LineRange } from './path-utils'
 
@@ -228,6 +229,9 @@ export interface CommandBus {
 export interface StoreApi {
   state: AppState
   commands: CommandBus
+  // Registry of context blocks contributed by mounted surfaces — see
+  // apps/desktop/src/renderer/src/context/useSurfaceContext.ts.
+  surfaceContext: SurfaceContextRegistry
   pickRoot(): Promise<void>
   navigateRelative(relativePathFromCurrent: string): Promise<void>
   navigateAbsolute(relativeToRoot: string, pushBreadcrumb: boolean): Promise<void>

@@ -5,6 +5,7 @@ import type { FitAddon, Ghostty, Terminal } from 'ghostty-web'
 // @ts-ignore — .wasm?url is a Vite-specific import form; no TS declaration needed
 import ghosttyWasmUrl from 'ghostty-web/ghostty-vt.wasm?url'
 import { useStore } from '../store'
+import { useSurfaceContext } from '../context/useSurfaceContext'
 
 // Load Ghostty WASM once for the app lifetime — reuse across all terminal instances.
 let ghosttyCache: Promise<{ ghostty: Ghostty; Terminal: typeof Terminal; FitAddon: typeof FitAddon }> | null = null
@@ -164,12 +165,19 @@ function TerminalInstance({
 
 export function TerminalPanel({
   command,
-  labelPrefix = 'Terminal'
+  labelPrefix = 'Terminal',
+  // Distinguishes this instance's block from the other TerminalPanel that
+  // can be simultaneously mounted (plain terminal + the Claude Code tab, see
+  // App.tsx) — must match the Section value under which this panel is
+  // rendered, since compose-screen-context.ts looks it up as
+  // `terminal:${state.activeSection}`.
+  surfaceId = 'terminal'
 }: {
   // When set, every tab launches this command instead of a bare shell (the
   // Claude Code tab passes `claude`). Otherwise it's a plain terminal.
   command?: string
   labelPrefix?: string
+  surfaceId?: string
 } = {}): React.JSX.Element {
   const { state } = useStore()
   const cwdRef = useRef(state.rootPath)
@@ -180,6 +188,12 @@ export function TerminalPanel({
 
   const [tabs, setTabs] = useState<TabInfo[]>(() => [{ id: nextTabId(), label: `${labelPrefix} 1` }])
   const [activeTab, setActiveTab] = useState<string>(() => tabs[0].id)
+
+  useSurfaceContext(`terminal:${surfaceId}`, {
+    tabCount: tabs.length,
+    activeTabId: activeTab,
+    activeTabLabel: tabs.find((t) => t.id === activeTab)?.label ?? null
+  })
 
   const addTab = useCallback(() => {
     const id = nextTabId()

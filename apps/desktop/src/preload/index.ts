@@ -1,12 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type {
-  AppStateSnapshot,
   CommandRendererRequest,
   CommandRendererResponse,
   KanbanBoard,
   KanbanWorktreeInfo,
   PersistedAgentTabs,
+  ScreenContextV2,
   UpdateStatusPayload
 } from '@codeswim/contract'
 
@@ -444,8 +444,8 @@ const api = {
     ipcRenderer.on('terminal:exit', listener)
     return () => ipcRenderer.removeListener('terminal:exit', listener)
   },
-  publishAgentState: (rootPath: string, snapshot: AppStateSnapshot): Promise<void> =>
-    ipcRenderer.invoke('agent:publish-state', rootPath, snapshot),
+  publishAgentState: (rootPath: string, context: ScreenContextV2): Promise<void> =>
+    ipcRenderer.invoke('agent:publish-state', rootPath, context),
   agentTabsRead: (rootPath: string): Promise<PersistedAgentTabs | null> =>
     ipcRenderer.invoke('agent-tabs:read', rootPath),
   agentTabsWrite: (rootPath: string, data: PersistedAgentTabs): Promise<void> =>
