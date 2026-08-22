@@ -14,7 +14,15 @@ const fakeApi = {} as DiagramNavApi
 // Builds a CommandCtxFactory backed by a mutable `box`, so tests can mutate
 // "external state" between or during command runs and assert the registry
 // picks up the change rather than something captured once at construction.
-function makeCtxFactory(box: { rootPath: string | null }): CommandCtxFactory {
+//
+// `confirm` mirrors the real adapter in state.tsx exactly: agent origins are
+// denied unconditionally, human origins go through `opts.humanConfirms` (the
+// stand-in for the human confirmation adapter). `opts.onConfirm` lets a test
+// assert confirm was (or wasn't) reached at all.
+function makeCtxFactory(
+  box: { rootPath: string | null },
+  opts: { humanConfirms?: boolean; onConfirm?: (summary: string) => void } = {}
+): CommandCtxFactory {
   return (origin) => ({
     getState: () => ({ rootPath: box.rootPath }) as unknown as AppState,
     dispatch: () => {},
@@ -23,7 +31,11 @@ function makeCtxFactory(box: { rootPath: string | null }): CommandCtxFactory {
     origin,
     activeRoot: box.rootPath,
     executionRoot: origin.kind === 'agent' ? origin.worktree : box.rootPath,
-    confirm: async () => true
+    confirm: async (_danger, summary) => {
+      opts.onConfirm?.(summary)
+      if (origin.kind === 'agent') return false
+      return opts.humanConfirms ?? true
+    }
   })
 }
 
@@ -36,6 +48,20 @@ function echoCommand(id = 'test.echo'): Command<{ value: string }, string> {
     schema: { type: 'object', required: ['value'], properties: { value: { type: 'string' } } },
     agent: 'listed',
     run: async (args) => args.value
+  }
+}
+
+// agent: 'listed' deliberately — the danger gate must hold even for a tier
+// that would otherwise let an agent reach this command, since the two gates
+// (agent tier, danger confirmation) are independent.
+function dangerCommand(id = 'test.danger'): Command<{ value: string }, string> {
+  return {
+    ...echoCommand(id),
+    danger: {
+      kind: 'destructive',
+      summarize: (args) => `About to act on "${args.value}"`
+    },
+    run: async (args) => `did:${args.value}`
   }
 }
 
@@ -174,6 +200,90 @@ describe('CommandRegistry', () => {
     expect(d).toMatchObject({ id: 'test.echo', domain: 'test', agent: 'listed' })
     expect(d).not.toHaveProperty('run')
     expect(d).not.toHaveProperty('validate')
+  })
+})
+
+// Phase 4 (plans/command-bus-and-screen-context.md): the fail-closed
+// approval seam. ctx.confirm is the injection point (see state.tsx's real
+// adapter) — these tests exercise the registry's side of the contract using
+// the same human/agent split the real adapter implements.
+describe('CommandRegistry: danger commands', () => {
+  it('runs the handler once a human origin confirms', async () => {
+    const registry = new CommandRegistry(makeCtxFactory({ rootPath: null }, { humanConfirms: true }))
+    registry.register(dangerCommand())
+    await expect(registry.run('test.danger', { value: 'x' }, HUMAN)).resolves.toBe('did:x')
+  })
+
+  it('a cancelled human confirmation is a real typed result, not a thrown handler error, and the handler never runs', async () => {
+    const registry = new CommandRegistry(makeCtxFactory({ rootPath: null }, { humanConfirms: false }))
+    let ran = false
+    registry.register({
+      ...dangerCommand(),
+      run: async (args) => {
+        ran = true
+        return `did:${args.value}`
+      }
+    })
+    await expect(registry.run('test.danger', { value: 'x' }, HUMAN)).rejects.toMatchObject({
+      code: 'denied'
+    })
+    expect(ran).toBe(false)
+  })
+
+  it('an agent origin is denied without ever running the handler, even though the command is agent: "listed"', async () => {
+    const registry = new CommandRegistry(makeCtxFactory({ rootPath: null }, { humanConfirms: true }))
+    let ran = false
+    registry.register({
+      ...dangerCommand(),
+      run: async (args) => {
+        ran = true
+        return `did:${args.value}`
+      }
+    })
+    await expect(registry.run('test.danger', { value: 'x' }, AGENT)).rejects.toMatchObject({
+      code: 'denied'
+    })
+    expect(ran).toBe(false)
+  })
+
+  it('cannot be bypassed by a forged agent origin naming an arbitrary worktree', async () => {
+    const registry = new CommandRegistry(makeCtxFactory({ rootPath: null }, { humanConfirms: true }))
+    registry.register(dangerCommand())
+    await expect(
+      registry.run('test.danger', { value: 'x' }, { kind: 'agent', sessionId: 'forged', worktree: '/anywhere' })
+    ).rejects.toMatchObject({ code: 'denied' })
+  })
+
+  it('derives the danger summary only after validation, so invalid args never reach it', async () => {
+    const registry = new CommandRegistry(makeCtxFactory({ rootPath: null }, { humanConfirms: true }))
+    registry.register<{ value: string }, string>({
+      ...dangerCommand(),
+      validate: (args) => {
+        if (args.value === 'bad') throw new Error('value must not be "bad"')
+      },
+      danger: {
+        kind: 'destructive',
+        summarize: (args) => {
+          // If this ever ran on invalid args, it would itself throw —
+          // proving the ordering by making a violation loud, not silent.
+          if (args.value === 'bad') throw new Error('summarize must not see invalid args')
+          return `About to act on "${args.value}"`
+        }
+      }
+    })
+    await expect(registry.run('test.danger', { value: 'bad' }, HUMAN)).rejects.toMatchObject({
+      code: 'invalid-args'
+    })
+  })
+
+  it('passes the derived summary to confirm', async () => {
+    const summaries: string[] = []
+    const registry = new CommandRegistry(
+      makeCtxFactory({ rootPath: null }, { humanConfirms: true, onConfirm: (s) => summaries.push(s) })
+    )
+    registry.register(dangerCommand())
+    await registry.run('test.danger', { value: 'the-thing' }, HUMAN)
+    expect(summaries).toEqual(['About to act on "the-thing"'])
   })
 })
 

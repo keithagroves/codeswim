@@ -102,10 +102,16 @@ export async function startSidecar(opts: StartOptions): Promise<SidecarHandle> {
   const config = {
     plugin: [harness.plugin],
     instructions: harness.instructions,
-    // Auto-approve all tool prompts. The diagrams-first gate in our plugin
-    // still blocks `write`/`edit` until a `diagram_edit` happens, so this
-    // doesn't undermine the opinionation. A future permission-prompt UI in
-    // the renderer can replace this with `"ask"` for sensitive tools.
+    // Auto-approve all of opencode's own tool prompts (write/edit/bash/...).
+    // The diagrams-first gate in our plugin still blocks `write`/`edit`
+    // until a `diagram_edit` happens, so this doesn't undermine the
+    // opinionation. This is orthogonal to the command registry's own
+    // danger/confirm gate (apps/desktop/src/renderer/src/commands/registry.ts)
+    // — find_command/run_command are opencode tools covered by this
+    // `'allow'`, but a `danger` command reached through them is still
+    // enforced independently, fail-closed for agent origins, regardless of
+    // this setting. A future permission-prompt UI can replace this with
+    // `"ask"` for opencode's own sensitive tools.
     permission: 'allow'
   }
 

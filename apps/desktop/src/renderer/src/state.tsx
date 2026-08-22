@@ -62,6 +62,15 @@ import {
 // (Phase 2), never through these wrappers.
 const HUMAN_ORIGIN: CommandOrigin = { kind: 'human' }
 
+// The confirmation adapter for human-origin danger commands — the one place
+// that decides how a human is asked to confirm. CommandRegistry/CommandCtx
+// only depend on this function's signature (summary in, boolean out), so a
+// future modal-based approval UI swaps in here without touching the
+// registry or any command definition.
+function humanConfirmAdapter(summary: string): Promise<boolean> {
+  return Promise.resolve(window.confirm(summary))
+}
+
 const DEFAULT_ACTIVITY_ORDER: Section[] = [
   'agent',
   'files',
@@ -610,10 +619,13 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       activeRoot: stateRef.current.rootPath,
       executionRoot: origin.kind === 'agent' ? origin.worktree : stateRef.current.rootPath,
       confirm: async (_danger, summary) => {
-        // Agent-origin dangerous commands are denied by default until the
-        // Phase 4 approval service can grant a scoped exception.
+        // Agent-origin dangerous commands are denied by default — a real
+        // scoped-grant approval service is the UX follow-up (plans/
+        // command-bus-and-screen-context.md Phase 4). This half (fail-closed
+        // enforcement, independent of opencode's own permission: 'allow')
+        // ships now; only the approval UX is deferred.
         if (origin.kind === 'agent') return false
-        return window.confirm(summary)
+        return humanConfirmAdapter(summary)
       }
     })
     const registry = new CommandRegistry(buildCtx)
