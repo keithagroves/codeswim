@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { KanbanBoard, KanbanCard, KanbanPriority } from '@codeswim/contract'
 import { relativeToRoot, toPosix } from '../path-utils'
 import { useStore, type TreeNode } from '../store'
-import { cyclicCards, nextColumnId, runnableCards } from '../kanban-run-all'
+import { runnableCards } from '../kanban-run-all'
 import { useSurfaceContext } from '../context/useSurfaceContext'
 
 interface CardDraft {
@@ -314,7 +314,18 @@ function GitHubEditor({
 }
 
 export function KanbanView(): React.JSX.Element {
-  const { state, navigateAbsolute, toast, startAgentFromCard, startAgentInWorktree } = useStore()
+  const {
+    state,
+    navigateAbsolute,
+    startAgentFromCard,
+    kanbanRunningCardIds,
+    kanbanLoad,
+    kanbanSave,
+    kanbanGitHubSync: kanbanGitHubSyncCommand,
+    kanbanMoveCard,
+    kanbanRunCard,
+    kanbanRunColumn
+  } = useStore()
   const rootPath = state.rootPath
   const [board, setBoard] = useState<KanbanBoard | null>(null)
   const [cardEditor, setCardEditor] = useState<CardDraft | null>(null)
@@ -323,20 +334,12 @@ export function KanbanView(): React.JSX.Element {
   const [syncing, setSyncing] = useState(false)
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null)
   const [dropColumnId, setDropColumnId] = useState<string | null>(null)
-  const [runningCardIds, setRunningCardIds] = useState<Set<string>>(new Set())
   const [runningColumns, setRunningColumns] = useState<Set<string>>(new Set())
-  const runningCardIdsRef = useRef<Set<string>>(new Set())
   const files = useMemo(() => fileOptions(state.tree), [state.tree])
-  // Bumped on every local mutation (persist/sync). Writing board.json fires
-  // the file watcher, whose reload races our own setBoard — a stale disk read
+  // Bumped on every local mutation (save/sync). Writing board.json fires the
+  // file watcher, whose reload races our own setBoard — a stale disk read
   // must not clobber state from a newer local mutation.
   const mutationGeneration = useRef(0)
-  // Mirrors `board` synchronously (state updates land a render late) so
-  // Run all's column-move writes can be serialized without racing each other.
-  const boardRef = useRef<KanbanBoard | null>(null)
-  useEffect(() => {
-    boardRef.current = board
-  }, [board])
 
   useSurfaceContext(
     'kanban',
@@ -348,7 +351,7 @@ export function KanbanView(): React.JSX.Element {
             cardCount: board.cards.filter((c) => c.columnId === col.id).length
           })),
           openCardId: cardEditor?.id ?? null,
-          runningCardIds: [...runningCardIds]
+          runningCardIds: [...kanbanRunningCardIds]
         }
       : null
   )
@@ -356,18 +359,13 @@ export function KanbanView(): React.JSX.Element {
   const loadBoard = useCallback(async () => {
     if (!rootPath) return
     const generation = mutationGeneration.current
-    try {
-      const next = await window.api.kanbanRead(rootPath)
-      if (mutationGeneration.current === generation) setBoard(next)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      toast(`Could not load board: ${message}`, 'error')
-    }
-  }, [rootPath, toast])
+    const next = await kanbanLoad(rootPath)
+    if (next && mutationGeneration.current === generation) setBoard(next)
+  }, [kanbanLoad, rootPath])
 
   useEffect(() => {
-    // setBoard fires after the IPC await, not synchronously in the effect.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // setBoard fires after the command await, not synchronously in the effect.
+
     void loadBoard()
   }, [loadBoard])
 
@@ -379,190 +377,61 @@ export function KanbanView(): React.JSX.Element {
     })
   }, [loadBoard, rootPath])
 
+  // Error toasts for save/sync failures are raised by the kanban.* commands
+  // themselves (commands/kanban.ts) — this just keeps local render state
+  // (and the "Saving…" indicator) in sync with the outcome.
   const persist = useCallback(
     async (next: KanbanBoard): Promise<KanbanBoard | null> => {
-      if (!rootPath) return null
       mutationGeneration.current += 1
       setBoard(next)
       setSaving(true)
       try {
-        const saved = await window.api.kanbanWrite(rootPath, next)
-        setBoard(saved)
+        const saved = await kanbanSave(next)
+        if (saved) setBoard(saved)
+        else await loadBoard()
         return saved
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        toast(`Could not save board: ${message}`, 'error')
-        await loadBoard()
-        return null
       } finally {
         setSaving(false)
       }
     },
-    [loadBoard, rootPath, toast]
+    [kanbanSave, loadBoard]
   )
 
   const syncGitHub = useCallback(
     async (source?: KanbanBoard) => {
-      if (!rootPath || !(source ?? board)?.github) return
+      const target = source ?? board
+      if (!target?.github) return
       mutationGeneration.current += 1
       setSyncing(true)
       try {
-        const synced = await window.api.kanbanGitHubSync(rootPath, source ?? (board as KanbanBoard))
-        setBoard(synced)
-        toast(`Synced ${synced.cards.filter((card) => card.github).length} GitHub items.`)
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        toast(`GitHub sync failed: ${message}`, 'error')
+        const synced = await kanbanGitHubSyncCommand(target)
+        if (synced) setBoard(synced)
       } finally {
         setSyncing(false)
       }
     },
-    [board, rootPath, toast]
+    [board, kanbanGitHubSyncCommand]
   )
 
-  // Run all's column moves happen concurrently (several cards can start or
-  // finish around the same time) — `moveCard` below reads `board` from its
-  // closure, so two calls landing before React re-renders between them would
-  // silently lose one. This instead threads every write through boardRef and
-  // a promise chain so writes serialize no matter how many callers fire at
-  // once.
-  const writeQueueRef = useRef<Promise<void>>(Promise.resolve())
-  const moveCardIsolated = useCallback(
-    (cardId: string, columnId: string): Promise<void> => {
-      const task = writeQueueRef.current.then(async () => {
-        if (!rootPath) return
-        const current = boardRef.current
-        if (!current || !current.cards.some((c) => c.id === cardId)) return
-        const cards = current.cards.map((c) =>
-          c.id === cardId ? { ...c, columnId, updatedAt: Date.now() } : c
-        )
-        const next = { ...current, cards }
-        boardRef.current = next
-        setBoard(next)
-        try {
-          const saved = await window.api.kanbanWrite(rootPath, next)
-          boardRef.current = saved
-          setBoard(saved)
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err)
-          toast(`Could not save board: ${message}`, 'error')
-        }
-      })
-      writeQueueRef.current = task
-      return task
-    },
-    [rootPath, toast]
-  )
-
-  const setCardRunning = useCallback((cardId: string, running: boolean) => {
-    const next = new Set(runningCardIdsRef.current)
-    if (running) next.add(cardId)
-    else next.delete(cardId)
-    runningCardIdsRef.current = next
-    setRunningCardIds(next)
-  }, [])
-
-  // Runs a single card: isolate it in a fresh git worktree + branch, advance
-  // it to the next column so it reads as "in progress", hand it to the agent,
-  // then advance it once more once the agent's first reply lands. The branch
-  // itself is left for manual review — Run all never merges anything.
-  //
-  // Worktrees need a real git repo with at least one commit (`git worktree
-  // add ... HEAD` has nothing to check out otherwise). If the workspace isn't
-  // one yet, ask before silently failing — memoized on a ref so concurrent
-  // callers (several cards starting at once from Run all) share one prompt
-  // instead of popping a confirm dialog per card.
-  const ensureRepoPromiseRef = useRef<Promise<boolean> | null>(null)
-  const ensureGitRepo = useCallback((): Promise<boolean> => {
-    if (!rootPath) return Promise.resolve(false)
-    if (ensureRepoPromiseRef.current) return ensureRepoPromiseRef.current
-    const task = (async (): Promise<boolean> => {
-      try {
-        const status = await window.api.gitStatus(rootPath)
-        if (status.isRepo) return true
-        const ok = window.confirm(
-          'Running agents in the background uses isolated git branches, which this folder ' +
-            "doesn't have yet.\n\nInitialize a git repository here (with a first commit of " +
-            'everything currently in the folder)?'
-        )
-        if (!ok) return false
-        await window.api.gitInit(rootPath)
-        await window.api.gitStageAll(rootPath)
-        await window.api.gitCommit(rootPath, 'Initial commit', '')
-        return true
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        toast(`Could not initialize a git repository: ${message}`, 'error')
-        return false
-      } finally {
-        ensureRepoPromiseRef.current = null
-      }
-    })()
-    ensureRepoPromiseRef.current = task
-    return task
-  }, [rootPath, toast])
-
+  // Runs a single card in the background. The actual orchestration (isolated
+  // git worktree, column moves, starting the agent, the fail-closed danger
+  // confirm) lives in kanban.runCard — see commands/kanban.ts. A declined
+  // confirm rejects with a 'denied' CommandRegistryError, which is an
+  // ordinary outcome here (the user said no), not a failure to surface.
   const runCard = useCallback(
-    async (card: KanbanCard, sourceColumnId: string): Promise<void> => {
-      if (!rootPath) return
-      const ready = await ensureGitRepo()
-      if (!ready) return
-      setCardRunning(card.id, true)
-      try {
-        const worktree = await window.api.kanbanWorktreeCreate(rootPath, card.id, card.title)
-        const runningColumn = nextColumnId(boardRef.current ?? board!, sourceColumnId)
-        await moveCardIsolated(card.id, runningColumn)
-        await startAgentInWorktree(card, worktree.path)
-        const settledColumn = nextColumnId(boardRef.current ?? board!, runningColumn)
-        await moveCardIsolated(card.id, settledColumn)
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        toast(`"${card.title}" failed to start: ${message}`, 'error')
-      } finally {
-        setCardRunning(card.id, false)
-      }
-    },
-    [board, ensureGitRepo, moveCardIsolated, rootPath, setCardRunning, startAgentInWorktree, toast]
+    (card: KanbanCard, sourceColumnId: string): Promise<void> =>
+      kanbanRunCard(card.id, sourceColumnId).catch(() => {}),
+    [kanbanRunCard]
   )
 
-  // Kanban "Run all": launches every currently-runnable card in a column,
-  // then — as each one finishes — rechecks the column for cards that just
-  // became unblocked (their dependsOn all reached the done column) and
-  // launches those too, until nothing runnable is left. Independent cards
-  // run concurrently, each in its own worktree.
+  // Kanban "Run all" — kanban.runColumn (commands/kanban.ts) owns the
+  // dependency-ordered scheduling; this just tracks the column-level
+  // "Running…" button state.
   const runAllInColumn = useCallback(
     async (columnId: string) => {
-      if (!board || !rootPath) return
-      const stuck = cyclicCards(board, columnId)
-      if (stuck.length > 0) {
-        toast(
-          `${stuck.length} card(s) have a circular dependency and were skipped: ${stuck
-            .map((c) => c.title)
-            .join(', ')}`,
-          'error'
-        )
-      }
-      const stuckIds = new Set(stuck.map((c) => c.id))
-      const launched = new Set<string>()
-
       setRunningColumns((prev) => new Set(prev).add(columnId))
       try {
-        const launch = async (card: KanbanCard): Promise<void> => {
-          if (launched.has(card.id) || stuckIds.has(card.id)) return
-          if (runningCardIdsRef.current.has(card.id)) return
-          launched.add(card.id)
-          await runCard(card, columnId)
-          const current = boardRef.current
-          if (!current) return
-          const unblocked = runnableCards(current, columnId).filter(
-            (c) => !launched.has(c.id) && !runningCardIdsRef.current.has(c.id)
-          )
-          await Promise.all(unblocked.map((c) => launch(c)))
-        }
-        const initial = runnableCards(board, columnId).filter(
-          (c) => !runningCardIdsRef.current.has(c.id)
-        )
-        await Promise.all(initial.map((c) => launch(c)))
+        await kanbanRunColumn(columnId).catch(() => {})
       } finally {
         setRunningColumns((prev) => {
           const next = new Set(prev)
@@ -571,7 +440,7 @@ export function KanbanView(): React.JSX.Element {
         })
       }
     },
-    [board, rootPath, runCard, toast]
+    [kanbanRunColumn]
   )
 
   const saveCard = useCallback(async () => {
@@ -613,33 +482,14 @@ export function KanbanView(): React.JSX.Element {
   const moveCard = useCallback(
     async (cardId: string, columnId: string, beforeCardId?: string) => {
       if (!board) return
-      const current = board.cards.find((card) => card.id === cardId)
-      if (!current) return
-      const moved: KanbanCard = { ...current, columnId, updatedAt: Date.now() }
-      const cards = board.cards.filter((card) => card.id !== cardId)
-      let insertAt = beforeCardId ? cards.findIndex((card) => card.id === beforeCardId) : -1
-      if (insertAt < 0) {
-        const lastInColumn = cards.reduce(
-          (last, card, index) => (card.columnId === columnId ? index : last),
-          -1
-        )
-        insertAt = lastInColumn + 1
-      }
-      cards.splice(insertAt, 0, moved)
-      const next = { ...board, cards }
-      const saved = await persist(next)
-      if (saved && current.github && rootPath) {
-        void window.api
-          .kanbanGitHubMove(rootPath, saved, cardId, columnId)
-          .catch((err: unknown) => {
-            const message = err instanceof Error ? err.message : String(err)
-            toast(`GitHub status update failed: ${message}`, 'error')
-          })
-      }
+      mutationGeneration.current += 1
+      const saved = await kanbanMoveCard(board, cardId, columnId, beforeCardId)
+      if (saved) setBoard(saved)
+      else await loadBoard()
       setDraggingCardId(null)
       setDropColumnId(null)
     },
-    [board, persist, rootPath, toast]
+    [board, kanbanMoveCard, loadBoard]
   )
 
   const connectGitHub = useCallback(async () => {
@@ -738,7 +588,9 @@ export function KanbanView(): React.JSX.Element {
         {board.columns.map((column) => {
           const cards = cardsByColumn.get(column.id) ?? []
           const isDropTarget = dropColumnId === column.id
-          const runnable = runnableCards(board, column.id).filter((c) => !runningCardIds.has(c.id))
+          const runnable = runnableCards(board, column.id).filter(
+            (c) => !kanbanRunningCardIds.has(c.id)
+          )
           const isRunning = runningColumns.has(column.id)
           return (
             <section
@@ -886,7 +738,7 @@ export function KanbanView(): React.JSX.Element {
                     <div className="kanban-card-actions">
                       <button
                         className="kanban-start-btn"
-                        disabled={runningCardIds.has(card.id)}
+                        disabled={kanbanRunningCardIds.has(card.id)}
                         onClick={(event) => {
                           event.stopPropagation()
                           startAgentFromCard(card)
@@ -897,14 +749,14 @@ export function KanbanView(): React.JSX.Element {
                       </button>
                       <button
                         className="kanban-start-btn kanban-start-btn-bg"
-                        disabled={runningCardIds.has(card.id)}
+                        disabled={kanbanRunningCardIds.has(card.id)}
                         onClick={(event) => {
                           event.stopPropagation()
                           void runCard(card, column.id)
                         }}
                         title="Start an agent on this task in an isolated git worktree, without switching views"
                       >
-                        {runningCardIds.has(card.id) ? '● Running…' : '▶ Start in background'}
+                        {kanbanRunningCardIds.has(card.id) ? '● Running…' : '▶ Start in background'}
                       </button>
                     </div>
                   </article>

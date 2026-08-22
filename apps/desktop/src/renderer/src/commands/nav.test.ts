@@ -27,7 +27,9 @@ function makeHarness(overrides: Partial<AppState> = {}): Harness {
   } as AppState
 
   const dispatched: unknown[] = []
-  const readWorkspaceFile = vi.fn(async (_root: string, relPath: string) => `contents of ${relPath}`)
+  const readWorkspaceFile = vi.fn(
+    async (_root: string, relPath: string) => `contents of ${relPath}`
+  )
   const readSourceExplanation = vi.fn(async (_root: string, sourcePath: string) => ({
     sourcePath,
     documentPath: `.codeswim/explanations/${sourcePath}.md`,
@@ -45,7 +47,8 @@ function makeHarness(overrides: Partial<AppState> = {}): Harness {
     origin,
     activeRoot: state.rootPath,
     executionRoot: origin.kind === 'agent' ? origin.worktree : state.rootPath,
-    confirm: async () => true
+    confirm: async () => true,
+    startAgentInWorktree: async () => {}
   })
 
   const registry = new CommandRegistry(buildCtx)
@@ -57,7 +60,11 @@ describe('nav commands: traversal rejection', () => {
   it('rejects nav.navigateAbsolute for a relPath that escapes the root', async () => {
     const { registry, readWorkspaceFile } = makeHarness()
     await expect(
-      registry.run('nav.navigateAbsolute', { relPath: '../../etc/passwd', pushBreadcrumb: true }, HUMAN)
+      registry.run(
+        'nav.navigateAbsolute',
+        { relPath: '../../etc/passwd', pushBreadcrumb: true },
+        HUMAN
+      )
     ).rejects.toMatchObject({ code: 'invalid-args' })
     expect(readWorkspaceFile).not.toHaveBeenCalled()
   })
@@ -95,7 +102,11 @@ describe('nav commands: traversal rejection', () => {
 describe('nav commands: happy path', () => {
   it('nav.navigateAbsolute reads via the root-scoped api and dispatches load-success', async () => {
     const { registry, dispatched, readWorkspaceFile } = makeHarness()
-    await registry.run('nav.navigateAbsolute', { relPath: 'architecture/auth.md', pushBreadcrumb: true }, HUMAN)
+    await registry.run(
+      'nav.navigateAbsolute',
+      { relPath: 'architecture/auth.md', pushBreadcrumb: true },
+      HUMAN
+    )
     expect(readWorkspaceFile).toHaveBeenCalledWith('/root', 'architecture/auth.md')
     expect(dispatched.some((a) => (a as { type: string }).type === 'load-success')).toBe(true)
   })

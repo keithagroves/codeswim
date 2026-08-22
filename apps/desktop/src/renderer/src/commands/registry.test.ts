@@ -35,7 +35,8 @@ function makeCtxFactory(
       opts.onConfirm?.(summary)
       if (origin.kind === 'agent') return false
       return opts.humanConfirms ?? true
-    }
+    },
+    startAgentInWorktree: async () => {}
   })
 }
 
@@ -86,7 +87,9 @@ describe('CommandRegistry', () => {
   it('rejects args that fail the schema', async () => {
     const registry = new CommandRegistry(makeCtxFactory({ rootPath: null }))
     registry.register(echoCommand())
-    await expect(registry.run('test.echo', {}, HUMAN)).rejects.toMatchObject({ code: 'invalid-args' })
+    await expect(registry.run('test.echo', {}, HUMAN)).rejects.toMatchObject({
+      code: 'invalid-args'
+    })
     await expect(registry.run('test.echo', { value: 3 }, HUMAN)).rejects.toMatchObject({
       code: 'invalid-args'
     })
@@ -209,13 +212,17 @@ describe('CommandRegistry', () => {
 // the same human/agent split the real adapter implements.
 describe('CommandRegistry: danger commands', () => {
   it('runs the handler once a human origin confirms', async () => {
-    const registry = new CommandRegistry(makeCtxFactory({ rootPath: null }, { humanConfirms: true }))
+    const registry = new CommandRegistry(
+      makeCtxFactory({ rootPath: null }, { humanConfirms: true })
+    )
     registry.register(dangerCommand())
     await expect(registry.run('test.danger', { value: 'x' }, HUMAN)).resolves.toBe('did:x')
   })
 
   it('a cancelled human confirmation is a real typed result, not a thrown handler error, and the handler never runs', async () => {
-    const registry = new CommandRegistry(makeCtxFactory({ rootPath: null }, { humanConfirms: false }))
+    const registry = new CommandRegistry(
+      makeCtxFactory({ rootPath: null }, { humanConfirms: false })
+    )
     let ran = false
     registry.register({
       ...dangerCommand(),
@@ -231,7 +238,9 @@ describe('CommandRegistry: danger commands', () => {
   })
 
   it('an agent origin is denied without ever running the handler, even though the command is agent: "listed"', async () => {
-    const registry = new CommandRegistry(makeCtxFactory({ rootPath: null }, { humanConfirms: true }))
+    const registry = new CommandRegistry(
+      makeCtxFactory({ rootPath: null }, { humanConfirms: true })
+    )
     let ran = false
     registry.register({
       ...dangerCommand(),
@@ -247,15 +256,23 @@ describe('CommandRegistry: danger commands', () => {
   })
 
   it('cannot be bypassed by a forged agent origin naming an arbitrary worktree', async () => {
-    const registry = new CommandRegistry(makeCtxFactory({ rootPath: null }, { humanConfirms: true }))
+    const registry = new CommandRegistry(
+      makeCtxFactory({ rootPath: null }, { humanConfirms: true })
+    )
     registry.register(dangerCommand())
     await expect(
-      registry.run('test.danger', { value: 'x' }, { kind: 'agent', sessionId: 'forged', worktree: '/anywhere' })
+      registry.run(
+        'test.danger',
+        { value: 'x' },
+        { kind: 'agent', sessionId: 'forged', worktree: '/anywhere' }
+      )
     ).rejects.toMatchObject({ code: 'denied' })
   })
 
   it('derives the danger summary only after validation, so invalid args never reach it', async () => {
-    const registry = new CommandRegistry(makeCtxFactory({ rootPath: null }, { humanConfirms: true }))
+    const registry = new CommandRegistry(
+      makeCtxFactory({ rootPath: null }, { humanConfirms: true })
+    )
     registry.register<{ value: string }, string>({
       ...dangerCommand(),
       validate: (args) => {
@@ -279,7 +296,10 @@ describe('CommandRegistry: danger commands', () => {
   it('passes the derived summary to confirm', async () => {
     const summaries: string[] = []
     const registry = new CommandRegistry(
-      makeCtxFactory({ rootPath: null }, { humanConfirms: true, onConfirm: (s) => summaries.push(s) })
+      makeCtxFactory(
+        { rootPath: null },
+        { humanConfirms: true, onConfirm: (s) => summaries.push(s) }
+      )
     )
     registry.register(dangerCommand())
     await registry.run('test.danger', { value: 'the-thing' }, HUMAN)

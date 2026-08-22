@@ -6,6 +6,7 @@ import type {
   CommandDescriptor,
   CommandOrigin,
   GitIgnoreResult,
+  KanbanBoard,
   KanbanCard,
   PullRequest
 } from '@codeswim/contract'
@@ -330,6 +331,27 @@ export interface StoreApi {
   // working while it runs in the background. Returns once the agent's first
   // reply has landed (or errored), so a caller can sequence dependent cards.
   startAgentInWorktree(card: KanbanCard, directory: string): Promise<void>
+  // Cards currently mid-flight via kanban.runCard/runColumn (either the
+  // "Start in background" button or "Run all"), for disabling per-card start
+  // buttons and showing a running indicator. Backed by commands/kanban.ts's
+  // KanbanRunTracker so the UI reflects cards auto-launched by "Run all" as
+  // dependencies clear, not just ones the component itself triggered.
+  kanbanRunningCardIds: ReadonlySet<string>
+  // Thin wrappers over commands/kanban.ts (see CommandBus above) — kept on
+  // StoreApi rather than making KanbanView call commands.run directly, same
+  // as every nav.* command.
+  kanbanLoad(root: string): Promise<KanbanBoard | null>
+  kanbanSave(board: KanbanBoard): Promise<KanbanBoard | null>
+  kanbanGitHubSync(board: KanbanBoard): Promise<KanbanBoard | null>
+  kanbanMoveCard(
+    board: KanbanBoard,
+    cardId: string,
+    columnId: string,
+    beforeCardId?: string
+  ): Promise<KanbanBoard | null>
+  kanbanEnsureRepo(): Promise<boolean>
+  kanbanRunCard(cardId: string, sourceColumnId: string): Promise<void>
+  kanbanRunColumn(columnId: string): Promise<void>
 }
 
 export const StoreContext = createContext<StoreApi | null>(null)

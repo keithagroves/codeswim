@@ -26,9 +26,16 @@ import {
 } from '@codeswim/commit'
 import { buildTriagePrompt, parseSyncPlan, type SyncPlan } from '@codeswim/commit'
 import { extname, relativeToRoot, toPosix } from './path-utils'
-import type { CommandOrigin, CommandOutcome, KanbanCard, PullRequest } from '@codeswim/contract'
+import type {
+  CommandOrigin,
+  CommandOutcome,
+  KanbanBoard,
+  KanbanCard,
+  PullRequest
+} from '@codeswim/contract'
 import { CommandRegistry, CommandRegistryError } from './commands/registry'
 import { registerNavCommands } from './commands/nav'
+import { registerKanbanCommands, type KanbanRunTracker } from './commands/kanban'
 import type { CommandCtxFactory } from './commands/context'
 import { SurfaceContextRegistry } from './context/surface-context'
 import { composeScreenContext } from './context/compose-screen-context'
@@ -469,7 +476,7 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, chatMessages: [...state.chatMessages, action.message] }
     case 'chat-upsert-part': {
       const messages = state.chatMessages.slice()
-      let msgIdx = messages.findIndex((m) => m.id === action.messageID)
+      const msgIdx = messages.findIndex((m) => m.id === action.messageID)
       if (msgIdx < 0) {
         messages.push({ id: action.messageID, role: 'assistant', parts: [action.part] })
         return { ...state, chatMessages: messages }
@@ -597,6 +604,12 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
   const agentTabsRestoredForRef = useRef<string | null>(null)
   const stateRef = useRef(state)
   stateRef.current = state
+  // Populated once startAgentInWorktree is declared below; buildCtx (built
+  // above that declaration) reads through this ref rather than closing over
+  // the useCallback result directly, matching stateRef's pattern.
+  const startAgentInWorktreeRef = useRef<(card: KanbanCard, directory: string) => Promise<void>>(
+    async () => {}
+  )
 
   const toast = useCallback((message: string, kind: 'info' | 'error' = 'info') => {
     const id = toastSeq++
@@ -609,6 +622,7 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
   // stable useCallback identities), so every command sees live state
   // regardless of when the registry itself was constructed.
   const commandsRef = useRef<CommandRegistry | null>(null)
+  const kanbanRunTrackerRef = useRef<KanbanRunTracker | null>(null)
   if (!commandsRef.current) {
     const buildCtx: CommandCtxFactory = (origin) => ({
       getState: () => stateRef.current,
@@ -626,13 +640,16 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
         // ships now; only the approval UX is deferred.
         if (origin.kind === 'agent') return false
         return humanConfirmAdapter(summary)
-      }
+      },
+      startAgentInWorktree: (card, directory) => startAgentInWorktreeRef.current(card, directory)
     })
     const registry = new CommandRegistry(buildCtx)
     registerNavCommands(registry)
+    kanbanRunTrackerRef.current = registerKanbanCommands(registry)
     commandsRef.current = registry
   }
   const commands = commandsRef.current
+  const kanbanRunTracker = kanbanRunTrackerRef.current as KanbanRunTracker
 
   // Registry of context blocks contributed by mounted surfaces (see
   // useSurfaceContext) — one instance for the provider's lifetime, same
@@ -643,6 +660,10 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
   }
   const surfaceContext = surfaceContextRef.current
   const surfaceBlocks = useSyncExternalStore(surfaceContext.subscribe, surfaceContext.getSnapshot)
+  const kanbanRunningCardIds = useSyncExternalStore(
+    kanbanRunTracker.subscribe,
+    kanbanRunTracker.getSnapshot
+  )
 
   // A block keyed by e.g. a card id belongs to the workspace that produced
   // it — meaningless (and potentially misleading) once the root changes.
@@ -670,7 +691,11 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
         }
         try {
           const value = await commands.run(request.commandId, request.args, request.origin)
-          await window.api.replyCommand({ id: request.id, kind: 'run', outcome: { ok: true, value } })
+          await window.api.replyCommand({
+            id: request.id,
+            kind: 'run',
+            outcome: { ok: true, value }
+          })
         } catch (err) {
           const outcome: CommandOutcome =
             err instanceof CommandRegistryError
@@ -1156,6 +1181,7 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
     },
     [openAgentTab, sendAgentChat]
   )
+  startAgentInWorktreeRef.current = startAgentInWorktree
 
   const setActiveSection = useCallback(
     (section: Section | null) => dispatch({ type: 'set-active-section', section }),
@@ -1260,12 +1286,17 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
   // changes were required to land the registry.
   const navigateAbsolute = useCallback(
     (relPath: string, pushBreadcrumb: boolean, markdownView?: 'diagram' | 'read') =>
-      commands.run<void>('nav.navigateAbsolute', { relPath, pushBreadcrumb, markdownView }, HUMAN_ORIGIN),
+      commands.run<void>(
+        'nav.navigateAbsolute',
+        { relPath, pushBreadcrumb, markdownView },
+        HUMAN_ORIGIN
+      ),
     [commands]
   )
 
   const inspectFile = useCallback(
-    (relPath: string): Promise<void> => commands.run<void>('nav.inspectFile', { relPath }, HUMAN_ORIGIN),
+    (relPath: string): Promise<void> =>
+      commands.run<void>('nav.inspectFile', { relPath }, HUMAN_ORIGIN),
     [commands]
   )
 
@@ -1293,6 +1324,59 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
 
   const goForward = useCallback(
     (): Promise<void> => commands.run<void>('nav.goForward', {}, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  // KanbanView's workflows are now the command registry's kanban.* commands
+  // (commands/kanban.ts); these are thin delegating wrappers, same pattern
+  // as the nav.* ones above.
+  const kanbanLoad = useCallback(
+    (root: string): Promise<KanbanBoard | null> =>
+      commands.run<KanbanBoard | null>('kanban.load', { root }, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const kanbanSave = useCallback(
+    (board: KanbanBoard): Promise<KanbanBoard | null> =>
+      commands.run<KanbanBoard | null>('kanban.save', { board }, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const kanbanGitHubSync = useCallback(
+    (board: KanbanBoard): Promise<KanbanBoard | null> =>
+      commands.run<KanbanBoard | null>('kanban.githubSync', { board }, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const kanbanMoveCard = useCallback(
+    (
+      board: KanbanBoard,
+      cardId: string,
+      columnId: string,
+      beforeCardId?: string
+    ): Promise<KanbanBoard | null> =>
+      commands.run<KanbanBoard | null>(
+        'kanban.moveCard',
+        { board, cardId, columnId, beforeCardId },
+        HUMAN_ORIGIN
+      ),
+    [commands]
+  )
+
+  const kanbanEnsureRepo = useCallback(
+    (): Promise<boolean> => commands.run<boolean>('kanban.ensureRepo', {}, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const kanbanRunCard = useCallback(
+    (cardId: string, sourceColumnId: string): Promise<void> =>
+      commands.run<void>('kanban.runCard', { cardId, sourceColumnId }, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const kanbanRunColumn = useCallback(
+    (columnId: string): Promise<void> =>
+      commands.run<void>('kanban.runColumn', { columnId }, HUMAN_ORIGIN),
     [commands]
   )
 
@@ -1995,7 +2079,15 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       activateAgentTab,
       sendAgentChat,
       startAgentFromCard,
-      startAgentInWorktree
+      startAgentInWorktree,
+      kanbanRunningCardIds,
+      kanbanLoad,
+      kanbanSave,
+      kanbanGitHubSync,
+      kanbanMoveCard,
+      kanbanEnsureRepo,
+      kanbanRunCard,
+      kanbanRunColumn
     }),
     [
       state,
@@ -2054,7 +2146,15 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       activateAgentTab,
       sendAgentChat,
       startAgentFromCard,
-      startAgentInWorktree
+      startAgentInWorktree,
+      kanbanRunningCardIds,
+      kanbanLoad,
+      kanbanSave,
+      kanbanGitHubSync,
+      kanbanMoveCard,
+      kanbanEnsureRepo,
+      kanbanRunCard,
+      kanbanRunColumn
     ]
   )
 

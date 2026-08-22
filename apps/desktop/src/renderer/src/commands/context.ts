@@ -1,5 +1,5 @@
 import type { Dispatch } from 'react'
-import type { CommandDanger, CommandOrigin, DiagramNavApi } from '@codeswim/contract'
+import type { CommandDanger, CommandOrigin, DiagramNavApi, KanbanCard } from '@codeswim/contract'
 import type { AppState } from '../store'
 import type { Action } from '../state'
 
@@ -26,6 +26,12 @@ export interface CommandCtx {
   // resolve false unless a future approval service grants a scoped
   // exception — see plans/command-bus-and-screen-context.md Phase 4.
   confirm(danger: CommandDanger, summary: string): Promise<boolean>
+  // Starts an agent on a card inside an isolated worktree, awaiting its first
+  // reply. Only used by agent:'never' commands (kanban.runCard/runColumn) —
+  // an agent-reachable command must never call this, to avoid a tool
+  // recursively spawning another agent session (see plans/
+  // command-bus-and-screen-context.md Phase 5).
+  startAgentInWorktree(card: KanbanCard, directory: string): Promise<void>
 }
 
 export type CommandCtxFactory = (origin: CommandOrigin) => CommandCtx
