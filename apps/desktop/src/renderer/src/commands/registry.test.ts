@@ -36,7 +36,13 @@ function makeCtxFactory(
       if (origin.kind === 'agent') return false
       return opts.humanConfirms ?? true
     },
-    startAgentInWorktree: async () => {}
+    startAgentInWorktree: async () => {},
+    planSync: async () => {
+      throw new Error('not used by registry tests')
+    },
+    commitGroup: async () => {
+      throw new Error('not used by registry tests')
+    }
   })
 }
 

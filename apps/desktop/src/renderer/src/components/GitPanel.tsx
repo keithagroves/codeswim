@@ -6,7 +6,7 @@ import type {
   GitSyncResult,
   KanbanWorktreeInfo
 } from '@codeswim/contract'
-import { runCoverage } from '../coverage/run'
+import { flattenChanges } from '../commands/git'
 import type { CoverageReport } from '@codeswim/coverage'
 import type { SyncPlan } from '@codeswim/commit'
 
@@ -40,52 +40,6 @@ type Phase =
   | { kind: 'done'; commits: Array<{ subject: string; sha: string }>; sync: GitSyncResult }
   | { kind: 'error'; message: string }
 
-function coverageIssueCount(r: CoverageReport): number {
-  return (
-    r.brokenLinks.length +
-    r.orphanDiagrams.length +
-    r.uncoveredSources.length +
-    r.mermaidIssues.length
-  )
-}
-
-// Plain-language verb for a porcelain worktree/index code, for the change list.
-function changeVerb(code: string): string {
-  switch (code) {
-    case 'A':
-      return 'added'
-    case 'M':
-      return 'edited'
-    case 'D':
-      return 'deleted'
-    case 'R':
-      return 'renamed'
-    case 'C':
-      return 'copied'
-    case '?':
-      return 'new'
-    default:
-      return 'changed'
-  }
-}
-
-// Collapse git's staged/unstaged/untracked split into a single list the user
-// can read: one row per path with a plain-language verb. Staged wins over
-// worktree for the verb, untracked reads as "new".
-interface SimpleChange {
-  path: string
-  verb: string
-}
-function flattenChanges(git: GitStatus): SimpleChange[] {
-  const byPath = new Map<string, string>()
-  for (const f of git.unstaged) byPath.set(f.path, changeVerb(f.worktree))
-  for (const f of git.staged) byPath.set(f.path, changeVerb(f.index))
-  for (const p of git.untracked) byPath.set(p, 'new')
-  return [...byPath.entries()]
-    .map(([path, verb]) => ({ path, verb }))
-    .sort((a, b) => a.path.localeCompare(b.path))
-}
-
 // A card worktree's branch reads as `codeswim/<slug>-<base36 timestamp>`
 // (see gitWorktreeAdd). Strip the prefix and that uniquing suffix back into
 // something close to the card title for the target switcher. The suffix test
@@ -99,8 +53,19 @@ function branchLabel(w: KanbanWorktreeInfo): string {
 }
 
 export function GitPanel(): React.JSX.Element {
-  const { state, toast, planSync, commitGroup, addToGitignore, syncDiagrams, showFileDiff } =
-    useStore()
+  const {
+    state,
+    toast,
+    addToGitignore,
+    syncDiagrams,
+    showFileDiff,
+    gitRefreshStatus,
+    gitLoadHistory,
+    gitInitRepo,
+    gitSync,
+    gitCommitPlan,
+    kanbanListWorktrees
+  } = useStore()
   const root = state.rootPath
   // Kanban "Run all" leaves each card's agent output uncommitted in its own
   // worktree, on purpose — nothing auto-commits. The Sync panel is where that
@@ -125,14 +90,14 @@ export function GitPanel(): React.JSX.Element {
   const refreshStatus = useCallback(async () => {
     if (!dir) return
     try {
-      const s = await window.api.gitStatus(dir)
+      const s = await gitRefreshStatus(dir)
       setGit(s)
       setStatusError(null)
     } catch (err) {
       setStatusError(err instanceof Error ? err.message : String(err))
       setGit(null)
     }
-  }, [dir])
+  }, [dir, gitRefreshStatus])
 
   // Load on mount / when the workspace changes, and whenever the file tree
   // shifts. Inlined (rather than calling refreshStatus) so the only setState
@@ -143,7 +108,7 @@ export function GitPanel(): React.JSX.Element {
     let cancelled = false
     void (async () => {
       try {
-        const s = await window.api.gitStatus(dir)
+        const s = await gitRefreshStatus(dir)
         if (!cancelled) {
           setGit(s)
           setStatusError(null)
@@ -158,7 +123,7 @@ export function GitPanel(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [dir, state.tree])
+  }, [dir, state.tree, gitRefreshStatus])
 
   // Card worktrees. Refreshed alongside status, but note that a "Run all"
   // launch — or an agent editing files inside a worktree — changes nothing in
@@ -169,20 +134,20 @@ export function GitPanel(): React.JSX.Element {
   const refreshWorktrees = useCallback(async () => {
     if (!root) return
     try {
-      const list = await window.api.kanbanWorktreeList(root)
+      const list = await kanbanListWorktrees(root)
       setWorktrees(list)
       setTargetCardId((id) => (id && !list.some((w) => w.cardId === id) ? null : id))
     } catch {
       setWorktrees([])
     }
-  }, [root])
+  }, [root, kanbanListWorktrees])
 
   useEffect(() => {
     if (!root) return
     let cancelled = false
     void (async () => {
       try {
-        const list = await window.api.kanbanWorktreeList(root)
+        const list = await kanbanListWorktrees(root)
         if (cancelled) return
         setWorktrees(list)
         setTargetCardId((id) => (id && !list.some((w) => w.cardId === id) ? null : id))
@@ -193,7 +158,7 @@ export function GitPanel(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [root, state.tree, historyNonce])
+  }, [root, state.tree, historyNonce, kanbanListWorktrees])
 
   // Load commit history when the History tab is active (and after each new
   // commit, via historyNonce).
@@ -202,7 +167,7 @@ export function GitPanel(): React.JSX.Element {
     let cancelled = false
     void (async () => {
       try {
-        const log = await window.api.gitLog(dir, 200)
+        const log = await gitLoadHistory(dir, 200)
         if (!cancelled) {
           setCommits(log)
           setHistoryError(null)
@@ -217,139 +182,64 @@ export function GitPanel(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [tab, dir, historyNonce])
+  }, [tab, dir, historyNonce, gitLoadHistory])
 
-  // Commit every group in a plan, sequentially, then back the commits up to the
-  // remote (pull + push). The commits are saved locally before we touch the
-  // network, so a failed/absent push never loses the user's work — the done
-  // screen just reports "saved here" instead of "backed up online".
+  // Commits every group in a plan, then backs the commits up to the remote
+  // (pull + push) — see commands/git.ts's doCommitPlan for the actual work.
+  // The commits are saved locally before the network is touched, so a
+  // failed/absent push never loses the user's work.
   const commitPlan = useCallback(
     async (plan: SyncPlan) => {
       if (!dir) return
       setPhase({ kind: 'working', label: 'Saving…' })
-      const done: Array<{ subject: string; sha: string }> = []
       try {
-        for (const g of plan.groups) {
-          const sha = await commitGroup(g.paths, g.subject, g.body, dir)
-          done.push({ subject: g.subject, sha })
-        }
+        const { commits: done, sync } = await gitCommitPlan(dir, plan)
+        setPhase({ kind: 'done', commits: done, sync })
+        setHistoryNonce((n) => n + 1)
+        await refreshStatus()
       } catch (err) {
         setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
-        return
       }
-      setPhase({ kind: 'working', label: 'Backing up online…' })
-      let sync: GitSyncResult
-      try {
-        sync = await window.api.gitPush(dir)
-      } catch (err) {
-        sync = {
-          remote: true,
-          pushed: false,
-          branch: null,
-          conflict: false,
-          error: err instanceof Error ? err.message : String(err)
-        }
-      }
-      setPhase({ kind: 'done', commits: done, sync })
-      setHistoryNonce((n) => n + 1)
-      await refreshStatus()
     },
-    [dir, commitGroup, refreshStatus]
+    [dir, gitCommitPlan, refreshStatus]
   )
 
-  // The Sync button. Coverage-gates first (for diagram repos), then asks the
-  // agent to triage. A simple, safe change commits itself; anything else lands
-  // on the review screen.
+  // The Sync button — see commands/git.ts's doSync for the coverage
+  // gate → triage → auto-commit-if-obvious flow.
   const onSync = useCallback(
     async (instruction?: string) => {
       if (!dir) return
       setPhase({ kind: 'working', label: 'Looking at your changes…' })
-
-      // 1. Coverage gate — only for codeswim-style repos that have diagrams,
-      // and only for the workspace itself. A card branch is reviewed (and
-      // gated) when it lands back on the workspace; blocking here would ask
-      // the user to fix diagrams in a checkout they aren't looking at, and the
-      // "let the agent fix it" action runs against the workspace anyway.
-      if (!target) {
-        let report: CoverageReport
-        try {
-          report = await runCoverage(dir)
-        } catch (err) {
-          setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
-          return
-        }
-        if (report.totals.diagrams > 0 && coverageIssueCount(report) > 0) {
-          setPhase({ kind: 'blocked', report })
-          return
-        }
-      }
-
-      // 2. Gather the working picture.
-      let status: GitStatus
-      let diff: string
       try {
-        status = await window.api.gitStatus(dir)
-        diff = await window.api.gitWorkingDiff(dir)
+        const outcome = await gitSync(dir, target !== null, instruction)
+        switch (outcome.kind) {
+          case 'blocked':
+            setPhase({ kind: 'blocked', report: outcome.report })
+            return
+          case 'nothing-changed':
+            setPhase({ kind: 'error', message: 'Nothing has changed since your last commit.' })
+            return
+          case 'plan':
+            setPhase({ kind: 'plan', plan: outcome.plan })
+            return
+          case 'done':
+            setPhase({ kind: 'done', commits: outcome.commits, sync: outcome.sync })
+            setHistoryNonce((n) => n + 1)
+            await refreshStatus()
+            return
+        }
       } catch (err) {
         setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
-        return
       }
-      const changes = flattenChanges(status)
-      if (changes.length === 0) {
-        setPhase({ kind: 'error', message: 'Nothing has changed since your last commit.' })
-        return
-      }
-      const changedPaths = changes.map((c) => c.path)
-
-      // 3. Triage with the agent.
-      setPhase({ kind: 'working', label: 'Asking the agent to sort it out…' })
-      let plan: SyncPlan
-      try {
-        plan = await planSync(diff, changedPaths, instruction)
-      } catch (err) {
-        setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
-        return
-      }
-      // The agent sometimes returns no usable groups (e.g. it lumped everything
-      // under "ignore", or named paths that didn't match). Never dead-end when
-      // there are real changes — fall back to a single catch-all commit the
-      // user can review and reword. Drop any path it flagged to ignore.
-      if (plan.groups.length === 0) {
-        const ignored = new Set(plan.ignore.map((i) => i.pattern))
-        const remaining = changedPaths.filter((p) => !ignored.has(p))
-        if (remaining.length === 0) {
-          // Everything is ignore-flagged — offer just the ignore guardrails.
-          setPhase({ kind: 'plan', plan })
-          return
-        }
-        plan = {
-          ...plan,
-          obvious: false,
-          groups: [
-            {
-              subject: plan.summary || 'Update files',
-              body: plan.summary,
-              paths: remaining
-            }
-          ]
-        }
-      }
-
-      // 4. Obvious + safe → just commit. Otherwise let the user review.
-      if (plan.obvious) {
-        await commitPlan(plan)
-        return
-      }
-      setPhase({ kind: 'plan', plan })
     },
-    [dir, target, planSync, commitPlan]
+    [dir, target, gitSync, refreshStatus]
   )
 
   const onInit = useCallback(async () => {
     if (!root) return
     setPhase({ kind: 'working', label: 'Initializing repository…' })
     try {
-      const res = await window.api.gitInit(root)
+      const res = await gitInitRepo(root)
       setPhase({ kind: 'idle' })
       await refreshStatus()
       toast(
@@ -361,7 +251,7 @@ export function GitPanel(): React.JSX.Element {
     } catch (err) {
       setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
     }
-  }, [root, refreshStatus, toast])
+  }, [root, gitInitRepo, refreshStatus, toast])
 
   const onIgnore = useCallback(
     async (patterns: string[]) => {

@@ -5,13 +5,19 @@ import type { SyncPlan } from '@codeswim/commit'
 import type {
   CommandDescriptor,
   CommandOrigin,
+  GitCommitEntry,
   GitIgnoreResult,
+  GitInitResult,
+  GitStatus,
+  GitSyncResult,
   KanbanBoard,
   KanbanCard,
+  KanbanWorktreeInfo,
   PullRequest
 } from '@codeswim/contract'
 import type { LineRange } from './path-utils'
 import type { SurfaceContextRegistry } from './context/surface-context'
+import type { GitSyncOutcome } from './commands/git'
 
 export type { LineRange } from './path-utils'
 
@@ -352,6 +358,17 @@ export interface StoreApi {
   kanbanEnsureRepo(): Promise<boolean>
   kanbanRunCard(cardId: string, sourceColumnId: string): Promise<void>
   kanbanRunColumn(columnId: string): Promise<void>
+  kanbanListWorktrees(root: string): Promise<KanbanWorktreeInfo[]>
+  // Thin wrappers over commands/git.ts, same pattern as the kanban.* ones
+  // above.
+  gitRefreshStatus(dir: string): Promise<GitStatus>
+  gitLoadHistory(dir: string, limit: number): Promise<GitCommitEntry[]>
+  gitInitRepo(root: string): Promise<GitInitResult>
+  gitSync(dir: string, isCardTarget: boolean, instruction?: string): Promise<GitSyncOutcome>
+  gitCommitPlan(
+    dir: string,
+    plan: SyncPlan
+  ): Promise<{ commits: Array<{ subject: string; sha: string }>; sync: GitSyncResult }>
 }
 
 export const StoreContext = createContext<StoreApi | null>(null)

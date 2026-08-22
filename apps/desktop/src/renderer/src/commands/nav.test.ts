@@ -48,7 +48,13 @@ function makeHarness(overrides: Partial<AppState> = {}): Harness {
     activeRoot: state.rootPath,
     executionRoot: origin.kind === 'agent' ? origin.worktree : state.rootPath,
     confirm: async () => true,
-    startAgentInWorktree: async () => {}
+    startAgentInWorktree: async () => {},
+    planSync: async () => {
+      throw new Error('not used by nav commands')
+    },
+    commitGroup: async () => {
+      throw new Error('not used by nav commands')
+    }
   })
 
   const registry = new CommandRegistry(buildCtx)

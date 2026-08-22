@@ -1,4 +1,4 @@
-import type { KanbanBoard, KanbanCard } from '@codeswim/contract'
+import type { KanbanBoard, KanbanCard, KanbanWorktreeInfo } from '@codeswim/contract'
 import { cyclicCards, nextColumnId, runnableCards } from '../kanban-run-all'
 import type { CommandCtx } from './context'
 import type { CommandRegistry } from './registry'
@@ -50,6 +50,17 @@ export class KanbanRunTracker {
 
 export interface KanbanLoadArgs {
   root: string
+}
+
+async function runListWorktrees(
+  args: KanbanLoadArgs,
+  ctx: CommandCtx
+): Promise<KanbanWorktreeInfo[]> {
+  try {
+    return await ctx.api.kanbanWorktreeList(args.root)
+  } catch {
+    return []
+  }
 }
 
 async function runLoad(
@@ -335,6 +346,16 @@ export function registerKanbanCommands(registry: CommandRegistry): KanbanRunTrac
     schema: { type: 'object', required: ['root'], properties: { root: { type: 'string' } } },
     agent: 'listed',
     run: (args, ctx) => runLoad(args, ctx, cache)
+  })
+
+  registry.register<KanbanLoadArgs, KanbanWorktreeInfo[]>({
+    id: 'kanban.listWorktrees',
+    domain: 'kanban',
+    title: 'List card worktrees',
+    description: "Lists a workspace's card worktrees (created by Run all / Start in background).",
+    schema: { type: 'object', required: ['root'], properties: { root: { type: 'string' } } },
+    agent: 'listed',
+    run: runListWorktrees
   })
 
   registry.register<KanbanSaveArgs, KanbanBoard | null>({

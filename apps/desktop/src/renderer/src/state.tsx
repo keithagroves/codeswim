@@ -29,13 +29,20 @@ import { extname, relativeToRoot, toPosix } from './path-utils'
 import type {
   CommandOrigin,
   CommandOutcome,
+  GitCommitEntry,
+  GitInitResult,
+  GitStatus,
+  GitSyncResult,
   KanbanBoard,
   KanbanCard,
+  KanbanWorktreeInfo,
   PullRequest
 } from '@codeswim/contract'
 import { CommandRegistry, CommandRegistryError } from './commands/registry'
 import { registerNavCommands } from './commands/nav'
+import type { GitSyncOutcome } from './commands/git'
 import { registerKanbanCommands, type KanbanRunTracker } from './commands/kanban'
+import { registerGitCommands } from './commands/git'
 import type { CommandCtxFactory } from './commands/context'
 import { SurfaceContextRegistry } from './context/surface-context'
 import { composeScreenContext } from './context/compose-screen-context'
@@ -610,6 +617,16 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
   const startAgentInWorktreeRef = useRef<(card: KanbanCard, directory: string) => Promise<void>>(
     async () => {}
   )
+  const planSyncRef = useRef<
+    (diff: string, changedPaths: string[], instruction?: string) => Promise<SyncPlan>
+  >(async () => {
+    throw new Error('planSync not ready')
+  })
+  const commitGroupRef = useRef<
+    (paths: string[], subject: string, body: string, dir?: string) => Promise<string>
+  >(async () => {
+    throw new Error('commitGroup not ready')
+  })
 
   const toast = useCallback((message: string, kind: 'info' | 'error' = 'info') => {
     const id = toastSeq++
@@ -641,11 +658,15 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
         if (origin.kind === 'agent') return false
         return humanConfirmAdapter(summary)
       },
-      startAgentInWorktree: (card, directory) => startAgentInWorktreeRef.current(card, directory)
+      startAgentInWorktree: (card, directory) => startAgentInWorktreeRef.current(card, directory),
+      planSync: (diff, changedPaths, instruction) =>
+        planSyncRef.current(diff, changedPaths, instruction),
+      commitGroup: (paths, subject, body, dir) => commitGroupRef.current(paths, subject, body, dir)
     })
     const registry = new CommandRegistry(buildCtx)
     registerNavCommands(registry)
     kanbanRunTrackerRef.current = registerKanbanCommands(registry)
+    registerGitCommands(registry)
     commandsRef.current = registry
   }
   const commands = commandsRef.current
@@ -1380,6 +1401,48 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
     [commands]
   )
 
+  // GitPanel's workflows are now the command registry's git.* commands
+  // (commands/git.ts); these are thin delegating wrappers, same pattern as
+  // the nav.*/kanban.* ones above.
+  const kanbanListWorktrees = useCallback(
+    (root: string): Promise<KanbanWorktreeInfo[]> =>
+      commands.run<KanbanWorktreeInfo[]>('kanban.listWorktrees', { root }, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const gitRefreshStatus = useCallback(
+    (dir: string): Promise<GitStatus> =>
+      commands.run<GitStatus>('git.refreshStatus', { dir }, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const gitLoadHistory = useCallback(
+    (dir: string, limit: number): Promise<GitCommitEntry[]> =>
+      commands.run<GitCommitEntry[]>('git.loadHistory', { dir, limit }, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const gitInitRepo = useCallback(
+    (root: string): Promise<GitInitResult> =>
+      commands.run<GitInitResult>('git.init', { root }, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const gitSync = useCallback(
+    (dir: string, isCardTarget: boolean, instruction?: string): Promise<GitSyncOutcome> =>
+      commands.run<GitSyncOutcome>('git.sync', { dir, isCardTarget, instruction }, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const gitCommitPlan = useCallback(
+    (
+      dir: string,
+      plan: SyncPlan
+    ): Promise<{ commits: Array<{ subject: string; sha: string }>; sync: GitSyncResult }> =>
+      commands.run('git.commitPlan', { dir, plan }, HUMAN_ORIGIN),
+    [commands]
+  )
+
   const findEntryFile = useCallback(async (rootPath: string): Promise<string | null> => {
     const files = await window.api.listMarkdown(rootPath)
     if (files.length === 0) return null
@@ -1689,6 +1752,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
     },
     [ensureAgent]
   )
+  planSyncRef.current = planSync
 
   const commitGroup = useCallback(
     async (paths: string[], subject: string, body: string, dir?: string): Promise<string> => {
@@ -1699,6 +1763,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
     },
     []
   )
+  commitGroupRef.current = commitGroup
 
   const addToGitignore = useCallback(async (patterns: string[], dir?: string) => {
     const target = dir ?? stateRef.current.rootPath
@@ -2087,7 +2152,13 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       kanbanMoveCard,
       kanbanEnsureRepo,
       kanbanRunCard,
-      kanbanRunColumn
+      kanbanRunColumn,
+      kanbanListWorktrees,
+      gitRefreshStatus,
+      gitLoadHistory,
+      gitInitRepo,
+      gitSync,
+      gitCommitPlan
     }),
     [
       state,
@@ -2154,7 +2225,13 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       kanbanMoveCard,
       kanbanEnsureRepo,
       kanbanRunCard,
-      kanbanRunColumn
+      kanbanRunColumn,
+      kanbanListWorktrees,
+      gitRefreshStatus,
+      gitLoadHistory,
+      gitInitRepo,
+      gitSync,
+      gitCommitPlan
     ]
   )
 

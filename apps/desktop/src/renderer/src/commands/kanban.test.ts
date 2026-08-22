@@ -92,6 +92,12 @@ function makeHarness(opts: { confirmResult?: boolean } = {}): Harness {
     },
     startAgentInWorktree: async (c, directory) => {
       startedAgents.push({ cardId: c.id, directory })
+    },
+    planSync: async () => {
+      throw new Error('not used by kanban commands')
+    },
+    commitGroup: async () => {
+      throw new Error('not used by kanban commands')
     }
   })
 

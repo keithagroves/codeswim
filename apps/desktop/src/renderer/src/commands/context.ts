@@ -1,5 +1,6 @@
 import type { Dispatch } from 'react'
 import type { CommandDanger, CommandOrigin, DiagramNavApi, KanbanCard } from '@codeswim/contract'
+import type { SyncPlan } from '@codeswim/commit'
 import type { AppState } from '../store'
 import type { Action } from '../state'
 
@@ -32,6 +33,13 @@ export interface CommandCtx {
   // recursively spawning another agent session (see plans/
   // command-bus-and-screen-context.md Phase 5).
   startAgentInWorktree(card: KanbanCard, directory: string): Promise<void>
+  // Ephemeral-session agent triage, used by git.sync — never shows up in the
+  // chat the user reads. Only used by agent:'never' commands, same
+  // recursion-avoidance rule as startAgentInWorktree above.
+  planSync(diff: string, changedPaths: string[], instruction?: string): Promise<SyncPlan>
+  // Commits one group (paths + subject/body) and returns its sha. Used by
+  // git.sync/git.commitPlan; same agent:'never'-only rule.
+  commitGroup(paths: string[], subject: string, body: string, dir?: string): Promise<string>
 }
 
 export type CommandCtxFactory = (origin: CommandOrigin) => CommandCtx
