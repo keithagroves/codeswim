@@ -1,11 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useStore } from '../store'
-import type {
-  SkillFileNode,
-  SkillListResult,
-  SkillScope,
-  SkillSummary
-} from '@codeswim/contract'
+import type { SkillFileNode, SkillListResult, SkillScope, SkillSummary } from '@codeswim/contract'
 
 const SKILL_FILENAME = 'SKILL.md'
 
@@ -56,7 +51,16 @@ function loadCollapsed(): ReadonlySet<SkillScope> {
 const skillKey = (scope: SkillScope, name: string): string => `${scope}:${name}`
 
 export function SkillsPanel(): React.JSX.Element {
-  const { state, setCurrentSkill, setToolsTab, toast } = useStore()
+  const {
+    state,
+    setCurrentSkill,
+    setToolsTab,
+    toast,
+    skillsList,
+    skillsListFiles,
+    skillsCreate,
+    skillsLinkFolder
+  } = useStore()
   const toolsTab = state.toolsTab
   const [list, setList] = useState<SkillListResult | null>(null)
   const [creatingIn, setCreatingIn] = useState<'global' | 'workspace' | null>(null)
@@ -86,7 +90,7 @@ export function SkillsPanel(): React.JSX.Element {
 
   const refresh = useCallback(async () => {
     try {
-      const next = await window.api.listSkills(state.rootPath)
+      const next = await skillsList(state.rootPath)
       setList(next)
       // Drop tree caches — file layouts may have changed underneath.
       setTrees({})
@@ -94,7 +98,7 @@ export function SkillsPanel(): React.JSX.Element {
       const msg = err instanceof Error ? err.message : String(err)
       toast(`Could not list skills: ${msg}`, 'error')
     }
-  }, [state.rootPath, toast])
+  }, [state.rootPath, skillsList, toast])
 
   useEffect(() => {
     void refresh()
@@ -105,7 +109,7 @@ export function SkillsPanel(): React.JSX.Element {
       const key = skillKey(scope, name)
       setTrees((prev) => ({ ...prev, [key]: 'loading' }))
       try {
-        const tree = await window.api.listSkillFiles(scope, name, state.rootPath)
+        const tree = await skillsListFiles(scope, name, state.rootPath)
         setTrees((prev) => ({ ...prev, [key]: tree }))
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -113,7 +117,7 @@ export function SkillsPanel(): React.JSX.Element {
         setTrees((prev) => ({ ...prev, [key]: [] }))
       }
     },
-    [state.rootPath, toast]
+    [state.rootPath, skillsListFiles, toast]
   )
 
   const onSkillClick = useCallback(
@@ -172,7 +176,7 @@ export function SkillsPanel(): React.JSX.Element {
     try {
       const source = await window.api.pickSkillLinkSource()
       if (!source) return
-      const result = await window.api.linkSkillFolder(scope, source, state.rootPath)
+      const result = await skillsLinkFolder(scope, source, state.rootPath)
       await refresh()
       const linkedCount = result.linked.length
       const skippedCount = result.skipped.length
@@ -185,7 +189,7 @@ export function SkillsPanel(): React.JSX.Element {
             .slice(0, 5)
             .map((s) => `${s.name}: ${s.reason}`)
             .join(' · ')
-          // eslint-disable-next-line no-console
+
           console.info('[codeswim] skipped skill links:', reasons)
         }
       }
@@ -221,7 +225,7 @@ Write the skill body here. Use the description above to explain *when* the
 agent should pick this up; use this body to explain *what* it should do.
 `
     try {
-      await window.api.writeSkill(scope, name, template, state.rootPath)
+      await skillsCreate(scope, name, template, state.rootPath)
       setCreatingIn(null)
       setNewName('')
       await refresh()

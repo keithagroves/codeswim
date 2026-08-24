@@ -3,6 +3,8 @@ import type { PendingQuestion } from './agent'
 import type { CommitMessage } from '@codeswim/commit'
 import type { SyncPlan } from '@codeswim/commit'
 import type {
+  AgentsDocContent,
+  AgentsScope,
   CommandDescriptor,
   CommandOrigin,
   GitCommitEntry,
@@ -13,7 +15,12 @@ import type {
   KanbanBoard,
   KanbanCard,
   KanbanWorktreeInfo,
-  PullRequest
+  LinkFolderResult,
+  PullRequest,
+  SkillFileContent,
+  SkillFileNode,
+  SkillListResult,
+  SkillScope
 } from '@codeswim/contract'
 import type { LineRange } from './path-utils'
 import type { SurfaceContextRegistry } from './context/surface-context'
@@ -369,6 +376,49 @@ export interface StoreApi {
     dir: string,
     plan: SyncPlan
   ): Promise<{ commits: Array<{ subject: string; sha: string }>; sync: GitSyncResult }>
+  // Thin wrappers over commands/skills.ts, same pattern as the kanban.*/
+  // git.* ones above.
+  skillsList(root: string | null): Promise<SkillListResult>
+  skillsListFiles(scope: SkillScope, name: string, root: string | null): Promise<SkillFileNode[]>
+  skillsReadFile(
+    scope: SkillScope,
+    name: string,
+    path: string,
+    root: string | null
+  ): Promise<SkillFileContent>
+  skillsWriteFile(
+    scope: SkillScope,
+    name: string,
+    path: string,
+    content: string,
+    root: string | null
+  ): Promise<void>
+  skillsReadAgentsDoc(scope: AgentsScope, root: string | null): Promise<AgentsDocContent>
+  skillsWriteAgentsDoc(scope: AgentsScope, content: string, root: string | null): Promise<void>
+  skillsCreate(
+    scope: 'global' | 'workspace',
+    name: string,
+    template: string,
+    root: string | null
+  ): Promise<void>
+  skillsDelete(
+    scope: SkillScope,
+    name: string,
+    linkTarget: string | undefined,
+    root: string | null
+  ): Promise<void>
+  skillsLinkFolder(
+    scope: 'global' | 'workspace',
+    source: string,
+    root: string | null
+  ): Promise<LinkFolderResult>
+  skillsOpenInEditor(
+    scope: SkillScope,
+    name: string,
+    root: string | null,
+    path?: string
+  ): Promise<void>
+  skillsOpenAgentsDocInEditor(scope: AgentsScope, root: string | null): Promise<void>
 }
 
 export const StoreContext = createContext<StoreApi | null>(null)

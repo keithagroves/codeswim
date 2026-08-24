@@ -2,11 +2,23 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { isMarkdownPath, parseFrontmatter, splitFrontmatter } from '../skill-frontmatter'
 import { MarkdownProse } from './MarkdownProse'
+import { CommandRegistryError } from '../commands/registry'
 
 const SKILL_FILENAME = 'SKILL.md'
 
 export function SkillsView(): React.JSX.Element {
-  const { state, setCurrentSkill, toast } = useStore()
+  const {
+    state,
+    setCurrentSkill,
+    toast,
+    skillsReadFile,
+    skillsWriteFile,
+    skillsReadAgentsDoc,
+    skillsWriteAgentsDoc,
+    skillsDelete,
+    skillsOpenInEditor,
+    skillsOpenAgentsDocInEditor
+  } = useStore()
   const current = state.currentSkill
   const selectedPath = current?.file ?? SKILL_FILENAME
 
@@ -44,7 +56,7 @@ export function SkillsView(): React.JSX.Element {
       try {
         if (current.kind === 'agents') {
           const scope = current.scope === 'global' ? 'global' : 'workspace'
-          const result = await window.api.agentsDocRead(scope, state.rootPath)
+          const result = await skillsReadAgentsDoc(scope, state.rootPath)
           if (loadId.current !== id) return
           setBinary(false)
           setFileSize(result.size)
@@ -55,7 +67,7 @@ export function SkillsView(): React.JSX.Element {
           setViewMode(result.exists ? 'rendered' : 'raw')
           return
         }
-        const result = await window.api.readSkillFile(
+        const result = await skillsReadFile(
           current.scope,
           current.name,
           selectedPath,
@@ -80,7 +92,7 @@ export function SkillsView(): React.JSX.Element {
         if (loadId.current === id) setLoading(false)
       }
     })()
-  }, [current, selectedPath, state.rootPath, toast])
+  }, [current, selectedPath, state.rootPath, toast, skillsReadAgentsDoc, skillsReadFile])
 
   const onSave = useCallback(async () => {
     if (!current || isReadOnly || binary) return
@@ -88,15 +100,9 @@ export function SkillsView(): React.JSX.Element {
     try {
       if (current.kind === 'agents') {
         const scope = current.scope === 'global' ? 'global' : 'workspace'
-        await window.api.agentsDocWrite(scope, content, state.rootPath)
+        await skillsWriteAgentsDoc(scope, content, state.rootPath)
       } else {
-        await window.api.writeSkillFile(
-          current.scope,
-          current.name,
-          selectedPath,
-          content,
-          state.rootPath
-        )
+        await skillsWriteFile(current.scope, current.name, selectedPath, content, state.rootPath)
       }
       setOriginal(content)
       toast(`Saved ${selectedPath}`, 'info')
@@ -106,7 +112,17 @@ export function SkillsView(): React.JSX.Element {
     } finally {
       setSaving(false)
     }
-  }, [binary, content, current, isReadOnly, selectedPath, state.rootPath, toast])
+  }, [
+    binary,
+    content,
+    current,
+    isReadOnly,
+    selectedPath,
+    state.rootPath,
+    toast,
+    skillsWriteAgentsDoc,
+    skillsWriteFile
+  ])
 
   const onOpenInEditor = useCallback(async () => {
     if (!current) return
@@ -119,30 +135,32 @@ export function SkillsView(): React.JSX.Element {
     try {
       if (current.kind === 'agents') {
         const scope = current.scope === 'global' ? 'global' : 'workspace'
-        await window.api.agentsDocOpenInEditor(scope, state.rootPath)
+        await skillsOpenAgentsDocInEditor(scope, state.rootPath)
       } else {
-        await window.api.openSkillInEditor(
-          current.scope,
-          current.name,
-          state.rootPath,
-          selectedPath
-        )
+        await skillsOpenInEditor(current.scope, current.name, state.rootPath, selectedPath)
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       toast(`Could not open in editor: ${msg}`, 'error')
     }
-  }, [current, dirty, selectedPath, state.rootPath, toast])
+  }, [
+    current,
+    dirty,
+    selectedPath,
+    state.rootPath,
+    toast,
+    skillsOpenAgentsDocInEditor,
+    skillsOpenInEditor
+  ])
 
+  // The confirm dialog is now commands/skills.ts's danger gate (registry.run
+  // calls ctx.confirm with the same message this used to build by hand) — a
+  // 'denied' rejection means the user said no, which is an ordinary outcome
+  // here, not a failure to report.
   const onDelete = useCallback(async () => {
     if (!current || isReadOnly) return
-    const message = current.linkTarget
-      ? `Unlink "${current.name}" from this scope? The original at ${current.linkTarget} won't be touched.`
-      : `Delete skill "${current.name}"? This removes the entire folder.`
-    const ok = window.confirm(message)
-    if (!ok) return
     try {
-      await window.api.deleteSkill(current.scope, current.name, state.rootPath)
+      await skillsDelete(current.scope, current.name, current.linkTarget, state.rootPath)
       setCurrentSkill(null)
       toast(
         current.linkTarget
@@ -151,10 +169,11 @@ export function SkillsView(): React.JSX.Element {
         'info'
       )
     } catch (err) {
+      if (err instanceof CommandRegistryError && err.code === 'denied') return
       const msg = err instanceof Error ? err.message : String(err)
       toast(`Could not delete skill: ${msg}`, 'error')
     }
-  }, [current, isReadOnly, setCurrentSkill, state.rootPath, toast])
+  }, [current, isReadOnly, setCurrentSkill, state.rootPath, toast, skillsDelete])
 
   if (!current) {
     return (

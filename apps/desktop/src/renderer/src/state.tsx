@@ -27,6 +27,8 @@ import {
 import { buildTriagePrompt, parseSyncPlan, type SyncPlan } from '@codeswim/commit'
 import { extname, relativeToRoot, toPosix } from './path-utils'
 import type {
+  AgentsDocContent,
+  AgentsScope,
   CommandOrigin,
   CommandOutcome,
   GitCommitEntry,
@@ -36,13 +38,19 @@ import type {
   KanbanBoard,
   KanbanCard,
   KanbanWorktreeInfo,
-  PullRequest
+  LinkFolderResult,
+  PullRequest,
+  SkillFileContent,
+  SkillFileNode,
+  SkillListResult,
+  SkillScope
 } from '@codeswim/contract'
 import { CommandRegistry, CommandRegistryError } from './commands/registry'
 import { registerNavCommands } from './commands/nav'
 import type { GitSyncOutcome } from './commands/git'
 import { registerKanbanCommands, type KanbanRunTracker } from './commands/kanban'
 import { registerGitCommands } from './commands/git'
+import { registerSkillsCommands } from './commands/skills'
 import type { CommandCtxFactory } from './commands/context'
 import { SurfaceContextRegistry } from './context/surface-context'
 import { composeScreenContext } from './context/compose-screen-context'
@@ -667,6 +675,7 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
     registerNavCommands(registry)
     kanbanRunTrackerRef.current = registerKanbanCommands(registry)
     registerGitCommands(registry)
+    registerSkillsCommands(registry)
     commandsRef.current = registry
   }
   const commands = commandsRef.current
@@ -1443,6 +1452,100 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
     [commands]
   )
 
+  // SkillsPanel/SkillsView's workflows are now the command registry's
+  // skills.* commands (commands/skills.ts); these are thin delegating
+  // wrappers, same pattern as the nav.*/kanban.*/git.* ones above.
+  const skillsList = useCallback(
+    (root: string | null): Promise<SkillListResult> =>
+      commands.run<SkillListResult>('skills.list', { root }, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const skillsListFiles = useCallback(
+    (scope: SkillScope, name: string, root: string | null): Promise<SkillFileNode[]> =>
+      commands.run<SkillFileNode[]>('skills.listFiles', { scope, name, root }, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const skillsReadFile = useCallback(
+    (
+      scope: SkillScope,
+      name: string,
+      path: string,
+      root: string | null
+    ): Promise<SkillFileContent> =>
+      commands.run<SkillFileContent>('skills.readFile', { scope, name, path, root }, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const skillsWriteFile = useCallback(
+    (
+      scope: SkillScope,
+      name: string,
+      path: string,
+      content: string,
+      root: string | null
+    ): Promise<void> =>
+      commands.run<void>('skills.writeFile', { scope, name, path, content, root }, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const skillsReadAgentsDoc = useCallback(
+    (scope: AgentsScope, root: string | null): Promise<AgentsDocContent> =>
+      commands.run<AgentsDocContent>('skills.readAgentsDoc', { scope, root }, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const skillsWriteAgentsDoc = useCallback(
+    (scope: AgentsScope, content: string, root: string | null): Promise<void> =>
+      commands.run<void>('skills.writeAgentsDoc', { scope, content, root }, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const skillsCreate = useCallback(
+    (
+      scope: 'global' | 'workspace',
+      name: string,
+      template: string,
+      root: string | null
+    ): Promise<void> =>
+      commands.run<void>('skills.create', { scope, name, template, root }, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const skillsDelete = useCallback(
+    (
+      scope: SkillScope,
+      name: string,
+      linkTarget: string | undefined,
+      root: string | null
+    ): Promise<void> =>
+      commands.run<void>('skills.delete', { scope, name, linkTarget, root }, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const skillsLinkFolder = useCallback(
+    (
+      scope: 'global' | 'workspace',
+      source: string,
+      root: string | null
+    ): Promise<LinkFolderResult> =>
+      commands.run<LinkFolderResult>('skills.linkFolder', { scope, source, root }, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const skillsOpenInEditor = useCallback(
+    (scope: SkillScope, name: string, root: string | null, path?: string): Promise<void> =>
+      commands.run<void>('skills.openInEditor', { scope, name, root, path }, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const skillsOpenAgentsDocInEditor = useCallback(
+    (scope: AgentsScope, root: string | null): Promise<void> =>
+      commands.run<void>('skills.openAgentsDocInEditor', { scope, root }, HUMAN_ORIGIN),
+    [commands]
+  )
+
   const findEntryFile = useCallback(async (rootPath: string): Promise<string | null> => {
     const files = await window.api.listMarkdown(rootPath)
     if (files.length === 0) return null
@@ -2158,7 +2261,18 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       gitLoadHistory,
       gitInitRepo,
       gitSync,
-      gitCommitPlan
+      gitCommitPlan,
+      skillsList,
+      skillsListFiles,
+      skillsReadFile,
+      skillsWriteFile,
+      skillsReadAgentsDoc,
+      skillsWriteAgentsDoc,
+      skillsCreate,
+      skillsDelete,
+      skillsLinkFolder,
+      skillsOpenInEditor,
+      skillsOpenAgentsDocInEditor
     }),
     [
       state,
@@ -2231,7 +2345,18 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       gitLoadHistory,
       gitInitRepo,
       gitSync,
-      gitCommitPlan
+      gitCommitPlan,
+      skillsList,
+      skillsListFiles,
+      skillsReadFile,
+      skillsWriteFile,
+      skillsReadAgentsDoc,
+      skillsWriteAgentsDoc,
+      skillsCreate,
+      skillsDelete,
+      skillsLinkFolder,
+      skillsOpenInEditor,
+      skillsOpenAgentsDocInEditor
     ]
   )
 
