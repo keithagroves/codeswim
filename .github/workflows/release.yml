@@ -58,8 +58,7 @@ jobs:
         run: ${{ matrix.build }}
 
   # electron-builder uploads artifacts to a *draft* release; nothing promotes
-  # it. Flip it to published once the builds are in — this is also what fires
-  # the landing-page refresh (which triggers on release: published).
+  # it. Flip it to published once the builds are in.
   publish:
     needs: build
     runs-on: ubuntu-latest
@@ -69,3 +68,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit "${{ github.ref_name }}" --draft=false --repo "${{ github.repository }}"
+
+      # GitHub does not deliver the `release: published` webhook for events
+      # authored by the default GITHUB_TOKEN (anti-loop guard), so
+      # landing-refresh.yml's `on: release: published` trigger never fires
+      # for this automated publish — only for a human clicking "Publish" in
+      # the UI. Dispatch directly instead of relying on that webhook.
+      - name: Trigger landing deploy
+        env:
+          GH_TOKEN: ${{ secrets.LANDING_DISPATCH_TOKEN }}
+        run: |
+          gh api repos/keithagroves/codeswim-landing/dispatches \
+            -f event_type=codeswim-release

@@ -67,6 +67,7 @@ mac:
 dmg:
   artifactName: ${productName}-${version}.${ext}
 linux:
+  executableName: codeswim
   target:
     - AppImage
     - deb
