@@ -1,4 +1,4 @@
-import yaml from 'js-yaml'
+import { load as loadYaml } from 'js-yaml'
 
 export interface Frontmatter {
   name?: string
@@ -22,7 +22,7 @@ function extractFrontmatter(raw: string): { frontmatter: Frontmatter; body: stri
 
   let parsed: Frontmatter = {}
   try {
-    const obj = yaml.load(lines.slice(1, end).join('\n'))
+    const obj = loadYaml(lines.slice(1, end).join('\n'))
     if (obj && typeof obj === 'object') parsed = obj as Frontmatter
   } catch {
     // ignore malformed frontmatter — show prose as-is

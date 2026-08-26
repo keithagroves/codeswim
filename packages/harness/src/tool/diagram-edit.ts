@@ -1,5 +1,5 @@
 import path from 'node:path'
-import yaml from 'js-yaml'
+import { load as loadYaml } from 'js-yaml'
 import type { SessionGate } from '../session-gate'
 
 export interface DiagramEditParams {
@@ -27,7 +27,7 @@ function parseFrontmatter(content: string): Record<string, unknown> | null {
   const m = content.match(FRONTMATTER_RE)
   if (!m) return null
   try {
-    const obj = yaml.load(m[1])
+    const obj = loadYaml(m[1])
     return obj && typeof obj === 'object' ? (obj as Record<string, unknown>) : null
   } catch {
     return null
