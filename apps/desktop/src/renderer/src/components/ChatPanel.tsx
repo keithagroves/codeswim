@@ -323,7 +323,8 @@ const PROVIDER_LABELS: Record<string, string> = {
   vertex: 'Google Vertex',
   bedrock: 'AWS Bedrock',
   azure: 'Azure',
-  'github-copilot': 'GitHub Copilot'
+  'github-copilot': 'GitHub Copilot',
+  pareto: 'Unbiased AI (Pareto)'
 }
 
 // Providers that accept a plain API key via `auth.set`, even when opencode
@@ -340,7 +341,8 @@ const COMMON_API_KEY_PROVIDERS = [
   'mistral',
   'cerebras',
   'deepseek',
-  'fireworks'
+  'fireworks',
+  'pareto'
 ]
 
 function prettyProvider(id: string): string {

@@ -112,7 +112,22 @@ export async function startSidecar(opts: StartOptions): Promise<SidecarHandle> {
     // enforced independently, fail-closed for agent origins, regardless of
     // this setting. A future permission-prompt UI can replace this with
     // `"ask"` for opencode's own sensitive tools.
-    permission: 'allow'
+    permission: 'allow',
+    // Unbiased AI's `pareto` model, OpenAI-compatible. No apiKey here —
+    // opencode fills it in from its own auth store (client.auth.set, same
+    // path the 'Configure an AI provider' UI uses for every other
+    // provider), so a key pasted in-app takes effect without a restart.
+    provider: {
+      pareto: {
+        npm: '@ai-sdk/openai-compatible',
+        options: {
+          baseURL: 'https://api.unbiased.ai/v1'
+        },
+        models: {
+          pareto: {}
+        }
+      }
+    }
   }
 
   // Isolation + config injection rationale lives in sidecar-env.ts.
