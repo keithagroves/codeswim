@@ -1,0 +1,42 @@
+{
+  "version": 2,
+  "workspaceView": "kanban",
+  "focus": {
+    "surface": "kanban",
+    "itemId": null
+  },
+  "runningScript": null,
+  "surfaces": {
+    "kanban": {
+      "columns": [
+        {
+          "id": "backlog",
+          "name": "Backlog",
+          "cardCount": 0
+        },
+        {
+          "id": "ready",
+          "name": "Ready",
+          "cardCount": 0
+        },
+        {
+          "id": "in-progress",
+          "name": "In progress",
+          "cardCount": 0
+        },
+        {
+          "id": "review",
+          "name": "Review",
+          "cardCount": 0
+        },
+        {
+          "id": "done",
+          "name": "Done",
+          "cardCount": 0
+        }
+      ],
+      "openCardId": null,
+      "runningCardIds": []
+    }
+  }
+}
