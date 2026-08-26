@@ -6,6 +6,8 @@ out
 .eslintcache
 *.log*
 .playwright-cli/
+test-results/
+playwright-report/
 pitch/
 .env
 .env.*
