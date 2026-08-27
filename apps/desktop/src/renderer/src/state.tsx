@@ -32,6 +32,8 @@ import type {
   CommandOrigin,
   CommandOutcome,
   GitCommitEntry,
+  GitHubSignInResult,
+  GitHubStatus,
   GitInitResult,
   GitStatus,
   GitSyncResult,
@@ -39,7 +41,11 @@ import type {
   KanbanCard,
   KanbanWorktreeInfo,
   LinkFolderResult,
+  MergeMethod,
+  MergeResult,
   PullRequest,
+  PullRequestList,
+  RoomIdentity,
   SkillFileContent,
   SkillFileNode,
   SkillListResult,
@@ -51,6 +57,7 @@ import type { GitSyncOutcome } from './commands/git'
 import { registerKanbanCommands, type KanbanRunTracker } from './commands/kanban'
 import { registerGitCommands } from './commands/git'
 import { registerSkillsCommands } from './commands/skills'
+import { registerGitHubCommands } from './commands/github'
 import type { CommandCtxFactory } from './commands/context'
 import { SurfaceContextRegistry } from './context/surface-context'
 import { composeScreenContext } from './context/compose-screen-context'
@@ -676,6 +683,7 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
     kanbanRunTrackerRef.current = registerKanbanCommands(registry)
     registerGitCommands(registry)
     registerSkillsCommands(registry)
+    registerGitHubCommands(registry)
     commandsRef.current = registry
   }
   const commands = commandsRef.current
@@ -1546,6 +1554,49 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
     [commands]
   )
 
+  // RoomChatPanel/PullRequestsPanel's workflows are now the command
+  // registry's github.* commands (commands/github.ts); these are thin
+  // delegating wrappers, same pattern as the nav.*/kanban.*/git.*/skills.*
+  // ones above.
+  const githubRoomIdentity = useCallback(
+    (root: string): Promise<RoomIdentity | null> =>
+      commands.run<RoomIdentity | null>('github.roomIdentity', { root }, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const githubAuthStatus = useCallback(
+    (): Promise<GitHubStatus> => commands.run<GitHubStatus>('github.status', {}, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const githubAccessToken = useCallback(
+    (): Promise<string | null> => commands.run<string | null>('github.token', {}, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const githubSignIn = useCallback(
+    (): Promise<GitHubSignInResult | { error: string }> =>
+      commands.run<GitHubSignInResult | { error: string }>('github.signIn', {}, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const githubSignOut = useCallback(
+    (): Promise<void> => commands.run<void>('github.signOut', {}, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const githubListPullRequests = useCallback(
+    (root: string, filter?: 'open' | 'closed' | 'all'): Promise<PullRequestList> =>
+      commands.run<PullRequestList>('github.listPullRequests', { root, filter }, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const githubMergePullRequest = useCallback(
+    (root: string, number: number, method?: MergeMethod): Promise<MergeResult> =>
+      commands.run<MergeResult>('github.mergePullRequest', { root, number, method }, HUMAN_ORIGIN),
+    [commands]
+  )
+
   const findEntryFile = useCallback(async (rootPath: string): Promise<string | null> => {
     const files = await window.api.listMarkdown(rootPath)
     if (files.length === 0) return null
@@ -2272,7 +2323,14 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       skillsDelete,
       skillsLinkFolder,
       skillsOpenInEditor,
-      skillsOpenAgentsDocInEditor
+      skillsOpenAgentsDocInEditor,
+      githubRoomIdentity,
+      githubAuthStatus,
+      githubAccessToken,
+      githubSignIn,
+      githubSignOut,
+      githubListPullRequests,
+      githubMergePullRequest
     }),
     [
       state,
@@ -2356,7 +2414,14 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       skillsDelete,
       skillsLinkFolder,
       skillsOpenInEditor,
-      skillsOpenAgentsDocInEditor
+      skillsOpenAgentsDocInEditor,
+      githubRoomIdentity,
+      githubAuthStatus,
+      githubAccessToken,
+      githubSignIn,
+      githubSignOut,
+      githubListPullRequests,
+      githubMergePullRequest
     ]
   )
 

@@ -324,8 +324,21 @@ live-verified end-to-end (create a workspace skill → edit → save → delete 
 and the file actually gone from disk) against a throwaway temp folder, workspace-scope only so nothing
 touched the real `~/.agents/skills`.
 
-Remaining for this phase: `RoomChatPanel.tsx`/`PullRequestsPanel.tsx`, `ReadView.tsx`,
-`UpdateButton.tsx`, `TerminalPanel.tsx`.
+**RoomChatPanel.tsx/PullRequestsPanel.tsx — done.** `commands/github.ts` registers 7 commands:
+`roomIdentity`/`status`/`listPullRequests` (agent: `listed`, read-only) and `token`/`signIn`/`signOut`/
+`mergePullRequest` (`agent: 'never'`). `github.token` is `'never'` even though it's just a read — it's
+a live credential, not workspace data, so it gets the same treatment as a write. `mergePullRequest` has
+no `danger` gate: the merge row's own inline "confirming" step (pick a merge method, click "Confirm
+merge") is already the human review, same reasoning as `git.commitPlan`. The `onGitHubAuthChanged`
+event subscription (device-flow sign-in completing asynchronously) moved into a new `useGitHubAuth()`
+hook in `chat/github-auth.ts` — an IPC event stream, not a workflow, per this phase's own carve-out —
+while the one-shot status/token reads underneath it go through the command bus like everything else.
+8 new unit tests in `commands/github.test.ts`; live-verified the read-only wiring (a no-remote repo
+correctly reports "needs a shared git remote" / "not connected to a GitHub repository" through the
+real command round-trip) — sign-in/merge aren't live-testable in this environment without real GitHub
+credentials, so those paths lean on the unit tests instead.
+
+Remaining for this phase: `ReadView.tsx`, `UpdateButton.tsx`, `TerminalPanel.tsx`.
 
 ---
 

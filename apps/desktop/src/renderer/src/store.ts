@@ -8,6 +8,8 @@ import type {
   CommandDescriptor,
   CommandOrigin,
   GitCommitEntry,
+  GitHubSignInResult,
+  GitHubStatus,
   GitIgnoreResult,
   GitInitResult,
   GitStatus,
@@ -16,7 +18,11 @@ import type {
   KanbanCard,
   KanbanWorktreeInfo,
   LinkFolderResult,
+  MergeMethod,
+  MergeResult,
   PullRequest,
+  PullRequestList,
+  RoomIdentity,
   SkillFileContent,
   SkillFileNode,
   SkillListResult,
@@ -419,6 +425,15 @@ export interface StoreApi {
     path?: string
   ): Promise<void>
   skillsOpenAgentsDocInEditor(scope: AgentsScope, root: string | null): Promise<void>
+  // Thin wrappers over commands/github.ts, same pattern as the kanban.*/
+  // git.*/skills.* ones above.
+  githubRoomIdentity(root: string): Promise<RoomIdentity | null>
+  githubAuthStatus(): Promise<GitHubStatus>
+  githubAccessToken(): Promise<string | null>
+  githubSignIn(): Promise<GitHubSignInResult | { error: string }>
+  githubSignOut(): Promise<void>
+  githubListPullRequests(root: string, filter?: 'open' | 'closed' | 'all'): Promise<PullRequestList>
+  githubMergePullRequest(root: string, number: number, method?: MergeMethod): Promise<MergeResult>
 }
 
 export const StoreContext = createContext<StoreApi | null>(null)

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { useRoomChat, type RoomMode } from '../chat/connection'
 import { resolveRoomConnect } from '../chat/room-connect'
-import type { AccessDenialReason, GitHubStatus, RoomIdentity } from '@codeswim/contract'
+import { useGitHubAuth } from '../chat/github-auth'
+import type { AccessDenialReason, RoomIdentity } from '@codeswim/contract'
 
 const NAME_KEY = 'codeswim:chatName'
 const ROOM_KIND_KEY = 'codeswim:chatRoomKind'
@@ -41,13 +42,13 @@ function deniedMessage(kind: RoomMode, reason: AccessDenialReason | null): strin
 }
 
 export function RoomChatPanel(): React.JSX.Element {
-  const { state, navigateAbsolute } = useStore()
+  const { state, navigateAbsolute, githubRoomIdentity, githubSignIn, githubSignOut } = useStore()
   const rootPath = state.rootPath
   const [identity, setIdentity] = useState<RoomIdentity | null>(null)
   const [identityLoaded, setIdentityLoaded] = useState(false)
-  // GitHub auth state. null = still loading.
-  const [github, setGithub] = useState<GitHubStatus | null>(null)
-  const [token, setToken] = useState<string | null>(null)
+  // GitHub auth state, kept live via a shared hook (status + token + the
+  // main-process auth-change subscription).
+  const { github, token } = useGitHubAuth()
   const [device, setDevice] = useState<{ userCode: string; verificationUri: string } | null>(null)
   const [codeCopied, setCodeCopied] = useState(false)
   const [signInError, setSignInError] = useState<string | null>(null)
@@ -69,8 +70,7 @@ export function RoomChatPanel(): React.JSX.Element {
     }
     let cancelled = false
     setIdentityLoaded(false)
-    void window.api
-      .roomIdentity(rootPath)
+    void githubRoomIdentity(rootPath)
       .then((id) => {
         if (!cancelled) {
           setIdentity(id)
@@ -86,42 +86,14 @@ export function RoomChatPanel(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [rootPath])
-
-  // Load GitHub auth status once and subscribe to sign-in/out changes (the
-  // device-flow approval lands asynchronously).
-  useEffect(() => {
-    let cancelled = false
-    void window.api.githubStatus().then((s) => {
-      if (!cancelled) setGithub(s)
-    })
-    const off = window.api.onGitHubAuthChanged((user) => {
-      setGithub((prev) => ({ configured: prev?.configured ?? true, user }))
-      if (user) setDevice(null)
-    })
-    return () => {
-      cancelled = true
-      off()
-    }
-  }, [])
+  }, [rootPath, githubRoomIdentity])
 
   const user = github?.user ?? null
   const configured = github?.configured ?? false
 
-  // Fetch the access token whenever we're signed in (and clear it on sign-out).
+  // The device-flow code is only useful until sign-in actually lands.
   useEffect(() => {
-    if (!user) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setToken(null)
-      return
-    }
-    let cancelled = false
-    void window.api.githubToken().then((t) => {
-      if (!cancelled) setToken(t)
-    })
-    return () => {
-      cancelled = true
-    }
+    if (user) setDevice(null)
   }, [user])
 
   const { effectiveKind, displayName, auth, roomId } = resolveRoomConnect({
@@ -172,7 +144,7 @@ export function RoomChatPanel(): React.JSX.Element {
 
   const signIn = async (): Promise<void> => {
     setSignInError(null)
-    const res = await window.api.githubSignIn()
+    const res = await githubSignIn()
     if ('error' in res) setSignInError(res.error)
     else setDevice(res)
   }
@@ -312,7 +284,7 @@ export function RoomChatPanel(): React.JSX.Element {
               className="chat-signout"
               type="button"
               title={`Signed in as ${user.login} — sign out`}
-              onClick={() => void window.api.githubSignOut()}
+              onClick={() => void githubSignOut()}
             >
               {user.avatarUrl ? <img className="chat-avatar" src={user.avatarUrl} alt="" /> : null}
               Sign out

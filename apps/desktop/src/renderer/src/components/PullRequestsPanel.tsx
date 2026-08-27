@@ -23,7 +23,7 @@ function relTime(iso: string): string {
 }
 
 export function PullRequestsPanel(): React.JSX.Element {
-  const { state, refreshOpenPrCount } = useStore()
+  const { state, refreshOpenPrCount, githubListPullRequests } = useStore()
   const root = state.rootPath
   const [filter, setFilter] = useState<Filter>('open')
   const [result, setResult] = useState<PullRequestList | null>(null)
@@ -47,7 +47,7 @@ export function PullRequestsPanel(): React.JSX.Element {
       setLoading(true)
       let res: PullRequestList
       try {
-        res = await window.api.listPullRequests(root, filter)
+        res = await githubListPullRequests(root, filter)
       } catch (err) {
         res = {
           status: 'error',
@@ -64,7 +64,7 @@ export function PullRequestsPanel(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [root, filter, nonce])
+  }, [root, filter, nonce, githubListPullRequests])
 
   if (!root) {
     return (
@@ -198,7 +198,8 @@ function PullRequestRow({
   pr: PullRequest
   onMerged: () => void
 }): React.JSX.Element {
-  const { state, toast, reviewPullRequest, showPullRequestDiff } = useStore()
+  const { state, toast, reviewPullRequest, showPullRequestDiff, githubMergePullRequest } =
+    useStore()
   const root = state.rootPath
   const [merge, setMerge] = useState<MergeState>({ kind: 'idle' })
   const [method, setMethod] = useState<MergeMethod>('merge')
@@ -212,7 +213,7 @@ function PullRequestRow({
   const doMerge = useCallback(async () => {
     if (!root) return
     setMerge({ kind: 'merging' })
-    const res = await window.api.mergePullRequest(root, pr.number, method)
+    const res = await githubMergePullRequest(root, pr.number, method)
     if (res.status === 'merged') {
       toast(`Merged #${pr.number}.`, 'info')
       onMerged()
@@ -226,7 +227,7 @@ function PullRequestRow({
           : res.message || 'Merge failed.'
     setMerge({ kind: 'error', message: reason })
     toast(`Couldn’t merge #${pr.number}: ${reason}`, 'error')
-  }, [root, pr.number, method, toast, onMerged])
+  }, [root, pr.number, method, toast, onMerged, githubMergePullRequest])
 
   return (
     <li className="pr-row">
