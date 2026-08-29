@@ -713,6 +713,46 @@ body.is-resizing {
   font-weight: 500;
 }
 
+/* Right-clicked "Ignore for spec coverage" — dimmed so it reads as excluded
+ * without disappearing (the file is still there, just opted out of the
+ * companion-doc nag and the Sync/coverage report). */
+.tree-row.is-ignored {
+  opacity: 0.5;
+}
+
+.tree-row.is-ignored.current {
+  opacity: 0.75;
+}
+
+.tree-context-menu {
+  position: fixed;
+  z-index: 50;
+  min-width: 200px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  padding: 4px;
+}
+
+.tree-context-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 12.5px;
+  font-family: inherit;
+}
+
+.tree-context-menu-item:hover {
+  background: var(--bg-muted);
+}
+
 .tree-icon {
   display: inline-block;
   width: 14px;

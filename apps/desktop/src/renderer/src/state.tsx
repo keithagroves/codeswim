@@ -157,7 +157,8 @@ const initialState: AppState = {
   agentTabs: [],
   activeAgentTabId: null,
   selectedModel: null,
-  availableProviders: []
+  availableProviders: [],
+  coverageIgnore: []
 }
 
 // Exported so commands/context.ts can type CommandCtx.dispatch precisely —
@@ -277,6 +278,7 @@ export type Action =
   | { type: 'set-open-pr-count'; count: number }
   | { type: 'set-selected-model'; model: SelectedModel | null }
   | { type: 'set-available-providers'; providers: ConfiguredProvider[] }
+  | { type: 'set-coverage-ignore'; paths: string[] }
 
 function fileViewFor(rel: string): 'diagram' | 'code' {
   return extname(rel) === '.md' ? 'diagram' : 'code'
@@ -623,6 +625,8 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, selectedModel: action.model }
     case 'set-available-providers':
       return { ...state, availableProviders: action.providers }
+    case 'set-coverage-ignore':
+      return { ...state, coverageIgnore: action.paths }
     default:
       return state
   }
@@ -1734,6 +1738,44 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
     }
   }, [state.rootPath])
 
+  const toggleCoverageIgnore = useCallback(
+    async (path: string): Promise<void> => {
+      const root = stateRef.current.rootPath
+      if (!root) return
+      const current = stateRef.current.coverageIgnore
+      const next = current.includes(path) ? current.filter((p) => p !== path) : [...current, path]
+      dispatch({ type: 'set-coverage-ignore', paths: next })
+      try {
+        await window.api.coverageIgnoreWrite(root, next)
+      } catch (err) {
+        // Revert the optimistic update if the write actually failed.
+        dispatch({ type: 'set-coverage-ignore', paths: current })
+        const msg = err instanceof Error ? err.message : String(err)
+        toast(`Couldn't update the ignore list: ${msg}`, 'error')
+      }
+    },
+    [toast]
+  )
+
+  // Load the workspace's coverage-ignore list once per rootPath, same
+  // lifecycle as the rest of the per-workspace fetches.
+  useEffect(() => {
+    const root = state.rootPath
+    if (!root) return
+    let cancelled = false
+    void window.api
+      .coverageIgnoreRead(root)
+      .then((paths) => {
+        if (!cancelled) dispatch({ type: 'set-coverage-ignore', paths })
+      })
+      .catch(() => {
+        // best-effort — an unreadable ignore list just means nothing's ignored
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [state.rootPath])
+
   // Activity-bar badge counts. Fetched here (not in the panels) so the numbers
   // show even when the matching panel has never been opened — the panels only
   // mount while active. The change count is unique changed paths across git's
@@ -1864,7 +1906,7 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
     }
     let report
     try {
-      report = await runCoverage(root)
+      report = await runCoverage(root, stateRef.current.coverageIgnore)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       toast(`Couldn't audit diagrams: ${msg}`, 'error')
@@ -2403,6 +2445,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       fetchProviderMethods,
       configureProvider,
       selectModel,
+      toggleCoverageIgnore,
       newSession,
       switchSession,
       refreshSessions,
@@ -2499,6 +2542,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       fetchProviderMethods,
       configureProvider,
       selectModel,
+      toggleCoverageIgnore,
       newSession,
       switchSession,
       refreshSessions,

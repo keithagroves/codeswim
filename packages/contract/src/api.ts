@@ -355,6 +355,16 @@ export interface DiagramNavApi {
   hooksRead(rootPath: string | null): Promise<AgentsDocContent>
   hooksWrite(rootPath: string | null, content: string): Promise<void>
   hooksOpenInEditor(rootPath: string | null): Promise<void>
+  // .codeswim/coverage-ignore.json (workspace-only) — paths (files or whole
+  // directories, root-relative posix) the user has right-clicked "Ignore for
+  // spec coverage" on in the file tree. Read once per workspace open;
+  // written back in full on every toggle. Consulted by both the per-file
+  // "not explained yet" banner (CodeView) and the Sync/coverage report
+  // (uncoveredSources / orphanDiagrams) so the app stops nagging about
+  // files that were never meant to have a codeswim companion doc — e.g.
+  // another tool's own spec files.
+  coverageIgnoreRead(rootPath: string): Promise<string[]>
+  coverageIgnoreWrite(rootPath: string, paths: string[]): Promise<void>
   gitStatus(rootPath: string): Promise<GitStatus>
   gitStagedDiff(rootPath: string): Promise<string>
   gitWorkingDiff(rootPath: string): Promise<string>

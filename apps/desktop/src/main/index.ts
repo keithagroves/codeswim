@@ -317,6 +317,33 @@ async function writeHooksJson(rootPath: string | null, content: string): Promise
   await fs.writeFile(file, content, 'utf-8')
 }
 
+// .codeswim/coverage-ignore.json — { "paths": [...] }, root-relative posix
+// paths (files or whole directories) the coverage checker and the per-file
+// "not explained yet" banner should skip. Tolerant like runs.json/hooks.json:
+// a missing or malformed file just means "nothing ignored yet", never fatal.
+function coverageIgnorePath(rootPath: string): string {
+  return join(rootPath, '.codeswim', 'coverage-ignore.json')
+}
+
+async function readCoverageIgnore(rootPath: string): Promise<string[]> {
+  try {
+    const raw = await fs.readFile(coverageIgnorePath(rootPath), 'utf-8')
+    const parsed: unknown = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return []
+    const paths = (parsed as Record<string, unknown>).paths
+    if (!Array.isArray(paths)) return []
+    return paths.filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
+  } catch {
+    return []
+  }
+}
+
+async function writeCoverageIgnore(rootPath: string, paths: string[]): Promise<void> {
+  const file = coverageIgnorePath(rootPath)
+  await fs.mkdir(dirname(file), { recursive: true })
+  await fs.writeFile(file, JSON.stringify({ paths }, null, 2) + '\n', 'utf-8')
+}
+
 interface RunEntry {
   source: 'npm' | 'custom'
   name: string
@@ -960,6 +987,14 @@ app.whenReady().then(async () => {
     if (!rootPath) throw new Error('Open a folder before editing hooks.')
     const err = await shell.openPath(hooksJsonPath(rootPath))
     if (err) throw new Error(err)
+  })
+
+  ipcMain.handle('coverage-ignore:read', async (_event, rootPath: string) => {
+    return readCoverageIgnore(rootPath)
+  })
+
+  ipcMain.handle('coverage-ignore:write', async (_event, rootPath: string, paths: string[]) => {
+    await writeCoverageIgnore(rootPath, paths)
   })
 
   ipcMain.handle('git:status', async (_event, rootPath: string) => {

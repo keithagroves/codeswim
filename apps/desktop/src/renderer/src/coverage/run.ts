@@ -4,6 +4,7 @@
 import { joinPosix, toPosix } from '../path-utils'
 import type { TreeNode } from '../store'
 import { analyzeCoverage, type CoverageReport, type FileInfo } from '@codeswim/coverage'
+import { isCoverageIgnored } from './ignore'
 
 const IGNORE_DIRS = new Set([
   // App-managed companion docs (explanations, board) — not part of the
@@ -56,7 +57,10 @@ function basename(p: string): string {
   return i < 0 ? p : p.slice(i + 1)
 }
 
-export async function runCoverage(rootPath: string): Promise<CoverageReport> {
+export async function runCoverage(
+  rootPath: string,
+  ignoreList: readonly string[] = []
+): Promise<CoverageReport> {
   const tree = await window.api.listTree(rootPath)
   const paths: string[] = []
   flatten(tree, paths)
@@ -71,6 +75,7 @@ export async function runCoverage(rootPath: string): Promise<CoverageReport> {
     const posix = toPosix(abs)
     const rel = posix.startsWith(rootPrefix) ? posix.slice(rootPrefix.length) : posix
     if (IGNORE_BASENAMES.has(basename(rel))) continue
+    if (isCoverageIgnored(rel, ignoreList)) continue
     if (/\.(md|markdown)$/i.test(rel)) {
       try {
         const content = await window.api.readFile(joinPosix(root, rel))

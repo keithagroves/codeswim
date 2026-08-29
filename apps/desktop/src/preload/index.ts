@@ -385,6 +385,10 @@ const api = {
     ipcRenderer.invoke('hooks:write', rootPath, content),
   hooksOpenInEditor: (rootPath: string | null): Promise<void> =>
     ipcRenderer.invoke('hooks:open', rootPath),
+  coverageIgnoreRead: (rootPath: string): Promise<string[]> =>
+    ipcRenderer.invoke('coverage-ignore:read', rootPath),
+  coverageIgnoreWrite: (rootPath: string, paths: string[]): Promise<void> =>
+    ipcRenderer.invoke('coverage-ignore:write', rootPath, paths),
   gitStatus: (rootPath: string): Promise<GitStatus> => ipcRenderer.invoke('git:status', rootPath),
   gitStagedDiff: (rootPath: string): Promise<string> =>
     ipcRenderer.invoke('git:staged-diff', rootPath),

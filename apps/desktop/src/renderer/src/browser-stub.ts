@@ -365,6 +365,8 @@ The companion document belongs at \`${documentPath}\`.
     hooksRead: async () => ({ content: '', exists: false, size: 0 }),
     hooksWrite: notInBrowser<void>('hooksWrite'),
     hooksOpenInEditor: notInBrowser<void>('hooksOpenInEditor'),
+    coverageIgnoreRead: async () => [],
+    coverageIgnoreWrite: notInBrowser<void>('coverageIgnoreWrite'),
     gitStatus: async () => ({
       isRepo: true,
       branch: null,

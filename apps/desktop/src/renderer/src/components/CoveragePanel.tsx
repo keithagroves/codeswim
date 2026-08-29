@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { CoverageReport } from '@codeswim/coverage'
 import { runCoverage } from '../coverage/run'
 import { useStore } from '../store'
+import { TreeContextMenu, type TreeContextMenuState } from './FileTree'
 
 // Sidebar section for the audit → fix loop on diagram coverage. Shows the
 // workspace's current state (via the shared runCoverage), lists only the
@@ -46,20 +47,25 @@ function CheckIcon(): React.JSX.Element {
 }
 
 export function CoveragePanel(): React.JSX.Element {
-  const { state, navigateAbsolute, syncDiagrams } = useStore()
+  const { state, navigateAbsolute, syncDiagrams, toggleCoverageIgnore } = useStore()
   const [run, setRun] = useState<RunState>({ status: 'idle' })
   const [fixing, setFixing] = useState(false)
+  const [contextMenu, setContextMenu] = useState<TreeContextMenuState | null>(null)
   const rootPath = state.rootPath
+
+  const onContextMenu = useCallback((path: string, x: number, y: number): void => {
+    setContextMenu({ path, x, y })
+  }, [])
 
   const runCheck = useCallback(async (): Promise<void> => {
     if (!rootPath) return
     setRun({ status: 'running' })
     try {
-      setRun({ status: 'done', report: await runCoverage(rootPath) })
+      setRun({ status: 'done', report: await runCoverage(rootPath, state.coverageIgnore) })
     } catch (err) {
       setRun({ status: 'error', message: err instanceof Error ? err.message : String(err) })
     }
-  }, [rootPath])
+  }, [rootPath, state.coverageIgnore])
 
   // Show the current state as soon as the section opens.
   useEffect(() => {
@@ -151,18 +157,21 @@ export function CoveragePanel(): React.JSX.Element {
                 tooltip: `${link.sourceFile}:${link.line} → ${link.target}`
               }))}
               onOpen={open}
+              onContextMenu={onContextMenu}
             />
             <IssueGroup
               title="Orphan diagrams"
               hint="Not reachable from the entry diagram"
               items={report.orphanDiagrams.map((path) => pathItem(path))}
               onOpen={open}
+              onContextMenu={onContextMenu}
             />
             <IssueGroup
               title="Uncovered sources"
               hint="No diagram links these files"
               items={report.uncoveredSources.map((path) => pathItem(path))}
               onOpen={open}
+              onContextMenu={onContextMenu}
             />
             <IssueGroup
               title="Mermaid issues"
@@ -174,10 +183,19 @@ export function CoveragePanel(): React.JSX.Element {
                 tooltip: issue.message
               }))}
               onOpen={open}
+              onContextMenu={onContextMenu}
             />
           </>
         )}
       </div>
+      {contextMenu ? (
+        <TreeContextMenu
+          menu={contextMenu}
+          ignored={false}
+          onToggleIgnore={() => void toggleCoverageIgnore(contextMenu.path)}
+          onClose={() => setContextMenu(null)}
+        />
+      ) : null}
     </aside>
   )
 }
@@ -223,6 +241,7 @@ function IssueGroup(props: {
   hint?: string
   items: IssueItem[]
   onOpen: (path: string) => void
+  onContextMenu: (path: string, x: number, y: number) => void
 }): React.JSX.Element | null {
   const [expanded, setExpanded] = useState(false)
   if (props.items.length === 0) return null
@@ -241,6 +260,10 @@ function IssueGroup(props: {
             <button
               className="coverage-item"
               onClick={() => props.onOpen(item.openPath)}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                props.onContextMenu(item.openPath, e.clientX, e.clientY)
+              }}
               title={item.tooltip}
             >
               <span className="coverage-item-name">{item.primary}</span>

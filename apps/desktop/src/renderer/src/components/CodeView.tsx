@@ -12,6 +12,7 @@ import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { bracketMatching, syntaxHighlighting } from '@codemirror/language'
 import { openSearchPanel, search, searchKeymap } from '@codemirror/search'
 import { createVSCodeSearchPanel } from '../code-search-panel'
+import { isCoverageIgnored } from '../coverage/ignore'
 import { languageFor } from '../code-lang'
 import { createCodeEditorTheme, codeHighlightStyle } from '../code-theme'
 import { parseMarkdown } from '../parse'
@@ -194,7 +195,7 @@ export function CodeView({
             </div>
           ) : null}
         </div>
-      ) : !state.sourceExplanationExists ? (
+      ) : !state.sourceExplanationExists && !isCoverageIgnored(path, state.coverageIgnore) ? (
         <div className="code-banner code-banner-empty">
           <span>This file has not been explained yet.</span>
           <button className="secondary" onClick={() => void createCurrentExplanation()}>

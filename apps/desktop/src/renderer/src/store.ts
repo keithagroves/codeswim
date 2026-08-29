@@ -248,6 +248,11 @@ export interface AppState {
   // Populated on connect — this is what the model-switcher lists, so
   // switching models never re-prompts for an API key.
   availableProviders: ConfiguredProvider[]
+  // Root-relative posix paths (files or whole directories) the user has
+  // right-clicked "Ignore for spec coverage" on in the file tree — see
+  // coverage/ignore.ts. Excluded from the Sync/coverage report and from
+  // CodeView's "not explained yet" nag.
+  coverageIgnore: string[]
 }
 
 // Structural shape of the command registry (apps/desktop/src/renderer/src/
@@ -316,6 +321,9 @@ export interface StoreApi {
   // Pins new chat sends (any tab) to this provider/model. Doesn't touch
   // credentials — only ever offers providers already in availableProviders.
   selectModel(model: SelectedModel | null): void
+  // Toggles a path in/out of coverageIgnore, persisting to
+  // .codeswim/coverage-ignore.json.
+  toggleCoverageIgnore(path: string): Promise<void>
   newSession(): Promise<void>
   switchSession(sessionId: string): Promise<void>
   refreshSessions(): Promise<void>

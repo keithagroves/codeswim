@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import type { TreeNode } from '../store'
+import { isCoverageIgnored } from '../coverage/ignore'
 
 function pathPrefixes(rel: string): string[] {
   // For "a/b/c.md" returns ["a", "a/b"] — every ancestor directory.
@@ -54,6 +55,8 @@ interface NodeRowProps {
   toggle: (path: string, open: boolean) => void
   open: (path: string) => void
   currentFile: string | null
+  coverageIgnore: readonly string[]
+  onContextMenu: (path: string, x: number, y: number) => void
 }
 
 function NodeRow({
@@ -62,11 +65,14 @@ function NodeRow({
   isOpen,
   toggle,
   open,
-  currentFile
+  currentFile,
+  coverageIgnore,
+  onContextMenu
 }: NodeRowProps): React.JSX.Element {
   const isDir = node.kind === 'dir'
   const opened = isDir && isOpen(node.path)
   const isCurrent = !isDir && node.path === currentFile
+  const ignored = isCoverageIgnored(node.path, coverageIgnore)
 
   const onClick = (): void => {
     if (isDir) toggle(node.path, opened)
@@ -77,10 +83,14 @@ function NodeRow({
     <>
       <button
         type="button"
-        className={`tree-row ${isCurrent ? 'current' : ''}`}
+        className={`tree-row ${isCurrent ? 'current' : ''} ${ignored ? 'is-ignored' : ''}`}
         style={{ paddingLeft: 8 + depth * 14 }}
         onClick={onClick}
-        title={node.path}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          onContextMenu(node.path, e.clientX, e.clientY)
+        }}
+        title={ignored ? `${node.path} (ignored for spec coverage)` : node.path}
       >
         {isDir ? (
           <>
@@ -111,6 +121,8 @@ function NodeRow({
               toggle={toggle}
               open={open}
               currentFile={currentFile}
+              coverageIgnore={coverageIgnore}
+              onContextMenu={onContextMenu}
             />
           ))
         : null}
@@ -118,8 +130,63 @@ function NodeRow({
   )
 }
 
+// Exported so CoveragePanel can reuse the same right-click "Ignore for spec
+// coverage" menu on its Broken links / Orphan diagrams / Uncovered sources
+// rows — those are the other place this action needs to be reachable from,
+// since they're often exactly the files someone wants to silence.
+export interface TreeContextMenuState {
+  path: string
+  x: number
+  y: number
+}
+
+export function TreeContextMenu({
+  menu,
+  ignored,
+  onToggleIgnore,
+  onClose
+}: {
+  menu: TreeContextMenuState
+  ignored: boolean
+  onToggleIgnore: () => void
+  onClose: () => void
+}): React.JSX.Element {
+  const ref = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const onDoc = (e: MouseEvent): void => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [onClose])
+
+  return (
+    <div className="tree-context-menu" role="menu" ref={ref} style={{ left: menu.x, top: menu.y }}>
+      <button
+        type="button"
+        role="menuitem"
+        className="tree-context-menu-item"
+        onClick={() => {
+          onToggleIgnore()
+          onClose()
+        }}
+      >
+        {ignored ? 'Un-ignore for spec coverage' : 'Ignore for spec coverage'}
+      </button>
+    </div>
+  )
+}
+
 export function FileTree(): React.JSX.Element | null {
-  const { state, inspectFile, refreshTree } = useStore()
+  const { state, inspectFile, refreshTree, toggleCoverageIgnore } = useStore()
   // Two sets so we can override the auto-expansion of ancestors of the
   // current file. A path in `opened` is forced open; a path in `closed`
   // is forced closed; otherwise it's open iff it's an ancestor of the
@@ -127,6 +194,7 @@ export function FileTree(): React.JSX.Element | null {
   // setState-in-effect.
   const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set())
   const [closed, setClosed] = useState<ReadonlySet<string>>(() => new Set())
+  const [contextMenu, setContextMenu] = useState<TreeContextMenuState | null>(null)
 
   const ancestors = useMemo(() => {
     if (!state.currentFile) return new Set<string>()
@@ -175,6 +243,10 @@ export function FileTree(): React.JSX.Element | null {
     [inspectFile]
   )
 
+  const onContextMenu = useCallback((path: string, x: number, y: number): void => {
+    setContextMenu({ path, x, y })
+  }, [])
+
   // Visibility is owned by the parent SidePanel; this component just renders.
   return (
     <aside className="sidebar" aria-label="File tree">
@@ -203,10 +275,20 @@ export function FileTree(): React.JSX.Element | null {
               toggle={toggle}
               open={open}
               currentFile={state.currentFile}
+              coverageIgnore={state.coverageIgnore}
+              onContextMenu={onContextMenu}
             />
           ))
         )}
       </div>
+      {contextMenu ? (
+        <TreeContextMenu
+          menu={contextMenu}
+          ignored={isCoverageIgnored(contextMenu.path, state.coverageIgnore)}
+          onToggleIgnore={() => void toggleCoverageIgnore(contextMenu.path)}
+          onClose={() => setContextMenu(null)}
+        />
+      ) : null}
     </aside>
   )
 }
