@@ -5689,6 +5689,7 @@ body.is-panning .diagram-canvas-wrap {
 .code-banner {
   flex-shrink: 0;
   border-bottom: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
   background: var(--bg-raised);
 }
 
