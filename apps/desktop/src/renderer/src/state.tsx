@@ -120,6 +120,7 @@ const initialState: AppState = {
   currentFile: null,
   currentDocumentPath: null,
   sourceExplanationExists: true,
+  explanationContent: null,
   breadcrumbs: [],
   forward: [],
   view: 'diagram',
@@ -170,6 +171,7 @@ export type Action =
       revealNavigator: boolean
       documentPath: string
       sourceExplanationExists: boolean
+      explanationContent?: string | null
       // Line range to highlight when view is 'code'. Any other navigation
       // (including revisiting a code file without a range) clears it.
       range?: LineRange | null
@@ -182,6 +184,7 @@ export type Action =
       view: FileView
       documentPath: string
       sourceExplanationExists: boolean
+      explanationContent?: string | null
     }
   | {
       type: 'nav-back' | 'nav-forward'
@@ -192,6 +195,7 @@ export type Action =
       view: FileView
       documentPath: string
       sourceExplanationExists: boolean
+      explanationContent?: string | null
     }
   | { type: 'set-loading'; loading: boolean }
   | { type: 'add-toast'; toast: Toast }
@@ -267,8 +271,8 @@ export type Action =
   | { type: 'set-change-count'; count: number }
   | { type: 'set-open-pr-count'; count: number }
 
-function fileViewFor(rel: string): 'diagram' | 'read' {
-  return extname(rel) === '.md' ? 'diagram' : 'read'
+function fileViewFor(rel: string): 'diagram' | 'code' {
+  return extname(rel) === '.md' ? 'diagram' : 'code'
 }
 
 function reducer(state: AppState, action: Action): AppState {
@@ -287,6 +291,7 @@ function reducer(state: AppState, action: Action): AppState {
         currentFile: action.file,
         currentDocumentPath: action.documentPath,
         sourceExplanationExists: action.sourceExplanationExists,
+        explanationContent: action.explanationContent ?? null,
         fileContents: action.contents,
         view: action.view,
         codeRange: action.range ?? null,
@@ -305,6 +310,7 @@ function reducer(state: AppState, action: Action): AppState {
         currentFile: action.file,
         currentDocumentPath: action.documentPath,
         sourceExplanationExists: action.sourceExplanationExists,
+        explanationContent: action.explanationContent ?? null,
         fileContents: action.contents,
         view: action.view,
         codeRange: null,
@@ -336,6 +342,7 @@ function reducer(state: AppState, action: Action): AppState {
         currentFile: action.file,
         currentDocumentPath: action.documentPath,
         sourceExplanationExists: action.sourceExplanationExists,
+        explanationContent: action.explanationContent ?? null,
         fileContents: action.contents,
         view: action.view,
         codeRange: null,
@@ -1289,9 +1296,10 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
       markdownView: 'diagram' | 'read' = 'diagram'
     ): Promise<{
       contents: string
-      view: 'diagram' | 'read'
+      view: 'diagram' | 'read' | 'code'
       documentPath: string
       sourceExplanationExists: boolean
+      explanationContent: string | null
     } | null> => {
       try {
         if (extname(relPath) === '.md') {
@@ -1301,15 +1309,21 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
             contents,
             view: markdownView,
             documentPath: relPath,
-            sourceExplanationExists: true
+            sourceExplanationExists: true,
+            explanationContent: null
           }
         }
-        const explanation = await window.api.readSourceExplanation(rootPath, relPath)
+        const abs = `${toPosix(rootPath).replace(/\/$/, '')}/${relPath}`
+        const [contents, explanation] = await Promise.all([
+          window.api.readFile(abs),
+          window.api.readSourceExplanation(rootPath, relPath)
+        ])
         return {
-          contents: explanation.content,
-          view: 'read',
+          contents,
+          view: 'code',
           documentPath: explanation.documentPath,
-          sourceExplanationExists: explanation.exists
+          sourceExplanationExists: explanation.exists,
+          explanationContent: explanation.exists ? explanation.content : null
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -1984,7 +1998,8 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       previous: null,
       revealNavigator: false,
       documentPath: result.documentPath,
-      sourceExplanationExists: result.sourceExplanationExists
+      sourceExplanationExists: result.sourceExplanationExists,
+      explanationContent: result.explanationContent
     })
   }, [readFileSafe, state.rootPath, state.currentFile])
 

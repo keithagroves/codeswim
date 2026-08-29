@@ -5558,9 +5558,83 @@ body.is-panning .diagram-canvas-wrap {
   flex-direction: column;
 }
 
+.code-view-editor {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .code-view .cm-editor {
   height: 100%;
   font-size: 13px;
+}
+
+/* Companion explanation doc, shown as a collapsible header above the real
+ * source rather than replacing it. Collapsed by default: title + one-line
+ * summary; expanding reveals the full prose (same renderer as ReadView). */
+.code-banner {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-raised);
+}
+
+.code-banner-toggle {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 16px;
+  background: none;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: var(--text);
+}
+
+.code-banner-chevron {
+  color: var(--text-muted);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.code-banner-title {
+  font-weight: 600;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.code-banner-summary {
+  color: var(--text-muted);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.code-banner-body {
+  padding: 0 16px 16px 40px;
+  max-height: 40vh;
+  overflow: auto;
+}
+
+.code-banner-lead {
+  margin: 0 0 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.code-banner-empty {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-raised);
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
 .code-view .cm-scroller {

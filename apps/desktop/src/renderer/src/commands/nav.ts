@@ -7,16 +7,20 @@ import type { CommandRegistry } from './registry'
 
 interface ReadResult {
   contents: string
-  view: 'diagram' | 'read'
+  view: 'diagram' | 'read' | 'code'
   documentPath: string
   sourceExplanationExists: boolean
+  // Companion explanation prose, shown as a banner above the code in
+  // CodeView. Null for markdown targets — they render their own content.
+  explanationContent: string | null
 }
 
-// Shared by every nav command that lands on the explanation view: markdown
-// reads raw, everything else goes through the source-explanation resolver.
-// Uses the root-scoped IPC (not the unrestricted absolute readFile) because
-// this is reachable from the generic run_command path once the agent bridge
-// lands — see plans/command-bus-and-screen-context.md Phase 2.
+// Shared by every nav command that lands on a file view: markdown reads raw
+// (diagram/read), everything else is real source, shown in the code view
+// with its companion explanation doc (if any) fetched alongside for the
+// banner. Uses the root-scoped IPC (not the unrestricted absolute readFile)
+// because this is reachable from the generic run_command path once the
+// agent bridge lands — see plans/command-bus-and-screen-context.md Phase 2.
 async function readFileSafe(
   ctx: CommandCtx,
   root: string,
@@ -26,14 +30,24 @@ async function readFileSafe(
   try {
     if (extname(relPath) === '.md') {
       const contents = await ctx.api.readWorkspaceFile(root, relPath)
-      return { contents, view: markdownView, documentPath: relPath, sourceExplanationExists: true }
+      return {
+        contents,
+        view: markdownView,
+        documentPath: relPath,
+        sourceExplanationExists: true,
+        explanationContent: null
+      }
     }
-    const explanation = await ctx.api.readSourceExplanation(root, relPath)
+    const [contents, explanation] = await Promise.all([
+      ctx.api.readWorkspaceFile(root, relPath),
+      ctx.api.readSourceExplanation(root, relPath)
+    ])
     return {
-      contents: explanation.content,
-      view: 'read',
+      contents,
+      view: 'code',
       documentPath: explanation.documentPath,
-      sourceExplanationExists: explanation.exists
+      sourceExplanationExists: explanation.exists,
+      explanationContent: explanation.exists ? explanation.content : null
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -55,7 +69,7 @@ export interface NavigateAbsoluteArgs {
 async function runNavigateAbsolute(args: NavigateAbsoluteArgs, ctx: CommandCtx): Promise<void> {
   const root = requireRoot(ctx)
   if (!root) return
-  const { path } = parseTarget(args.relPath)
+  const { path, range } = parseTarget(args.relPath)
   ctx.dispatch({ type: 'set-loading', loading: true })
   const previous = ctx.getState().currentFile
   const result = await readFileSafe(ctx, root, path, args.markdownView)
@@ -63,16 +77,21 @@ async function runNavigateAbsolute(args: NavigateAbsoluteArgs, ctx: CommandCtx):
     ctx.dispatch({ type: 'set-loading', loading: false })
     return
   }
+  // A line ref only makes sense in source view — even for a markdown target
+  // (e.g. `overview.md#L10-L22`), show its raw text rather than the diagram.
+  const view = range ? 'code' : result.view
   ctx.dispatch({
     type: 'load-success',
     file: path,
     contents: result.contents,
-    view: result.view,
+    view,
     pushBreadcrumb: args.pushBreadcrumb,
     previous,
     revealNavigator: true,
     documentPath: result.documentPath,
-    sourceExplanationExists: result.sourceExplanationExists
+    sourceExplanationExists: result.sourceExplanationExists,
+    explanationContent: result.explanationContent,
+    range
   })
 }
 
@@ -91,7 +110,10 @@ async function runOpenSourceCode(args: OpenSourceCodeArgs, ctx: CommandCtx): Pro
   ctx.dispatch({ type: 'set-loading', loading: true })
   const previous = ctx.getState().currentFile
   try {
-    const contents = await ctx.api.readWorkspaceFile(root, args.relPath)
+    const [contents, explanation] = await Promise.all([
+      ctx.api.readWorkspaceFile(root, args.relPath),
+      extname(args.relPath) === '.md' ? null : ctx.api.readSourceExplanation(root, args.relPath)
+    ])
     ctx.dispatch({
       type: 'load-success',
       file: args.relPath,
@@ -100,8 +122,9 @@ async function runOpenSourceCode(args: OpenSourceCodeArgs, ctx: CommandCtx): Pro
       pushBreadcrumb: true,
       previous,
       revealNavigator: true,
-      documentPath: args.relPath,
-      sourceExplanationExists: true,
+      documentPath: explanation?.documentPath ?? args.relPath,
+      sourceExplanationExists: explanation?.exists ?? false,
+      explanationContent: explanation?.exists ? explanation.content : null,
       range: args.range
     })
   } catch (err) {
@@ -118,12 +141,17 @@ export interface NavigateRelativeArgs {
 // Resolves navigateRelative's target against whatever document is currently
 // open. Returns null when there's nothing open to resolve against (run/
 // validate both treat that as a no-op, matching the pre-command behavior).
+// Re-attaches any `#L10-L22` line ref from the raw target onto the resolved
+// path — runNavigateAbsolute re-parses it there — so a mermaid node's line
+// reference survives being resolved relative to the current document.
 function resolveTarget(args: NavigateRelativeArgs, ctx: CommandCtx): string | null {
   const state = ctx.getState()
   const baseFile = state.currentDocumentPath ?? state.currentFile
   if (!baseFile) return null
-  const { path } = parseTarget(args.target)
-  return resolveRelative(baseFile, path)
+  const { path, range } = parseTarget(args.target)
+  const resolved = resolveRelative(baseFile, path)
+  if (!range) return resolved
+  return `${resolved}#L${range.start}-L${range.end}`
 }
 
 // Reads a workspace file referenced relative to the currently open document,
@@ -166,7 +194,8 @@ async function runPopTo(args: PopToArgs, ctx: CommandCtx): Promise<void> {
     contents: result.contents,
     view: result.view,
     documentPath: result.documentPath,
-    sourceExplanationExists: result.sourceExplanationExists
+    sourceExplanationExists: result.sourceExplanationExists,
+    explanationContent: result.explanationContent
   })
 }
 
@@ -187,7 +216,8 @@ async function runGoBack(_args: Record<string, never>, ctx: CommandCtx): Promise
     contents: result.contents,
     view: result.view,
     documentPath: result.documentPath,
-    sourceExplanationExists: result.sourceExplanationExists
+    sourceExplanationExists: result.sourceExplanationExists,
+    explanationContent: result.explanationContent
   })
 }
 
@@ -208,7 +238,8 @@ async function runGoForward(_args: Record<string, never>, ctx: CommandCtx): Prom
     contents: result.contents,
     view: result.view,
     documentPath: result.documentPath,
-    sourceExplanationExists: result.sourceExplanationExists
+    sourceExplanationExists: result.sourceExplanationExists,
+    explanationContent: result.explanationContent
   })
 }
 

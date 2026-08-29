@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { EditorState, Extension, StateEffect, StateField } from '@codemirror/state'
 import {
   Decoration,
@@ -12,7 +12,11 @@ import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { bracketMatching, syntaxHighlighting } from '@codemirror/language'
 import { languageFor } from '../code-lang'
 import { createCodeEditorTheme, codeHighlightStyle } from '../code-theme'
+import { parseMarkdown } from '../parse'
+import { parseTarget, resolveRelative } from '../path-utils'
 import type { LineRange } from '../path-utils'
+import { useStore } from '../store'
+import { MarkdownProse } from './MarkdownProse'
 
 // StateEffect carries a desired highlight range. StateField rebuilds a
 // DecorationSet of `.cm-target-line` lines whenever it sees the effect.
@@ -56,6 +60,19 @@ export function CodeView({
 }): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
+  const { state, navigateRelative, openSourceCode, readSnippet, createCurrentExplanation } =
+    useStore()
+  const [bannerOpen, setBannerOpen] = useState(false)
+
+  // Collapse the banner again whenever the file changes underneath it.
+  useEffect(() => {
+    setBannerOpen(false)
+  }, [path])
+
+  const explanation = useMemo(
+    () => (state.explanationContent ? parseMarkdown(state.explanationContent) : null),
+    [state.explanationContent]
+  )
 
   useEffect(() => {
     if (!hostRef.current) return
@@ -105,5 +122,54 @@ export function CodeView({
     view.dispatch({ effects })
   }, [highlightRange, contents])
 
-  return <div ref={hostRef} className="code-view" />
+  const fm = explanation?.frontmatter ?? {}
+
+  return (
+    <div className="code-view">
+      {explanation ? (
+        <div className={`code-banner${bannerOpen ? ' code-banner-open' : ''}`}>
+          <button
+            type="button"
+            className="code-banner-toggle"
+            onClick={() => setBannerOpen((open) => !open)}
+            aria-expanded={bannerOpen}
+          >
+            <span className="code-banner-chevron">{bannerOpen ? '▾' : '▸'}</span>
+            <span className="code-banner-title">{fm.name ?? path}</span>
+            {!bannerOpen && fm.description ? (
+              <span className="code-banner-summary">{fm.description}</span>
+            ) : null}
+          </button>
+          {bannerOpen ? (
+            <div className="code-banner-body">
+              {fm.description ? <p className="code-banner-lead">{fm.description}</p> : null}
+              {explanation.prose ? (
+                <MarkdownProse
+                  source={explanation.prose}
+                  onNavigate={(target) => void navigateRelative(target)}
+                  headingOffset={2}
+                  collapsibleSource
+                  loadSnippet={(target) => readSnippet(target)}
+                  onOpenEditor={(target) => {
+                    const baseDoc = state.currentDocumentPath ?? state.currentFile
+                    if (!baseDoc) return
+                    const { path: targetPath, range } = parseTarget(target)
+                    void openSourceCode(resolveRelative(baseDoc, targetPath), range)
+                  }}
+                />
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : !state.sourceExplanationExists ? (
+        <div className="code-banner code-banner-empty">
+          <span>This file has not been explained yet.</span>
+          <button className="secondary" onClick={() => void createCurrentExplanation()}>
+            Explain file
+          </button>
+        </div>
+      ) : null}
+      <div ref={hostRef} className="code-view-editor" />
+    </div>
+  )
 }

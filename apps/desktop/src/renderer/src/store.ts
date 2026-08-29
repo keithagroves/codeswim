@@ -166,6 +166,10 @@ export interface AppState {
   // leaves this is the companion explanation path.
   currentDocumentPath: string | null
   sourceExplanationExists: boolean
+  // Companion explanation prose for the current source file, rendered as a
+  // banner above the code in CodeView. Null for markdown files (they render
+  // their own content) or when no explanation doc exists yet.
+  explanationContent: string | null
   breadcrumbs: string[]
   // Browser-style forward history. Populated when the user goes Back; cleared
   // on any fresh navigation. Lets the Forward button retrace.
