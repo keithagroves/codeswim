@@ -375,7 +375,7 @@ agent should pick this up; use this body to explain *what* it should do.
     <aside className="sidebar" aria-label="Tools">
       <div className="sidebar-header">
         <span className="sidebar-title">Tools</span>
-        {toolsTab !== 'mcp' ? (
+        {toolsTab !== 'hooks' ? (
           <button className="sidebar-icon-btn" onClick={() => void refresh()} title="Refresh">
             ↻
           </button>
@@ -392,11 +392,11 @@ agent should pick this up; use this body to explain *what* it should do.
         </button>
         <button
           role="tab"
-          aria-selected={toolsTab === 'mcp'}
-          className={`tools-tab ${toolsTab === 'mcp' ? 'is-active' : ''}`}
-          onClick={() => setToolsTab('mcp')}
+          aria-selected={toolsTab === 'hooks'}
+          className={`tools-tab ${toolsTab === 'hooks' ? 'is-active' : ''}`}
+          onClick={() => setToolsTab('hooks')}
         >
-          MCP
+          Hooks
         </button>
         <button
           role="tab"
@@ -407,14 +407,14 @@ agent should pick this up; use this body to explain *what* it should do.
           Context
         </button>
       </div>
-      {toolsTab === 'mcp' ? (
+      {toolsTab === 'hooks' ? (
         <div className="sidebar-body">
           <div className="tools-mcp-empty">
-            <div className="tools-mcp-title">MCP servers</div>
+            <div className="tools-mcp-title">Hooks</div>
             <p>
-              Connect Model Context Protocol servers to give the agent extra tools and data sources.
+              <code>.codeswim/hooks.json</code> declares <code>SessionStart</code> commands whose
+              output extends the agent&rsquo;s system prompt for this workspace.
             </p>
-            <p className="tools-mcp-soon">Configuration is coming soon.</p>
           </div>
         </div>
       ) : toolsTab === 'context' ? (

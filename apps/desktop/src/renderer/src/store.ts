@@ -62,10 +62,12 @@ export type Section =
   | 'terminal'
   | 'claude'
   | 'chat'
-// Sub-tabs within the Tools section. 'skills' lists user skills; 'mcp' is the
-// MCP-servers surface; 'context' holds the agent instructions (local + global
-// AGENTS.md) and the built-in system prompts.
-export type ToolsTab = 'skills' | 'mcp' | 'context'
+// Sub-tabs within the Tools section. 'skills' lists user skills; 'hooks' is
+// the .codeswim/hooks.json editor (SessionStart hooks that extend the system
+// prompt); 'context' holds the agent instructions (local + global
+// AGENTS.md) and the built-in system prompts. MCP will get its own
+// top-level section once it's implemented, not a Tools sub-tab.
+export type ToolsTab = 'skills' | 'hooks' | 'context'
 
 export interface Toast {
   id: number
@@ -425,6 +427,9 @@ export interface StoreApi {
     path?: string
   ): Promise<void>
   skillsOpenAgentsDocInEditor(scope: AgentsScope, root: string | null): Promise<void>
+  hooksRead(root: string | null): Promise<AgentsDocContent>
+  hooksWrite(root: string | null, content: string): Promise<void>
+  hooksOpenInEditor(root: string | null): Promise<void>
   // Thin wrappers over commands/github.ts, same pattern as the kanban.*/
   // git.*/skills.* ones above.
   githubRoomIdentity(root: string): Promise<RoomIdentity | null>

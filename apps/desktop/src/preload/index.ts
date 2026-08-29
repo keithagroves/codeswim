@@ -379,6 +379,12 @@ const api = {
     ipcRenderer.invoke('agents:write', scope, content, rootPath),
   agentsDocOpenInEditor: (scope: AgentsScope, rootPath: string | null): Promise<void> =>
     ipcRenderer.invoke('agents:open', scope, rootPath),
+  hooksRead: (rootPath: string | null): Promise<AgentsDocContent> =>
+    ipcRenderer.invoke('hooks:read', rootPath),
+  hooksWrite: (rootPath: string | null, content: string): Promise<void> =>
+    ipcRenderer.invoke('hooks:write', rootPath, content),
+  hooksOpenInEditor: (rootPath: string | null): Promise<void> =>
+    ipcRenderer.invoke('hooks:open', rootPath),
   gitStatus: (rootPath: string): Promise<GitStatus> => ipcRenderer.invoke('git:status', rootPath),
   gitStagedDiff: (rootPath: string): Promise<string> =>
     ipcRenderer.invoke('git:staged-diff', rootPath),

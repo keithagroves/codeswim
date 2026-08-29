@@ -362,6 +362,9 @@ The companion document belongs at \`${documentPath}\`.
     agentsDocRead: async () => ({ content: '', exists: false, size: 0 }),
     agentsDocWrite: notInBrowser<void>('agentsDocWrite'),
     agentsDocOpenInEditor: notInBrowser<void>('agentsDocOpenInEditor'),
+    hooksRead: async () => ({ content: '', exists: false, size: 0 }),
+    hooksWrite: notInBrowser<void>('hooksWrite'),
+    hooksOpenInEditor: notInBrowser<void>('hooksOpenInEditor'),
     gitStatus: async () => ({
       isRepo: true,
       branch: null,

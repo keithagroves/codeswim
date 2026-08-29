@@ -65,7 +65,8 @@ import {
   agentsDocPath,
   readAgentsDoc,
   writeAgentsDoc,
-  type AgentsScope
+  type AgentsScope,
+  type AgentsDocContent
 } from '@codeswim/domain-skills'
 import {
   moveGitHubKanbanItem,
@@ -285,6 +286,35 @@ function killTerminals(): void {
     }
   }
   terminals.clear()
+}
+
+// .codeswim/hooks.json — workspace-only, single file, no scope switch (unlike
+// AGENTS.md's workspace/global split). Same shape as AgentsDocContent since
+// the Tools → Hooks tab edits it the same way (raw text, Save, Open in
+// editor). Parsing/validation for the runtime reader lives separately in
+// packages/harness/src/hooks.ts; this is just the editor's read/write path.
+function hooksJsonPath(rootPath: string): string {
+  return join(rootPath, '.codeswim', 'hooks.json')
+}
+
+async function readHooksJson(rootPath: string | null): Promise<AgentsDocContent> {
+  if (!rootPath) return { content: '', exists: false, size: 0 }
+  try {
+    const content = await fs.readFile(hooksJsonPath(rootPath), 'utf-8')
+    return { content, exists: true, size: Buffer.byteLength(content, 'utf-8') }
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      return { content: '', exists: false, size: 0 }
+    }
+    throw err
+  }
+}
+
+async function writeHooksJson(rootPath: string | null, content: string): Promise<void> {
+  if (!rootPath) throw new Error('Open a folder before editing hooks.')
+  const file = hooksJsonPath(rootPath)
+  await fs.mkdir(dirname(file), { recursive: true })
+  await fs.writeFile(file, content, 'utf-8')
 }
 
 interface RunEntry {
@@ -915,6 +945,20 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('agents:open', async (_event, scope: AgentsScope, rootPath: string | null) => {
     const err = await shell.openPath(agentsDocPath(scope, rootPath))
+    if (err) throw new Error(err)
+  })
+
+  ipcMain.handle('hooks:read', async (_event, rootPath: string | null) => {
+    return readHooksJson(rootPath)
+  })
+
+  ipcMain.handle('hooks:write', async (_event, rootPath: string | null, content: string) => {
+    await writeHooksJson(rootPath, content)
+  })
+
+  ipcMain.handle('hooks:open', async (_event, rootPath: string | null) => {
+    if (!rootPath) throw new Error('Open a folder before editing hooks.')
+    const err = await shell.openPath(hooksJsonPath(rootPath))
     if (err) throw new Error(err)
   })
 

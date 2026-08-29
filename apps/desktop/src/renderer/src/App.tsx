@@ -8,8 +8,8 @@ import { DiagramView } from './components/DiagramView'
 import { DiffView } from './components/DiffView'
 import { FileTree } from './components/FileTree'
 import { GitPanel } from './components/GitPanel'
+import { HooksView } from './components/HooksView'
 import { KanbanView } from './components/KanbanView'
-import { McpView } from './components/McpView'
 import { PullRequestsPanel } from './components/PullRequestsPanel'
 import { ReadView } from './components/ReadView'
 import { ScriptControls } from './components/ScriptControls'
@@ -232,7 +232,7 @@ function Body(): React.JSX.Element {
   const { state } = useStore()
 
   if (state.activeSection === 'tools') {
-    return state.toolsTab === 'mcp' ? <McpView /> : <SkillsView />
+    return state.toolsTab === 'hooks' ? <HooksView /> : <SkillsView />
   }
   if (state.view === 'output') {
     return <ScriptOutput />

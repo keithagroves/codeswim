@@ -190,7 +190,8 @@ export function SkillsView(): React.JSX.Element {
             <code>~/.agents/skills/</code>, shared across every workspace.
           </li>
           <li>
-            <strong>MCP</strong> — Model Context Protocol servers (coming soon).
+            <strong>Hooks</strong> — <code>.codeswim/hooks.json</code>, event-triggered commands
+            that extend the system prompt (e.g. project-specific mermaid conventions).
           </li>
           <li>
             <strong>Context</strong> — the agent instructions (<code>AGENTS.md</code>, local and

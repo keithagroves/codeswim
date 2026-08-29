@@ -349,6 +349,12 @@ export interface DiagramNavApi {
   agentsDocRead(scope: AgentsScope, rootPath: string | null): Promise<AgentsDocContent>
   agentsDocWrite(scope: AgentsScope, content: string, rootPath: string | null): Promise<void>
   agentsDocOpenInEditor(scope: AgentsScope, rootPath: string | null): Promise<void>
+  // .codeswim/hooks.json (workspace-only), surfaced and edited from the
+  // Tools → Hooks tab. See packages/harness/src/hooks.ts for the runtime
+  // reader this config feeds.
+  hooksRead(rootPath: string | null): Promise<AgentsDocContent>
+  hooksWrite(rootPath: string | null, content: string): Promise<void>
+  hooksOpenInEditor(rootPath: string | null): Promise<void>
   gitStatus(rootPath: string): Promise<GitStatus>
   gitStagedDiff(rootPath: string): Promise<string>
   gitWorkingDiff(rootPath: string): Promise<string>

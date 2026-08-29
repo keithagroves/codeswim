@@ -57,6 +57,7 @@ import type { GitSyncOutcome } from './commands/git'
 import { registerKanbanCommands, type KanbanRunTracker } from './commands/kanban'
 import { registerGitCommands } from './commands/git'
 import { registerSkillsCommands } from './commands/skills'
+import { registerHooksCommands } from './commands/hooks'
 import { registerGitHubCommands } from './commands/github'
 import type { CommandCtxFactory } from './commands/context'
 import { SurfaceContextRegistry } from './context/surface-context'
@@ -683,6 +684,7 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
     kanbanRunTrackerRef.current = registerKanbanCommands(registry)
     registerGitCommands(registry)
     registerSkillsCommands(registry)
+    registerHooksCommands(registry)
     registerGitHubCommands(registry)
     commandsRef.current = registry
   }
@@ -1554,6 +1556,24 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
     [commands]
   )
 
+  const hooksRead = useCallback(
+    (root: string | null): Promise<AgentsDocContent> =>
+      commands.run<AgentsDocContent>('hooks.read', { root }, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const hooksWrite = useCallback(
+    (root: string | null, content: string): Promise<void> =>
+      commands.run<void>('hooks.write', { content, root }, HUMAN_ORIGIN),
+    [commands]
+  )
+
+  const hooksOpenInEditor = useCallback(
+    (root: string | null): Promise<void> =>
+      commands.run<void>('hooks.openInEditor', { root }, HUMAN_ORIGIN),
+    [commands]
+  )
+
   // RoomChatPanel/PullRequestsPanel's workflows are now the command
   // registry's github.* commands (commands/github.ts); these are thin
   // delegating wrappers, same pattern as the nav.*/kanban.*/git.*/skills.*
@@ -2324,6 +2344,9 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       skillsLinkFolder,
       skillsOpenInEditor,
       skillsOpenAgentsDocInEditor,
+      hooksRead,
+      hooksWrite,
+      hooksOpenInEditor,
       githubRoomIdentity,
       githubAuthStatus,
       githubAccessToken,
@@ -2415,6 +2438,9 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       skillsLinkFolder,
       skillsOpenInEditor,
       skillsOpenAgentsDocInEditor,
+      hooksRead,
+      hooksWrite,
+      hooksOpenInEditor,
       githubRoomIdentity,
       githubAuthStatus,
       githubAccessToken,
