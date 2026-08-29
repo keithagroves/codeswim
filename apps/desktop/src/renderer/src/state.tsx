@@ -1352,6 +1352,14 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
     [commands]
   )
 
+  // ReadView's inline collapsible-snippet preview — reads a workspace file
+  // referenced relative to the currently open document, without navigating.
+  const readSnippet = useCallback(
+    (target: string): Promise<string | null> =>
+      commands.run<string | null>('nav.readSnippet', { target }, HUMAN_ORIGIN),
+    [commands]
+  )
+
   const popTo = useCallback(
     (index: number): Promise<void> => commands.run<void>('nav.popTo', { index }, HUMAN_ORIGIN),
     [commands]
@@ -2267,6 +2275,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       surfaceContext,
       pickRoot,
       navigateRelative,
+      readSnippet,
       navigateAbsolute,
       inspectFile,
       openSourceCode,
@@ -2361,6 +2370,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       surfaceContext,
       pickRoot,
       navigateRelative,
+      readSnippet,
       navigateAbsolute,
       inspectFile,
       openSourceCode,

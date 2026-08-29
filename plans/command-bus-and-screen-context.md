@@ -338,7 +338,20 @@ correctly reports "needs a shared git remote" / "not connected to a GitHub repos
 real command round-trip) — sign-in/merge aren't live-testable in this environment without real GitHub
 credentials, so those paths lean on the unit tests instead.
 
-Remaining for this phase: `ReadView.tsx`, `UpdateButton.tsx`, `TerminalPanel.tsx`.
+**ReadView.tsx — done.** Much smaller than the other surfaces: `ReadView.tsx` already routed
+navigation through `nav.*` commands from Phase 1 — the only thing left was `loadSnippet`'s raw
+`window.api.readFile(abs)` (an absolute-path read bypassing root containment entirely, built from
+manual `parseTarget`/`resolveRelative`/`toPosix` splicing). Added `nav.readSnippet` to the existing
+`commands/nav.ts` (reuses `navigateRelative`'s own target-resolution helper), root-scoped via
+`readWorkspaceFile` like every other nav read, `agent: 'listed'` since it's read-only. Returns `null`
+rather than throwing on a missing/unreadable file, matching the collapsible-snippet UI's existing
+"no preview available" fallback. 5 new unit tests in `nav.test.ts` (resolution, empty-state,
+above-root rejection, read-failure swallowing, agent-reachability); live-verified ReadView still
+renders cleanly for a source file against `examples/sample-architecture` — the collapsible-snippet UI
+itself needs a `## Source [x](path#Lstart-Lend)` heading to exercise end-to-end, disproportionate
+fixture setup for a single-call-site change already covered by the unit tests.
+
+Remaining for this phase: `UpdateButton.tsx`, `TerminalPanel.tsx`.
 
 ---
 

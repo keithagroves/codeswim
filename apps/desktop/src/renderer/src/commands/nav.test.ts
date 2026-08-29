@@ -148,3 +148,49 @@ describe('nav commands: happy path', () => {
     })
   })
 })
+
+describe('nav.readSnippet', () => {
+  it('resolves against the current document and reads via the root-scoped api, without navigating', async () => {
+    const { registry, dispatched, readWorkspaceFile } = makeHarness({
+      currentDocumentPath: 'billing/charge-flow.md'
+    })
+    const result = await registry.run<string | null>(
+      'nav.readSnippet',
+      { target: '../shared/db.md' },
+      HUMAN
+    )
+    expect(result).toBe('contents of shared/db.md')
+    expect(readWorkspaceFile).toHaveBeenCalledWith('/root', 'shared/db.md')
+    expect(dispatched).toEqual([])
+  })
+
+  it('returns null (not an error) when nothing is open to resolve against', async () => {
+    const { registry } = makeHarness({ currentDocumentPath: null, currentFile: null })
+    await expect(registry.run('nav.readSnippet', { target: 'db.md' }, HUMAN)).resolves.toBeNull()
+  })
+
+  it('rejects a target that resolves above the root', async () => {
+    const { registry, readWorkspaceFile } = makeHarness({ currentDocumentPath: 'top-level.md' })
+    await expect(
+      registry.run('nav.readSnippet', { target: '../secret.md' }, HUMAN)
+    ).rejects.toMatchObject({ code: 'invalid-args' })
+    expect(readWorkspaceFile).not.toHaveBeenCalled()
+  })
+
+  it('returns null rather than throwing when the underlying read fails', async () => {
+    const { registry, readWorkspaceFile } = makeHarness({
+      currentDocumentPath: 'billing/charge-flow.md'
+    })
+    readWorkspaceFile.mockRejectedValueOnce(new Error('ENOENT'))
+    await expect(
+      registry.run('nav.readSnippet', { target: '../shared/db.md' }, HUMAN)
+    ).resolves.toBeNull()
+  })
+
+  it('is agent-reachable (read-only)', async () => {
+    const { registry } = makeHarness({ currentDocumentPath: 'billing/charge-flow.md' })
+    await expect(
+      registry.run('nav.readSnippet', { target: '../shared/db.md' }, AGENT)
+    ).resolves.not.toBeNull()
+  })
+})

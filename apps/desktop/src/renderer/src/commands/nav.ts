@@ -126,6 +126,26 @@ function resolveTarget(args: NavigateRelativeArgs, ctx: CommandCtx): string | nu
   return resolveRelative(baseFile, path)
 }
 
+// Reads a workspace file referenced relative to the currently open document,
+// for the collapsible inline snippet preview in ReadView's rendered prose.
+// Root-scoped (readWorkspaceFile), not the unrestricted absolute readFile —
+// same reasoning as readFileSafe above.
+export interface ReadSnippetArgs {
+  target: string
+}
+
+async function runReadSnippet(args: ReadSnippetArgs, ctx: CommandCtx): Promise<string | null> {
+  const root = requireRoot(ctx)
+  if (!root) return null
+  const resolved = resolveTarget(args, ctx)
+  if (!resolved) return null
+  try {
+    return await ctx.api.readWorkspaceFile(root, resolved)
+  } catch {
+    return null
+  }
+}
+
 export interface PopToArgs {
   index: number
 }
@@ -231,14 +251,19 @@ export function registerNavCommands(registry: CommandRegistry): void {
     },
     validate: (args) => assertRelativeWorkspacePath(parseTarget(args.relPath).path, 'relPath'),
     agent: 'listed',
-    run: (args, ctx) => runNavigateAbsolute({ relPath: args.relPath, pushBreadcrumb: true, markdownView: 'read' }, ctx)
+    run: (args, ctx) =>
+      runNavigateAbsolute(
+        { relPath: args.relPath, pushBreadcrumb: true, markdownView: 'read' },
+        ctx
+      )
   })
 
   registry.register<OpenSourceCodeArgs, void>({
     id: 'nav.openSourceCode',
     domain: 'nav',
     title: 'Open source',
-    description: 'Opens a workspace-relative file as raw source, optionally scrolled to a line range.',
+    description:
+      'Opens a workspace-relative file as raw source, optionally scrolled to a line range.',
     schema: {
       type: 'object',
       required: ['relPath', 'range'],
@@ -280,6 +305,25 @@ export function registerNavCommands(registry: CommandRegistry): void {
       if (!resolved) return
       await runNavigateAbsolute({ relPath: resolved, pushBreadcrumb: true }, ctx)
     }
+  })
+
+  registry.register<ReadSnippetArgs, string | null>({
+    id: 'nav.readSnippet',
+    domain: 'nav',
+    title: 'Read snippet',
+    description:
+      'Reads a workspace file referenced relative to the currently open document, for inline preview.',
+    schema: {
+      type: 'object',
+      required: ['target'],
+      properties: { target: { type: 'string' } }
+    },
+    validate: (args, ctx) => {
+      const resolved = resolveTarget(args, ctx)
+      if (resolved) assertRelativeWorkspacePath(resolved, 'target')
+    },
+    agent: 'listed',
+    run: runReadSnippet
   })
 
   registry.register<PopToArgs, void>({

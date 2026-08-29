@@ -256,6 +256,9 @@ export interface StoreApi {
   surfaceContext: SurfaceContextRegistry
   pickRoot(): Promise<void>
   navigateRelative(relativePathFromCurrent: string): Promise<void>
+  // Reads a workspace file relative to the currently open document without
+  // navigating — ReadView's inline collapsible-snippet preview.
+  readSnippet(target: string): Promise<string | null>
   navigateAbsolute(relativeToRoot: string, pushBreadcrumb: boolean): Promise<void>
   inspectFile(relativeToRoot: string): Promise<void>
   // Opens a file's raw source in the in-app read-only code view, optionally
