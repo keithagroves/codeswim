@@ -10,6 +10,8 @@ import {
 } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { bracketMatching, syntaxHighlighting } from '@codemirror/language'
+import { openSearchPanel, search, searchKeymap } from '@codemirror/search'
+import { createVSCodeSearchPanel } from '../code-search-panel'
 import { languageFor } from '../code-lang'
 import { createCodeEditorTheme, codeHighlightStyle } from '../code-theme'
 import { parseMarkdown } from '../parse'
@@ -83,7 +85,14 @@ export function CodeView({
       history(),
       bracketMatching(),
       syntaxHighlighting(codeHighlightStyle, { fallback: true }),
-      keymap.of([...defaultKeymap, ...historyKeymap]),
+      // Ctrl/Cmd+F opens the search panel (Mod-f is bound by searchKeymap).
+      // `top: true` docks it under the code-banner instead of floating over
+      // the bottom of the viewport. createPanel swaps in a compact,
+      // VS Code-style panel (see code-search-panel.ts) instead of the stock
+      // one, which crams case/word/regex toggles and a replace row into one
+      // dense strip.
+      search({ top: true, createPanel: createVSCodeSearchPanel }),
+      keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
       EditorView.editable.of(false),
       highlightField,
       createCodeEditorTheme(),
@@ -104,6 +113,30 @@ export function CodeView({
       viewRef.current = null
     }
   }, [path, contents])
+
+  // searchKeymap's Mod-f binding only fires while CodeMirror's own contentDOM
+  // has focus — but this is a read-only viewer people don't reflexively click
+  // into first, so Cmd/Ctrl+F would silently do nothing most of the time.
+  // This listener makes it work as soon as the code view is on screen,
+  // regardless of focus, same as a browser's page-find. It backs off when
+  // some other text field (chat input, a sidebar filter box) is actively
+  // focused, so it doesn't steal the shortcut from those.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent): void => {
+      const isFind =
+        (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f'
+      if (!isFind) return
+      const active = document.activeElement
+      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) return
+      const view = viewRef.current
+      if (!view) return
+      e.preventDefault()
+      view.focus()
+      openSearchPanel(view)
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [])
 
   // Apply the highlight range (and scroll to it) whenever it changes — or
   // whenever the file content changes underneath us. The editor is recreated
