@@ -270,7 +270,7 @@ export function RoomChatPanel(): React.JSX.Element {
           {identity.slug}
         </div>
         <div className="chat-header-right">
-          <div className={`chat-status chat-status-${status}`}>
+          <div className={`room-status room-status-${status}`}>
             {status === 'open'
               ? `${users.length} online`
               : status === 'connecting'

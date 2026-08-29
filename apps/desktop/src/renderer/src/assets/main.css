@@ -5144,7 +5144,7 @@ body.is-panning .diagram-canvas-wrap {
   white-space: nowrap;
 }
 
-.chat-status {
+.room-status {
   margin-left: auto;
   flex-shrink: 0;
   font-size: 11px;
@@ -5154,7 +5154,7 @@ body.is-panning .diagram-canvas-wrap {
   gap: 5px;
 }
 
-.chat-status::before {
+.room-status::before {
   content: '';
   width: 7px;
   height: 7px;
@@ -5162,15 +5162,15 @@ body.is-panning .diagram-canvas-wrap {
   background: var(--text-muted);
 }
 
-.chat-status-open::before {
+.room-status-open::before {
   background: var(--pastel-mint);
 }
 
-.chat-status-connecting::before {
+.room-status-connecting::before {
   background: var(--pastel-peach);
 }
 
-.chat-status-closed::before {
+.room-status-closed::before {
   background: var(--error-text);
 }
 
@@ -5270,7 +5270,7 @@ body.is-panning .diagram-canvas-wrap {
   opacity: 0.6;
 }
 
-.chat-status-denied::before {
+.room-status-denied::before {
   background: var(--error-text);
 }
 
@@ -5312,7 +5312,7 @@ body.is-panning .diagram-canvas-wrap {
   gap: 10px;
 }
 
-.chat-header-right .chat-status {
+.chat-header-right .room-status {
   margin-left: 0;
 }
 
