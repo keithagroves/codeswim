@@ -168,6 +168,95 @@ function PlanCard({
   )
 }
 
+// Persistent "which model am I talking to" indicator + switcher. Lists only
+// providers opencode already has credentials for (state.availableProviders,
+// populated by ensureAgent) — picking a model here never prompts for an API
+// key, unlike the gear-icon ProviderSetup flow, which is for adding a *new*
+// provider. Shared between ChatPanel's sidebar and each AgentsView tab so the
+// active model is visible (and switchable) from either surface.
+export function ModelPicker(): React.JSX.Element | null {
+  const { state, selectModel, toggleChatSettings } = useStore()
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e: MouseEvent): void => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [open])
+
+  if (!state.rootPath) return null
+
+  const providers = state.availableProviders
+  const current = state.selectedModel
+  const currentProvider = providers.find((p) => p.id === current?.providerID)
+  const currentModel = currentProvider?.models.find((m) => m.id === current?.modelID)
+  const label = currentModel
+    ? `${prettyProvider(currentProvider!.id)} · ${currentModel.name}`
+    : providers.length === 0
+      ? 'No model configured'
+      : 'Select model'
+
+  return (
+    <div className="model-picker" ref={ref}>
+      <button
+        className="model-picker-trigger"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={label}
+      >
+        <span className="model-picker-label">{label}</span>
+        <span className="model-picker-caret">▾</span>
+      </button>
+      {open ? (
+        <div className="model-picker-menu" role="menu">
+          {providers.length === 0 ? (
+            <div className="model-picker-empty">No providers configured yet</div>
+          ) : (
+            providers.map((p) => (
+              <div key={p.id} className="model-picker-group">
+                <div className="model-picker-group-title">{prettyProvider(p.id)}</div>
+                {p.models.map((m) => {
+                  const isCurrent = p.id === current?.providerID && m.id === current?.modelID
+                  return (
+                    <button
+                      key={m.id}
+                      className={`model-picker-item ${isCurrent ? 'is-current' : ''}`}
+                      role="menuitemradio"
+                      aria-checked={isCurrent}
+                      onClick={() => {
+                        setOpen(false)
+                        selectModel({ providerID: p.id, modelID: m.id })
+                      }}
+                    >
+                      {m.name}
+                    </button>
+                  )
+                })}
+              </div>
+            ))
+          )}
+          <div className="model-picker-menu-divider" />
+          <button
+            className="model-picker-item model-picker-add"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false)
+              toggleChatSettings()
+            }}
+          >
+            + Add another provider
+          </button>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function StatusBadge(): React.JSX.Element {
   const { state } = useStore()
   const { chatStatus, chatError } = state
@@ -777,8 +866,8 @@ export function ChatPanel(): React.JSX.Element {
         <button
           className="icon-btn"
           onClick={toggleChatSettings}
-          title="Provider settings"
-          aria-label="Provider settings"
+          title="Add or manage providers"
+          aria-label="Add or manage providers"
           aria-pressed={state.chatSettingsOpen}
           disabled={!state.rootPath}
         >
@@ -841,13 +930,16 @@ export function ChatPanel(): React.JSX.Element {
           disabled={!state.rootPath || sending || hasPendingQuestion}
           rows={3}
         />
-        <button
-          className="primary chat-send-btn"
-          onClick={send}
-          disabled={!state.rootPath || sending || hasPendingQuestion || !input.trim()}
-        >
-          Send
-        </button>
+        <div className="chat-input-toolbar">
+          <ModelPicker />
+          <button
+            className="primary chat-send-btn"
+            onClick={send}
+            disabled={!state.rootPath || sending || hasPendingQuestion || !input.trim()}
+          >
+            Send
+          </button>
+        </div>
       </div>
     </aside>
   )

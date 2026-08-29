@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { PendingQuestion } from './agent'
+import type { ConfiguredProvider, PendingQuestion, SelectedModel } from './agent'
 import type { CommitMessage } from '@codeswim/commit'
 import type { SyncPlan } from '@codeswim/commit'
 import type {
@@ -34,7 +34,7 @@ import type { GitSyncOutcome } from './commands/git'
 
 export type { LineRange } from './path-utils'
 
-export type { PendingQuestion } from './agent'
+export type { ConfiguredModel, ConfiguredProvider, PendingQuestion, SelectedModel } from './agent'
 export type { CommitMessage } from '@codeswim/commit'
 
 // Label used for a PR's diff in the main-panel diff viewer. Doubles as the
@@ -240,6 +240,14 @@ export interface AppState {
   // Tabs in the Agents workspace view (header tab next to Explore/Plan).
   agentTabs: AgentTab[]
   activeAgentTabId: string | null
+  // Provider/model pinned to new chat sends, app-wide (all tabs share it —
+  // see the model-switcher dropdown in ChatPanel/AgentsView). null until
+  // ensureAgent's first connect resolves a default. Persisted to localStorage.
+  selectedModel: SelectedModel | null
+  // Providers opencode already has credentials for, with their model lists.
+  // Populated on connect — this is what the model-switcher lists, so
+  // switching models never re-prompts for an API key.
+  availableProviders: ConfiguredProvider[]
 }
 
 // Structural shape of the command registry (apps/desktop/src/renderer/src/
@@ -305,6 +313,9 @@ export interface StoreApi {
   toggleChatSettings(): void
   fetchProviderMethods(): Promise<Record<string, Array<{ type: 'oauth' | 'api'; label: string }>>>
   configureProvider(provider: string, apiKey: string): Promise<void>
+  // Pins new chat sends (any tab) to this provider/model. Doesn't touch
+  // credentials — only ever offers providers already in availableProviders.
+  selectModel(model: SelectedModel | null): void
   newSession(): Promise<void>
   switchSession(sessionId: string): Promise<void>
   refreshSessions(): Promise<void>

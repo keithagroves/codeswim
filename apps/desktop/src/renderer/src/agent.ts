@@ -76,7 +76,14 @@ export interface AgentClient {
   listSessions(directory?: string): Promise<SessionInfo[]>
   createSession(directory?: string): Promise<SessionInfo>
   loadMessages(sessionId: string, directory?: string): Promise<LoadedMessage[]>
-  send(sessionId: string, text: string, directory?: string): Promise<AgentSendResult>
+  // `model` pins the request to a specific provider/model pair (see
+  // SelectedModel below); omitted, opencode falls back to its own default.
+  send(
+    sessionId: string,
+    text: string,
+    directory?: string,
+    model?: SelectedModel
+  ): Promise<AgentSendResult>
   subscribeParts(handler: (update: PartUpdate) => void): () => void
   subscribeQuestions(handler: (event: QuestionEvent) => void): () => void
   listPendingQuestions(sessionId?: string): Promise<PendingQuestion[]>
@@ -202,6 +209,67 @@ export async function setApiKey(
   })
 }
 
+// A provider/model pair a chat send is pinned to. Distinct from AuthMethod
+// above — that's about *which providers have credentials*, this is about
+// *which already-configured model to use*.
+export interface SelectedModel {
+  providerID: string
+  modelID: string
+}
+
+export interface ConfiguredModel {
+  id: string
+  name: string
+}
+
+export interface ConfiguredProvider {
+  id: string
+  name: string
+  models: ConfiguredModel[]
+}
+
+export interface ConfiguredProviders {
+  providers: ConfiguredProvider[]
+  // providerID → modelID, opencode's own default pick per provider.
+  defaults: Record<string, string>
+}
+
+interface RawModel {
+  id: string
+  name?: string
+}
+
+interface RawProvider {
+  id: string
+  name?: string
+  models?: Record<string, RawModel>
+}
+
+// Lists providers opencode already has credentials for (client.config.providers
+// only returns providers it can actually use — same endpoint connectAgent uses
+// to detect "no provider configured"), along with each provider's available
+// models. This is what backs the model-switcher dropdown: no API key prompt,
+// because these providers are already authenticated.
+export async function getConfiguredProviders(
+  url: string,
+  directory: string
+): Promise<ConfiguredProviders> {
+  const client = createOpencodeClient({ baseUrl: url, directory })
+  const result = await client.config.providers({ query: { directory }, throwOnError: true })
+  const data = result.data as { providers?: RawProvider[]; default?: Record<string, string> }
+  const providers = (data.providers ?? [])
+    .map((p) => ({
+      id: p.id,
+      name: p.name?.trim() || p.id,
+      models: Object.values(p.models ?? {})
+        .map((m) => ({ id: m.id, name: m.name?.trim() || m.id }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+    }))
+    .filter((p) => p.models.length > 0)
+    .sort((a, b) => a.name.localeCompare(b.name))
+  return { providers, defaults: data.default ?? {} }
+}
+
 export async function connectAgent(url: string, defaultDirectory: string): Promise<AgentClient> {
   const client = createOpencodeClient({ baseUrl: url, directory: defaultDirectory })
 
@@ -319,11 +387,19 @@ export async function connectAgent(url: string, defaultDirectory: string): Promi
       }))
     },
 
-    async send(sessionId: string, text: string, directory = defaultDirectory): Promise<AgentSendResult> {
+    async send(
+      sessionId: string,
+      text: string,
+      directory = defaultDirectory,
+      model?: SelectedModel
+    ): Promise<AgentSendResult> {
       const result = await client.session.prompt({
         path: { id: sessionId },
         query: { directory },
-        body: { parts: [{ type: 'text', text }] as never },
+        body: {
+          parts: [{ type: 'text', text }] as never,
+          ...(model ? { model: { providerID: model.providerID, modelID: model.modelID } } : {})
+        },
         throwOnError: true,
         signal: abort.signal
       })

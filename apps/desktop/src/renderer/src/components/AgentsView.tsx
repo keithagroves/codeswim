@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { flattenTreeFiles, useStore } from '../store'
 import { resolveWorkspacePath } from '../path-utils'
-import { MessageView, QuestionPrompt } from './ChatPanel'
+import { MessageView, ModelPicker, QuestionPrompt } from './ChatPanel'
 import type { AgentTab } from '../store'
 
 // The Agents workspace view: browser-style tabs across the top, one agent
@@ -135,13 +135,16 @@ function AgentTabBody({ tab }: { tab: AgentTab }): React.JSX.Element {
           disabled={sending || hasPendingQuestion}
           rows={3}
         />
-        <button
-          className="primary chat-send-btn"
-          onClick={send}
-          disabled={sending || hasPendingQuestion || !input.trim()}
-        >
-          Send
-        </button>
+        <div className="chat-input-toolbar">
+          <ModelPicker />
+          <button
+            className="primary chat-send-btn"
+            onClick={send}
+            disabled={sending || hasPendingQuestion || !input.trim()}
+          >
+            Send
+          </button>
+        </div>
       </div>
     </div>
   )

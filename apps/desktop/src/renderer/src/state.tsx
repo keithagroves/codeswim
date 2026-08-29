@@ -9,12 +9,15 @@ import {
 } from 'react'
 import {
   connectAgent,
+  getConfiguredProviders,
   getProviderAuthMethods,
   setApiKey,
   type AgentClient,
+  type ConfiguredProvider,
   type LoadedMessage,
   type PendingQuestion,
-  type ProviderAuthMap
+  type ProviderAuthMap,
+  type SelectedModel
 } from './agent'
 import { runCoverage, buildSyncPrompt } from './coverage/run'
 import { buildCardPrompt } from './kanban-prompt'
@@ -152,7 +155,9 @@ const initialState: AppState = {
   changeCount: 0,
   openPrCount: 0,
   agentTabs: [],
-  activeAgentTabId: null
+  activeAgentTabId: null,
+  selectedModel: null,
+  availableProviders: []
 }
 
 // Exported so commands/context.ts can type CommandCtx.dispatch precisely —
@@ -270,6 +275,8 @@ export type Action =
   | { type: 'recents-set'; recents: string[] }
   | { type: 'set-change-count'; count: number }
   | { type: 'set-open-pr-count'; count: number }
+  | { type: 'set-selected-model'; model: SelectedModel | null }
+  | { type: 'set-available-providers'; providers: ConfiguredProvider[] }
 
 function fileViewFor(rel: string): 'diagram' | 'code' {
   return extname(rel) === '.md' ? 'diagram' : 'code'
@@ -612,6 +619,10 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, changeCount: action.count }
     case 'set-open-pr-count':
       return { ...state, openPrCount: action.count }
+    case 'set-selected-model':
+      return { ...state, selectedModel: action.model }
+    case 'set-available-providers':
+      return { ...state, availableProviders: action.providers }
     default:
       return state
   }
@@ -913,6 +924,35 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
         }
       }
 
+      // Refresh the model-switcher's provider/model list, and pick a default
+      // selection if none is set yet (or the persisted one no longer applies
+      // — e.g. its provider's key was removed). Best-effort: a failure here
+      // shouldn't block chatting, it just leaves the switcher empty.
+      void getConfiguredProviders(conn.url, rootPath)
+        .then(({ providers, defaults }) => {
+          dispatch({ type: 'set-available-providers', providers })
+          const current = stateRef.current.selectedModel
+          const stillValid =
+            !!current &&
+            providers.some(
+              (p) => p.id === current.providerID && p.models.some((m) => m.id === current.modelID)
+            )
+          if (stillValid) return
+          const first = providers[0]
+          if (!first) return
+          const defaultModelId = defaults[first.id]
+          const modelID =
+            (defaultModelId && first.models.some((m) => m.id === defaultModelId)
+              ? defaultModelId
+              : first.models[0]?.id) ?? null
+          if (modelID) {
+            dispatch({ type: 'set-selected-model', model: { providerID: first.id, modelID } })
+          }
+        })
+        .catch(() => {
+          // best-effort
+        })
+
       dispatch({ type: 'chat-status', status: 'ready' })
       return agent
     } catch (err) {
@@ -947,7 +987,12 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       dispatch({ type: 'chat-status', status: 'thinking' })
 
       try {
-        const reply = await agent.send(sessionId, trimmed)
+        const reply = await agent.send(
+          sessionId,
+          trimmed,
+          undefined,
+          stateRef.current.selectedModel ?? undefined
+        )
         for (const part of reply.parts) {
           dispatch({ type: 'chat-upsert-part', messageID: reply.messageID, part })
         }
@@ -1176,7 +1221,12 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
         })
         patch({ status: 'thinking', error: null })
 
-        const reply = await agent.send(sessionId, trimmed, directory)
+        const reply = await agent.send(
+          sessionId,
+          trimmed,
+          directory,
+          stateRef.current.selectedModel ?? undefined
+        )
         for (const part of reply.parts) {
           dispatch({ type: 'agent-tab-upsert-part', sessionId, messageID: reply.messageID, part })
         }
@@ -1286,6 +1336,10 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
     },
     [ensureAgent]
   )
+
+  const selectModel = useCallback((model: SelectedModel | null) => {
+    dispatch({ type: 'set-selected-model', model })
+  }, [])
 
   // Still used directly by `reload` below, which re-reads the current file
   // in place rather than navigating — not part of the nav.* command slice.
@@ -2249,6 +2303,38 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
     }
   }, [state.activityOrder])
 
+  // Restore the last-picked model on mount. ensureAgent's connect (above)
+  // validates this against the workspace's actually-configured providers and
+  // falls back to a default if it no longer applies.
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('codeswim:selectedModel')
+      if (stored) {
+        const parsed = JSON.parse(stored) as Partial<SelectedModel>
+        if (typeof parsed.providerID === 'string' && typeof parsed.modelID === 'string') {
+          dispatch({
+            type: 'set-selected-model',
+            model: { providerID: parsed.providerID, modelID: parsed.modelID }
+          })
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  useEffect(() => {
+    try {
+      if (state.selectedModel) {
+        localStorage.setItem('codeswim:selectedModel', JSON.stringify(state.selectedModel))
+      } else {
+        localStorage.removeItem('codeswim:selectedModel')
+      }
+    } catch {
+      // ignore
+    }
+  }, [state.selectedModel])
+
   // Persist the Agents-view tab strip (id/sessionId/title only — see
   // PersistedAgentTabs in @codeswim/contract) to .codeswim/agent-tabs.json
   // via the main process, so it survives a restart. Keyed off a lightweight
@@ -2316,6 +2402,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       toggleChatSettings,
       fetchProviderMethods,
       configureProvider,
+      selectModel,
       newSession,
       switchSession,
       refreshSessions,
@@ -2411,6 +2498,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       toggleChatSettings,
       fetchProviderMethods,
       configureProvider,
+      selectModel,
       newSession,
       switchSession,
       refreshSessions,
