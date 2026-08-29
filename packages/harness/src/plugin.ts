@@ -31,6 +31,11 @@ import {
   type CommandIo
 } from './tool/command'
 import { createSessionGate } from './session-gate'
+import { readHooksConfig, runSessionStartHooks, type HooksIo } from './hooks'
+import { exec as execCallback } from 'node:child_process'
+import { promisify } from 'node:util'
+
+const exec = promisify(execCallback)
 
 const CODE_MUTATING_TOOLS = new Set(['write', 'edit', 'apply_patch'])
 
@@ -124,8 +129,24 @@ function kanbanFsFor(workspaceRoot: string): KanbanFs {
 const chatIo: ChatIo = { fetch: (url, init) => fetch(url, init) }
 const commandIo: CommandIo = { fetch: (url, init) => fetch(url, init) }
 
-export const CodeswimPlugin: Plugin = async () => {
+const realHooksIo: HooksIo = {
+  readFile: (absPath) => fs.readFile(absPath, 'utf-8'),
+  async exec(command, opts) {
+    try {
+      const { stdout } = await exec(command, { cwd: opts.cwd, timeout: opts.timeoutMs })
+      return { code: 0, stdout }
+    } catch (err) {
+      const e = err as { code?: number | null; stdout?: string }
+      return { code: e.code ?? 1, stdout: e.stdout ?? '' }
+    }
+  }
+}
+
+export const CodeswimPlugin: Plugin = async (input) => {
   const gate = createSessionGate()
+  // Stable for the subprocess's lifetime — same lifetime/scoping rationale
+  // as chatConfig/commandConfig below.
+  const workspaceRoot = input.worktree
   // Resolved once per subprocess — the host (apps/desktop/src/main/sidecar.ts)
   // restarts the subprocess whenever the workspace root changes, so this env
   // is always scoped to the current workspace's room. null means this
@@ -361,6 +382,15 @@ export const CodeswimPlugin: Plugin = async () => {
       if (!CODE_MUTATING_TOOLS.has(input.tool)) return
       const blocked = gate.checkCodeEditAllowed(input.sessionID)
       if (blocked) throw new Error(blocked)
+    },
+
+    // Lets a user extend the bundled system prompt per-workspace via
+    // .codeswim/hooks.json, without touching the packaged app. Re-read on
+    // every call (cheap) so edits take effect on the next message.
+    'experimental.chat.system.transform': async (_input, output) => {
+      const config = await readHooksConfig(workspaceRoot, realHooksIo)
+      const extra = await runSessionStartHooks(config, workspaceRoot, realHooksIo)
+      output.system = [...output.system, ...extra]
     },
 
     // Surface the diagrams-first gate in the tool list so the model self-corrects

@@ -128,6 +128,26 @@ npm dies but its children leak.
 The script names come from package.json — they're validated against the
 parsed scripts before spawning, then shell-quoted defensively.
 
+## Hooks
+
+The bundled system prompt ([packages/harness/src/prompt/](packages/harness/src/prompt/))
+is opinionated by design, but a user can extend it per-workspace without
+touching the packaged app via `.codeswim/hooks.json`:
+
+```json
+{ "hooks": { "SessionStart": [{ "command": "cat .codeswim/mermaid-style.md" }] } }
+```
+
+Each `SessionStart` entry's stdout (on exit 0, within an optional `timeout`
+ms, default 5000) is appended to the agent's system prompt for that session.
+See [packages/harness/src/hooks.ts](packages/harness/src/hooks.ts) — parsing
+follows the same tolerant-validation precedent as `.codeswim/runs.json`
+(missing file, bad JSON, or a bad entry is silently skipped, never fatal),
+and wiring is in `plugin.ts` via opencode's `experimental.chat.system.transform`
+hook. There's no dedicated settings UI yet, same as `runs.json` — it's a
+hand-edited file. This is the seam to extend if we add more hook events
+(`PreToolUse`/`PostToolUse`) or a global (`~/.codeswim/`) scope later.
+
 ## Test fixture
 
 [examples/sample-architecture/overview.md](examples/sample-architecture/overview.md) is a
