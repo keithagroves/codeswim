@@ -24,4 +24,5 @@ flyer-web/
 
 # Added by codeswim sync
 .codeswim/agent-state.json
+*agent-state.json
 examples/sample-architecture/.codeswim/agent-state.json
