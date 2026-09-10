@@ -34,6 +34,34 @@ jobs:
 
       - run: npm ci
 
+      # electron-builder 26.15.3 passes the certificate password to
+      # set-key-partition-list, but macOS 26.6 requires the temporary
+      # keychain's own password (electron-builder#10101). Import the cert into
+      # a keychain we control until the upstream fix reaches a stable release.
+      - name: Import signing certificate
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.CSC_LINK }}
+          CERTIFICATE_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/codeswim-signing.keychain-db"
+          certificate="$RUNNER_TEMP/codeswim-signing.p12"
+          keychain_password="$(openssl rand -base64 32)"
+
+          trap 'rm -f "$certificate"' EXIT
+          printf '%s' "$CERTIFICATE_BASE64" | /usr/bin/base64 -D > "$certificate"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$certificate" -k "$keychain" -P "$CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security -T /usr/bin/productbuild
+          security set-key-partition-list -S apple-tool:,apple: -s \
+            -k "$keychain_password" "$keychain"
+          security list-keychains -d user -s "$keychain" \
+            $(security list-keychains -d user | tr -d '"')
+          echo "CSC_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+
       - name: Build and publish
         # The Linux .deb step crashes in electron-builder's fpm on current
         # runners; the AppImage still uploads. Tolerate only the Linux leg so
@@ -48,14 +76,20 @@ jobs:
           VITE_PARTY_HOST: ${{ vars.VITE_PARTY_HOST }}
           MAIN_VITE_PARTY_HOST: ${{ vars.VITE_PARTY_HOST }}
           MAIN_VITE_GITHUB_CLIENT_ID: ${{ vars.MAIN_VITE_GITHUB_CLIENT_ID }}
-          # macOS signing + notarization. Scoped to macOS so the mac .p12 in
-          # CSC_LINK doesn't get picked up as a Windows signing cert.
-          CSC_LINK: ${{ runner.os == 'macOS' && secrets.CSC_LINK || '' }}
-          CSC_KEY_PASSWORD: ${{ runner.os == 'macOS' && secrets.CSC_KEY_PASSWORD || '' }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # The macOS signing identity comes from CSC_KEYCHAIN, exported by
+          # the import step above. Notarization credentials stay macOS-only.
+          APPLE_ID: ${{ runner.os == 'macOS' && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ runner.os == 'macOS' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ runner.os == 'macOS' && secrets.APPLE_TEAM_ID || '' }}
         run: ${{ matrix.build }}
+
+      - name: Remove signing keychain
+        if: always() && runner.os == 'macOS'
+        shell: bash
+        run: |
+          if [[ -n "${CSC_KEYCHAIN:-}" && -f "$CSC_KEYCHAIN" ]]; then
+            security delete-keychain "$CSC_KEYCHAIN"
+          fi
 
   # electron-builder uploads artifacts to a *draft* release; nothing promotes
   # it. Flip it to published once the builds are in.
