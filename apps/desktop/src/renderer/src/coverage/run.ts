@@ -97,7 +97,11 @@ export async function runCoverage(
 export function buildSyncPrompt(report: CoverageReport): string {
   const lines: string[] = []
   lines.push(
-    'Run a diagram-sync pass on this workspace. The coverage tool found drift between the diagrams and the code. Fix each item below in place using `diagram_edit`; do not introduce unrelated changes.'
+    'Run a diagram-sync pass on this workspace. The specs coverage tool found drift between the diagrams and the code. Fix each item below in place using `diagram_edit`; do not introduce unrelated changes.'
+  )
+  lines.push('')
+  lines.push(
+    'Before fixing an item, judge whether it actually needs a codeswim spec at all. Some flagged files are never meant to have one — e.g. another tool\'s own spec/plan files (`.kiro/specs/**`, similar), generated output, or other docs that already serve their own purpose and were never meant to be documented by *this* diagram hierarchy. For those, don\'t write a spec or force a link — instead add the path to `.codeswim/coverage-ignore.json` (create it if missing) as `{ "paths": [...] }`, root-relative posix paths; a whole directory covers everything under it, so prefer that over listing many individual files. Only spend effort on genuine drift: real source/diagram content this project should actually document.'
   )
   lines.push('')
 

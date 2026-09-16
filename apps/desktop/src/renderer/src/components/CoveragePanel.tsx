@@ -98,9 +98,9 @@ export function CoveragePanel(): React.JSX.Element {
       : null
 
   return (
-    <aside className="coverage-panel" aria-label="Diagram coverage">
+    <aside className="coverage-panel" aria-label="Specs">
       <div className="coverage-panel-header">
-        <span className="sidebar-title">Coverage</span>
+        <span className="sidebar-title">Specs</span>
         <button
           className="coverage-refresh"
           onClick={() => void runCheck()}

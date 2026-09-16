@@ -191,7 +191,7 @@ const ITEM_BY_KEY: Record<Section, Item> = {
   agent: { key: 'agent', label: 'Agent', icon: <ChatIcon /> },
   files: { key: 'files', label: 'Files', icon: <FolderIcon /> },
   search: { key: 'search', label: 'Search', icon: <SearchIcon /> },
-  coverage: { key: 'coverage', label: 'Diagram coverage', icon: <CoverageIcon /> },
+  coverage: { key: 'coverage', label: 'Specs', icon: <CoverageIcon /> },
   tools: { key: 'tools', label: 'Tools', icon: <ToolsIcon /> },
   git: { key: 'git', label: 'Commit', icon: <GitIcon /> },
   pulls: { key: 'pulls', label: 'Pull requests', icon: <PullRequestIcon /> },
