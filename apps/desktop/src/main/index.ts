@@ -179,7 +179,10 @@ async function walkTree(rootPath: string, dir: string, relPrefix: string): Promi
 
   const nodes: TreeNode[] = []
   for (const entry of entries) {
-    if (entry.name.startsWith('.') && entry.name !== '.env' && entry.name !== '.gitignore') continue
+    // Dotfiles/dot-directories are real project content (.env, .kiro,
+    // .vscode, .codeswim, ...) and show like any other entry — only the
+    // genuinely unbrowsable ones (.git's object store, OS junk) are excluded
+    // below, same as non-dotfile noise like node_modules.
     if (entry.isDirectory() && TREE_IGNORED_DIRS.has(entry.name)) continue
     if (entry.isFile() && TREE_IGNORED_FILES.has(entry.name)) continue
 
@@ -229,17 +232,10 @@ function startWatching(rootPath: string): void {
   stopWatching()
 
   watcher = chokidar.watch(rootPath, {
+    // Mirrors walkTree's ignore set — dotfiles/dot-directories are watched
+    // like anything else, so the tree refreshes when e.g. .kiro/ changes.
     ignored: (path: string) => {
       const base = path.split('/').pop() ?? ''
-      if (
-        base.startsWith('.') &&
-        base !== '.env' &&
-        base !== '.gitignore' &&
-        base !== '.codeswim' &&
-        base !== '.'
-      ) {
-        return true
-      }
       if (TREE_IGNORED_DIRS.has(base) || TREE_IGNORED_FILES.has(base)) return true
       return false
     },
