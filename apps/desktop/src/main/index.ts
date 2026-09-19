@@ -159,7 +159,33 @@ async function walkMarkdown(dir: string, out: string[]): Promise<void> {
   }
 }
 
-const TREE_IGNORED_DIRS = new Set(['node_modules', 'dist', 'out', 'build', '.git'])
+const TREE_IGNORED_DIRS = new Set([
+  'node_modules',
+  'dist',
+  'out',
+  'build',
+  '.git',
+  // Vendor/dependency trees other ecosystems drop into the workspace — never
+  // source the user wrote, and can run into thousands of files (e.g. a
+  // Python .venv's site-packages), which also makes them expensive to
+  // walk/watch and pointless to flag for specs.
+  '.venv',
+  'venv',
+  'env',
+  '__pycache__',
+  '.tox',
+  '.mypy_cache',
+  '.pytest_cache',
+  '.ruff_cache',
+  'site-packages',
+  'vendor',
+  'bower_components',
+  '.next',
+  '.nuxt',
+  '.gradle',
+  'Pods',
+  'target'
+])
 const TREE_IGNORED_FILES = new Set(['.DS_Store'])
 
 interface TreeNode {
@@ -181,8 +207,9 @@ async function walkTree(rootPath: string, dir: string, relPrefix: string): Promi
   for (const entry of entries) {
     // Dotfiles/dot-directories are real project content (.env, .kiro,
     // .vscode, .codeswim, ...) and show like any other entry — only the
-    // genuinely unbrowsable ones (.git's object store, OS junk) are excluded
-    // below, same as non-dotfile noise like node_modules.
+    // genuinely unbrowsable ones (.git's object store, OS junk) or vendored
+    // dependency trees (node_modules and its equivalents in other
+    // ecosystems) are excluded below.
     if (entry.isDirectory() && TREE_IGNORED_DIRS.has(entry.name)) continue
     if (entry.isFile() && TREE_IGNORED_FILES.has(entry.name)) continue
 
@@ -313,22 +340,22 @@ async function writeHooksJson(rootPath: string | null, content: string): Promise
   await fs.writeFile(file, content, 'utf-8')
 }
 
-// .codeswim/coverage-ignore.json — { "paths": [...] }, root-relative posix
-// paths (files or whole directories) the coverage checker and the per-file
-// "not explained yet" banner should skip. Tolerant like runs.json/hooks.json:
-// a missing or malformed file just means "nothing ignored yet", never fatal.
+// .codeswim/spec-ignore — a .gitignore-style text file: one root-relative
+// posix path (file or whole directory) per line, blank lines and `#`
+// comments skipped, that the specs checker and the per-file "not explained
+// yet" banner should skip. Tolerant like runs.json/hooks.json: a missing
+// file just means "nothing ignored yet", never fatal.
 function coverageIgnorePath(rootPath: string): string {
-  return join(rootPath, '.codeswim', 'coverage-ignore.json')
+  return join(rootPath, '.codeswim', 'spec-ignore')
 }
 
 async function readCoverageIgnore(rootPath: string): Promise<string[]> {
   try {
     const raw = await fs.readFile(coverageIgnorePath(rootPath), 'utf-8')
-    const parsed: unknown = JSON.parse(raw)
-    if (!parsed || typeof parsed !== 'object') return []
-    const paths = (parsed as Record<string, unknown>).paths
-    if (!Array.isArray(paths)) return []
-    return paths.filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
+    return raw
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith('#'))
   } catch {
     return []
   }
@@ -337,7 +364,8 @@ async function readCoverageIgnore(rootPath: string): Promise<string[]> {
 async function writeCoverageIgnore(rootPath: string, paths: string[]): Promise<void> {
   const file = coverageIgnorePath(rootPath)
   await fs.mkdir(dirname(file), { recursive: true })
-  await fs.writeFile(file, JSON.stringify({ paths }, null, 2) + '\n', 'utf-8')
+  const lines = paths.map((p) => p.trim()).filter((p) => p.length > 0)
+  await fs.writeFile(file, lines.length > 0 ? lines.join('\n') + '\n' : '', 'utf-8')
 }
 
 interface RunEntry {

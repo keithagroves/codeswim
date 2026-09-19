@@ -17,7 +17,25 @@ const IGNORE_DIRS = new Set([
   '.git',
   '.vscode',
   '.idea',
-  '.DS_Store'
+  '.DS_Store',
+  // Vendor/dependency trees — listTree already prunes these (see main's
+  // TREE_IGNORED_DIRS), but kept here too as a defensive backstop.
+  '.venv',
+  'venv',
+  'env',
+  '__pycache__',
+  '.tox',
+  '.mypy_cache',
+  '.pytest_cache',
+  '.ruff_cache',
+  'site-packages',
+  'vendor',
+  'bower_components',
+  '.next',
+  '.nuxt',
+  '.gradle',
+  'Pods',
+  'target'
 ])
 
 const IGNORE_BASENAMES = new Set([
@@ -101,13 +119,15 @@ export function buildSyncPrompt(report: CoverageReport): string {
   )
   lines.push('')
   lines.push(
-    'Before fixing an item, judge whether it actually needs a codeswim spec at all. Some flagged files are never meant to have one — e.g. another tool\'s own spec/plan files (`.kiro/specs/**`, similar), generated output, or other docs that already serve their own purpose and were never meant to be documented by *this* diagram hierarchy. For those, don\'t write a spec or force a link — instead add the path to `.codeswim/coverage-ignore.json` (create it if missing) as `{ "paths": [...] }`, root-relative posix paths; a whole directory covers everything under it, so prefer that over listing many individual files. Only spend effort on genuine drift: real source/diagram content this project should actually document.'
+    "Before fixing an item, judge whether it actually needs a codeswim spec at all. Some flagged files are never meant to have one — e.g. another tool's own spec/plan files (`.kiro/specs/**`, similar), generated output, or other docs that already serve their own purpose and were never meant to be documented by *this* diagram hierarchy. For those, don't write a spec or force a link — instead add the path to `.codeswim/spec-ignore` (create it if missing), a `.gitignore`-style text file with one root-relative posix path per line; a whole directory covers everything under it, so prefer that over listing many individual files. Only spend effort on genuine drift: real source/diagram content this project should actually document."
   )
   lines.push('')
 
   if (report.brokenLinks.length > 0) {
     lines.push(`## Broken links (${report.brokenLinks.length})`)
-    lines.push('Each link in a diagram resolves to nothing. Either point at the right file or remove the link.')
+    lines.push(
+      'Each link in a diagram resolves to nothing. Either point at the right file or remove the link.'
+    )
     for (const b of report.brokenLinks) {
       lines.push(`- \`${b.sourceFile}:${b.line}:${b.column}\` — ${b.kind}(\`${b.target}\`)`)
     }
@@ -116,14 +136,18 @@ export function buildSyncPrompt(report: CoverageReport): string {
 
   if (report.orphanDiagrams.length > 0) {
     lines.push(`## Orphan diagrams (${report.orphanDiagrams.length})`)
-    lines.push('Not reachable from `overview.md`. Add a markdown link from `overview.md` (or another already-reachable diagram) so readers can find them.')
+    lines.push(
+      'Not reachable from `overview.md`. Add a markdown link from `overview.md` (or another already-reachable diagram) so readers can find them.'
+    )
     for (const o of report.orphanDiagrams) lines.push(`- \`${o}\``)
     lines.push('')
   }
 
   if (report.uncoveredSources.length > 0) {
     lines.push(`## Uncovered source files (${report.uncoveredSources.length})`)
-    lines.push('No diagram references these. Add a reference under the most relevant architecture doc\'s "Source" list (or create a new one if a genuinely new subsystem appeared).')
+    lines.push(
+      'No diagram references these. Add a reference under the most relevant architecture doc\'s "Source" list (or create a new one if a genuinely new subsystem appeared).'
+    )
     for (const s of report.uncoveredSources) lines.push(`- \`${s}\``)
     lines.push('')
   }
@@ -137,8 +161,12 @@ export function buildSyncPrompt(report: CoverageReport): string {
     lines.push('')
   }
 
-  lines.push('Also: verify every node in every flowchart/graph diagram has a `click NodeId call navigate("...")` handler. Specific code/function nodes target their file (with a line ref when you can name the span); abstract nodes (states, errors, return values) target the relevant flow/ADR doc or `overview.md`. Add any missing handlers.')
+  lines.push(
+    'Also: verify every node in every flowchart/graph diagram has a `click NodeId call navigate("...")` handler. Specific code/function nodes target their file (with a line ref when you can name the span); abstract nodes (states, errors, return values) target the relevant flow/ADR doc or `overview.md`. Add any missing handlers.'
+  )
   lines.push('')
-  lines.push('When you\'re done, summarise what you changed in one short paragraph so I can re-run sync to confirm.')
+  lines.push(
+    "When you're done, summarise what you changed in one short paragraph so I can re-run sync to confirm."
+  )
   return lines.join('\n')
 }

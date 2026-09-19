@@ -2167,9 +2167,9 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
   // Live reload: re-read the current file when it changes on disk.
   // Also refresh the runs list when its source files (package.json scripts
   // or .codeswim/runs.json) change, so the agent adding a run shows up in
-  // the dropdown without a workspace reload. Same for coverage-ignore.json —
+  // the dropdown without a workspace reload. Same for .codeswim/spec-ignore —
   // the sync agent edits it directly (see buildSyncPrompt) rather than going
-  // through toggleCoverageIgnore, so the file tree/Coverage panel need to
+  // through toggleCoverageIgnore, so the file tree/Specs panel need to
   // pick up its own change.
   useEffect(() => {
     const unsub = window.api.onFileChanged((absPath) => {
@@ -2179,7 +2179,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       if (rel === 'package.json' || rel === '.codeswim/runs.json') {
         void refreshRuns()
       }
-      if (rel === '.codeswim/coverage-ignore.json') {
+      if (rel === '.codeswim/spec-ignore') {
         void window.api
           .coverageIgnoreRead(root)
           .then((paths) => dispatch({ type: 'set-coverage-ignore', paths }))

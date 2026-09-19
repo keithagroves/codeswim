@@ -110,10 +110,13 @@ The chokidar watcher in main starts when the user picks a folder. It:
   if the changed file is currently displayed).
 - Emits a debounced (200ms) `tree-changed` on add/unlink/addDir/unlinkDir
   so the file tree refreshes.
-- Ignores only `node_modules`, `dist`, `out`, `build`, `.git`, `.DS_Store` —
-  dotfiles/dot-directories (`.env`, `.kiro`, `.vscode`, `.codeswim`, ...)
-  are otherwise real project content and are watched/listed like anything
-  else.
+- Ignores `node_modules`, `dist`, `out`, `build`, `.git`, `.DS_Store`, and
+  other ecosystems' vendored dependency trees (`.venv`, `venv`, `env`,
+  `__pycache__`, `.tox`, `site-packages`, `vendor`, `target`, ... — see
+  `TREE_IGNORED_DIRS` in `apps/desktop/src/main/index.ts`) — dotfiles/
+  dot-directories that aren't one of those (`.env`, `.kiro`, `.vscode`,
+  `.codeswim`, ...) are otherwise real project content and are
+  watched/listed like anything else.
 
 Debouncing matters — editors do multi-step writes (rename + write) that
 fire several events within ~50ms.
