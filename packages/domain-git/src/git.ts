@@ -80,15 +80,30 @@ const NOT_A_REPO: GitStatus = {
   clean: true
 }
 
+// Several renderer effects (GitPanel's status refresh, the activity-bar
+// change-count badge, coverage sync, ...) react to the same file/tree-change
+// events and can call into git at the same moment. Spawning two `git`
+// children at once from Node has a known macOS posix_spawn race that
+// surfaces as a spurious `spawn EBADF` instead of either command's real
+// result, so every call is funneled through this single chain to keep git
+// child-process spawns strictly sequential.
+let queue: Promise<unknown> = Promise.resolve()
+
 async function git(rootPath: string, args: string[]): Promise<string> {
   if (!rootPath) throw new Error('no workspace open')
-  try {
-    const { stdout } = await execFileAsync('git', args, {
+  const run = queue.then(() =>
+    execFileAsync('git', args, {
       cwd: rootPath,
       maxBuffer: MAX_BUFFER,
       // Force machine-stable output regardless of the user's git config.
       env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' }
     })
+  )
+  // Keep the chain alive regardless of this call's outcome, otherwise one
+  // failed command would wedge every git call queued after it.
+  queue = run.catch(() => {})
+  try {
+    const { stdout } = await run
     return stdout
   } catch (err) {
     const e = err as { code?: string; stderr?: string; message?: string }
