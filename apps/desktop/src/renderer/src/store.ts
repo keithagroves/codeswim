@@ -299,6 +299,8 @@ export interface StoreApi {
   toggleSidebar(): void
   refreshTree(): Promise<void>
   sendChat(text: string): Promise<void>
+  // Cancels the main chat's in-flight turn, if any.
+  stopChat(): Promise<void>
   setActiveSection(section: Section | null): void
   toggleActiveSection(section: Section): void
   setSidePanelWidth(width: number): void
@@ -322,7 +324,7 @@ export interface StoreApi {
   // credentials — only ever offers providers already in availableProviders.
   selectModel(model: SelectedModel | null): void
   // Toggles a path in/out of coverageIgnore, persisting to
-  // .codeswim/coverage-ignore.json.
+  // .codeswim/spec-ignore.
   toggleCoverageIgnore(path: string): Promise<void>
   newSession(): Promise<void>
   switchSession(sessionId: string): Promise<void>
@@ -370,6 +372,8 @@ export interface StoreApi {
   closeAgentTab(tabId: string): void
   activateAgentTab(tabId: string): void
   sendAgentChat(tabId: string, text: string): Promise<void>
+  // Cancels a tab's in-flight turn, if any.
+  stopAgentChat(tabId: string): Promise<void>
   // Kanban "Start" button: opens a new agent tab, switches to the Agents
   // view, and sends the card as the first prompt.
   startAgentFromCard(card: KanbanCard): void

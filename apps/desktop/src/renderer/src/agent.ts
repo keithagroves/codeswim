@@ -84,6 +84,10 @@ export interface AgentClient {
     directory?: string,
     model?: SelectedModel
   ): Promise<AgentSendResult>
+  // Cancels the in-flight turn on the server. The pending send()'s promise
+  // still settles on its own (either with whatever partial reply the server
+  // hands back, or with an abort-shaped error) — this only requests the stop.
+  stop(sessionId: string, directory?: string): Promise<void>
   subscribeParts(handler: (update: PartUpdate) => void): () => void
   subscribeQuestions(handler: (event: QuestionEvent) => void): () => void
   listPendingQuestions(sessionId?: string): Promise<PendingQuestion[]>
@@ -301,8 +305,7 @@ export async function connectAgent(url: string, defaultDirectory: string): Promi
         for await (const envelope of stream) {
           if (abort.signal.aborted) break
           const wrapped = envelope as GlobalEventEnvelope | RawEvent
-          const e: RawEvent =
-            (wrapped as GlobalEventEnvelope).payload ?? (wrapped as RawEvent)
+          const e: RawEvent = (wrapped as GlobalEventEnvelope).payload ?? (wrapped as RawEvent)
           if (e.type === 'message.updated') {
             const info = (e.properties as { info?: { id?: string; role?: string } } | undefined)
               ?.info
@@ -317,9 +320,7 @@ export async function connectAgent(url: string, defaultDirectory: string): Promi
             continue
           }
           if (e.type === 'question.replied' || e.type === 'question.rejected') {
-            const props = e.properties as
-              | { sessionID?: string; requestID?: string }
-              | undefined
+            const props = e.properties as { sessionID?: string; requestID?: string } | undefined
             if (props?.sessionID && props?.requestID) {
               for (const h of questionHandlers) {
                 h({ kind: 'closed', sessionID: props.sessionID, requestID: props.requestID })
@@ -356,9 +357,7 @@ export async function connectAgent(url: string, defaultDirectory: string): Promi
         signal: abort.signal
       })
       const sessions = (result.data ?? []) as RawSession[]
-      return sessions
-        .map(toSessionInfo)
-        .sort((a, b) => b.updatedAt - a.updatedAt)
+      return sessions.map(toSessionInfo).sort((a, b) => b.updatedAt - a.updatedAt)
     },
 
     async createSession(directory = defaultDirectory): Promise<SessionInfo> {
@@ -381,9 +380,7 @@ export async function connectAgent(url: string, defaultDirectory: string): Promi
       return messages.map((m) => ({
         id: m.info.id,
         role: m.info.role,
-        parts: m.parts
-          .map(toAssistantPart)
-          .filter((p): p is AssistantPart => p !== null)
+        parts: m.parts.map(toAssistantPart).filter((p): p is AssistantPart => p !== null)
       }))
     },
 
@@ -406,10 +403,17 @@ export async function connectAgent(url: string, defaultDirectory: string): Promi
       const data = result.data as { info: { id: string }; parts: RawPart[] }
       return {
         messageID: data.info.id,
-        parts: data.parts
-          .map(toAssistantPart)
-          .filter((p): p is AssistantPart => p !== null)
+        parts: data.parts.map(toAssistantPart).filter((p): p is AssistantPart => p !== null)
       }
+    },
+
+    async stop(sessionId: string, directory = defaultDirectory): Promise<void> {
+      await client.session.abort({
+        path: { id: sessionId },
+        query: { directory },
+        throwOnError: true,
+        signal: abort.signal
+      })
     },
 
     subscribeParts(handler: (update: PartUpdate) => void): () => void {
@@ -452,16 +456,18 @@ export async function connectAgent(url: string, defaultDirectory: string): Promi
       })
       if (!res.ok) {
         const detail = await res.text().catch(() => '')
-        throw new Error(`POST /question/${requestID}/reply → ${res.status} ${res.statusText} ${detail}`)
+        throw new Error(
+          `POST /question/${requestID}/reply → ${res.status} ${res.statusText} ${detail}`
+        )
       }
     },
 
     async rejectQuestion(requestID: string): Promise<void> {
       const params = new URLSearchParams({ directory: defaultDirectory })
-      const res = await fetch(
-        `${url}/question/${encodeURIComponent(requestID)}/reject?${params}`,
-        { method: 'POST', signal: abort.signal }
-      )
+      const res = await fetch(`${url}/question/${encodeURIComponent(requestID)}/reject?${params}`, {
+        method: 'POST',
+        signal: abort.signal
+      })
       if (!res.ok) {
         throw new Error(`POST /question/${requestID}/reject → ${res.status} ${res.statusText}`)
       }

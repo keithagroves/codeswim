@@ -640,6 +640,10 @@ let agentTabSeq = 1
 export function StoreProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const [state, dispatch] = useReducer(reducer, initialState)
   const agentRef = useRef<AgentClient | null>(null)
+  // Session IDs with a stop in flight — lets sendChat/sendAgentChat's catch
+  // block tell "the user hit Stop" apart from a genuine agent error, since
+  // aborting the server-side run also settles the pending send() call.
+  const stoppingSessionsRef = useRef<Set<string>>(new Set())
   // rootPath for which the agentTabs persistence effect is safe to write.
   // `set-root` resets agentTabs to [] synchronously, well before ensureAgent
   // gets a chance to read the persisted tabs back — without this guard, the
@@ -997,6 +1001,7 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
           undefined,
           stateRef.current.selectedModel ?? undefined
         )
+        stoppingSessionsRef.current.delete(sessionId)
         for (const part of reply.parts) {
           dispatch({ type: 'chat-upsert-part', messageID: reply.messageID, part })
         }
@@ -1008,6 +1013,10 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
           dispatch({ type: 'sessions-set', sessions })
         })
       } catch (err) {
+        if (stoppingSessionsRef.current.delete(sessionId)) {
+          dispatch({ type: 'chat-status', status: 'ready' })
+          return
+        }
         const msg = err instanceof Error ? err.message : String(err)
         dispatch({ type: 'chat-status', status: 'error', error: msg })
         toast(`Agent error: ${msg}`, 'error')
@@ -1015,6 +1024,20 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
     },
     [ensureAgent, toast]
   )
+
+  const stopChat = useCallback(async (): Promise<void> => {
+    const agent = agentRef.current
+    const sessionId = stateRef.current.currentSessionId
+    if (!agent || !sessionId) return
+    stoppingSessionsRef.current.add(sessionId)
+    try {
+      await agent.stop(sessionId)
+    } catch (err) {
+      stoppingSessionsRef.current.delete(sessionId)
+      const msg = err instanceof Error ? err.message : String(err)
+      toast(`Couldn't stop the agent: ${msg}`, 'error')
+    }
+  }, [toast])
 
   const openCurrentFileInEditor = useCallback(async (): Promise<void> => {
     const { rootPath, currentFile } = stateRef.current
@@ -1207,9 +1230,11 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
         p: Partial<Pick<AgentTab, 'sessionId' | 'title' | 'status' | 'error'>>
       ): void => dispatch({ type: 'agent-tab-patch', tabId, patch: p })
 
+      // Declared outside the try so the catch block can still tell which
+      // session's stop (if any) is in flight.
+      let sessionId = tab.sessionId
       try {
         // Sessions are created lazily so an unused tab leaves no history.
-        let sessionId = tab.sessionId
         if (!sessionId) {
           patch({ status: 'connecting' })
           const created = await agent.createSession(directory)
@@ -1231,6 +1256,7 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
           directory,
           stateRef.current.selectedModel ?? undefined
         )
+        stoppingSessionsRef.current.delete(sessionId)
         for (const part of reply.parts) {
           dispatch({ type: 'agent-tab-upsert-part', sessionId, messageID: reply.messageID, part })
         }
@@ -1249,12 +1275,34 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
           }
         })
       } catch (err) {
+        if (sessionId && stoppingSessionsRef.current.delete(sessionId)) {
+          patch({ status: 'ready' })
+          return
+        }
         const msg = err instanceof Error ? err.message : String(err)
         patch({ status: 'error', error: msg })
         toast(`Agent error: ${msg}`, 'error')
       }
     },
     [ensureAgent, toast]
+  )
+
+  const stopAgentChat = useCallback(
+    async (tabId: string): Promise<void> => {
+      const agent = agentRef.current
+      const tab = stateRef.current.agentTabs.find((t) => t.id === tabId)
+      if (!agent || !tab?.sessionId) return
+      const directory = tab.directory ?? stateRef.current.rootPath ?? undefined
+      stoppingSessionsRef.current.add(tab.sessionId)
+      try {
+        await agent.stop(tab.sessionId, directory)
+      } catch (err) {
+        stoppingSessionsRef.current.delete(tab.sessionId)
+        const msg = err instanceof Error ? err.message : String(err)
+        toast(`Couldn't stop the agent: ${msg}`, 'error')
+      }
+    },
+    [toast]
   )
 
   // Kanban "Start" button: opens a fresh agent tab, switches to the Agents
@@ -2449,6 +2497,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       createCurrentExplanation,
       refreshTree,
       sendChat,
+      stopChat,
       setActiveSection,
       toggleActiveSection,
       setSidePanelWidth,
@@ -2483,6 +2532,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       closeAgentTab,
       activateAgentTab,
       sendAgentChat,
+      stopAgentChat,
       startAgentFromCard,
       startAgentInWorktree,
       kanbanRunningCardIds,
@@ -2546,6 +2596,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       createCurrentExplanation,
       refreshTree,
       sendChat,
+      stopChat,
       setActiveSection,
       toggleActiveSection,
       setSidePanelWidth,
@@ -2580,6 +2631,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       closeAgentTab,
       activateAgentTab,
       sendAgentChat,
+      stopAgentChat,
       startAgentFromCard,
       startAgentInWorktree,
       kanbanRunningCardIds,

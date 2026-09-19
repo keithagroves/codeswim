@@ -76,9 +76,7 @@ function parseChatPlan(json: string): SyncPlan | null {
 }
 
 type TextSegment =
-  | { kind: 'prose'; text: string }
-  | { kind: 'plan'; json: string }
-  | { kind: 'plan-pending' }
+  { kind: 'prose'; text: string } | { kind: 'plan'; json: string } | { kind: 'plan-pending' }
 
 // Split assistant text around <plan>…</plan> blocks so the JSON renders as a
 // card instead of raw markdown. An opening tag with no close yet means the
@@ -821,10 +819,13 @@ export function QuestionPrompt({
 }
 
 export function ChatPanel(): React.JSX.Element {
-  const { state, sendChat, toggleChatSettings } = useStore()
+  const { state, sendChat, stopChat, toggleChatSettings } = useStore()
   const [input, setInput] = useState('')
   const listRef = useRef<HTMLDivElement | null>(null)
   const sending = state.chatStatus === 'thinking' || state.chatStatus === 'connecting'
+  // Only an in-flight turn (not "connecting", which has no session yet) can
+  // actually be stopped.
+  const canStop = state.chatStatus === 'thinking'
   const hasPendingQuestion = !!state.pendingQuestion
   // Resolver for path-like inline code in agent messages. Rebuilt only when the
   // file tree changes; a token that names a real file becomes a clickable link.
@@ -932,13 +933,19 @@ export function ChatPanel(): React.JSX.Element {
         />
         <div className="chat-input-toolbar">
           <ModelPicker />
-          <button
-            className="primary chat-send-btn"
-            onClick={send}
-            disabled={!state.rootPath || sending || hasPendingQuestion || !input.trim()}
-          >
-            Send
-          </button>
+          {canStop ? (
+            <button className="secondary chat-stop-btn" onClick={() => void stopChat()}>
+              Stop
+            </button>
+          ) : (
+            <button
+              className="primary chat-send-btn"
+              onClick={send}
+              disabled={!state.rootPath || sending || hasPendingQuestion || !input.trim()}
+            >
+              Send
+            </button>
+          )}
         </div>
       </div>
     </aside>

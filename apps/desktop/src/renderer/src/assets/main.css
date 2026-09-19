@@ -3005,6 +3005,18 @@ body.is-mac .header {
   align-self: flex-end;
 }
 
+.chat-stop-btn {
+  align-self: flex-end;
+  background: var(--error-bg);
+  color: var(--error-text);
+  border-color: var(--error-border);
+  font-weight: 500;
+}
+
+.chat-stop-btn:hover {
+  background: rgba(244, 112, 103, 0.22);
+}
+
 .chat-input-toolbar {
   display: flex;
   align-items: center;

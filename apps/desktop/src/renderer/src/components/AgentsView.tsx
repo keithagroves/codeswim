@@ -59,10 +59,13 @@ function TabStrip(): React.JSX.Element {
 }
 
 function AgentTabBody({ tab }: { tab: AgentTab }): React.JSX.Element {
-  const { state, sendAgentChat } = useStore()
+  const { state, sendAgentChat, stopAgentChat } = useStore()
   const [input, setInput] = useState('')
   const listRef = useRef<HTMLDivElement | null>(null)
   const sending = tab.status === 'thinking' || tab.status === 'connecting'
+  // Only an in-flight turn (not "connecting", which has no session yet) can
+  // actually be stopped.
+  const canStop = tab.status === 'thinking'
   const hasPendingQuestion = !!tab.pendingQuestion
 
   const resolvePath = useMemo(() => {
@@ -137,13 +140,19 @@ function AgentTabBody({ tab }: { tab: AgentTab }): React.JSX.Element {
         />
         <div className="chat-input-toolbar">
           <ModelPicker />
-          <button
-            className="primary chat-send-btn"
-            onClick={send}
-            disabled={sending || hasPendingQuestion || !input.trim()}
-          >
-            Send
-          </button>
+          {canStop ? (
+            <button className="secondary chat-stop-btn" onClick={() => void stopAgentChat(tab.id)}>
+              Stop
+            </button>
+          ) : (
+            <button
+              className="primary chat-send-btn"
+              onClick={send}
+              disabled={sending || hasPendingQuestion || !input.trim()}
+            >
+              Send
+            </button>
+          )}
         </div>
       </div>
     </div>
