@@ -90,7 +90,7 @@ function NodeRow({
           e.preventDefault()
           onContextMenu(node.path, e.clientX, e.clientY)
         }}
-        title={ignored ? `${node.path} (ignored for spec coverage)` : node.path}
+        title={ignored ? `${node.path} (ignored for specs)` : node.path}
       >
         {isDir ? (
           <>
@@ -130,8 +130,8 @@ function NodeRow({
   )
 }
 
-// Exported so CoveragePanel can reuse the same right-click "Ignore for spec
-// coverage" menu on its Broken links / Orphan diagrams / Uncovered sources
+// Exported so CoveragePanel can reuse the same right-click "Ignore for
+// specs" menu on its Broken links / Orphan diagrams / Uncovered sources
 // rows — those are the other place this action needs to be reachable from,
 // since they're often exactly the files someone wants to silence.
 export interface TreeContextMenuState {
@@ -179,7 +179,7 @@ export function TreeContextMenu({
           onClose()
         }}
       >
-        {ignored ? 'Un-ignore for spec coverage' : 'Ignore for spec coverage'}
+        {ignored ? 'Un-ignore for specs' : 'Ignore for specs'}
       </button>
     </div>
   )

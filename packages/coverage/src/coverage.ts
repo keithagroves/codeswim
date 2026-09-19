@@ -30,8 +30,9 @@ export interface CoverageOptions {
   // Predicate identifying files that count as "source code" for the coverage
   // metric. Defaults to a sensible mix of common languages.
   isSourceFile?: (path: string) => boolean
-  // Predicate for "this is a diagram (markdown) file". Defaults to .md/.markdown.
-  isDiagram?: (path: string) => boolean
+  // Predicate for "this is a diagram file". Defaults to an .md/.markdown
+  // file that actually contains a mermaid fence — see defaultIsDiagram.
+  isDiagram?: (file: FileInfo) => boolean
   // Entry path for reachability. Defaults to overview.md at root if present,
   // otherwise the shallowest .md in alphabetical order.
   entry?: string
@@ -102,9 +103,37 @@ export function defaultIsSourceFile(path: string): boolean {
   return DEFAULT_SOURCE_EXTS.has(ext)
 }
 
-export function defaultIsDiagram(path: string): boolean {
-  const ext = extname(path).toLowerCase()
-  return ext === '.md' || ext === '.markdown'
+// A plain prose .md file (README, CHANGELOG, plan notes, another tool's own
+// spec/plan output) is content, not a diagram — it was never meant to be
+// woven into the diagram hierarchy, and treating it as one means the sync
+// agent ends up "explaining" a markdown file by linking it into more
+// markdown. Only a file that actually contains a mermaid fence counts.
+export function defaultIsDiagram(file: FileInfo): boolean {
+  const ext = extname(file.path).toLowerCase()
+  if (ext !== '.md' && ext !== '.markdown') return false
+  return hasMermaidBlock(file.content)
+}
+
+function hasMermaidBlock(content: string): boolean {
+  const lines = content.split(/\r?\n/)
+  let fenceChar: string | null = null
+  let fenceLength = 0
+  for (const line of lines) {
+    const fence = line.match(FENCE_OPEN_RE)
+    if (!fence) continue
+    const seq = fence[2]
+    const ch = seq[0]
+    const len = seq.length
+    if (fenceChar === null) {
+      if (isMermaidFence(fence[3])) return true
+      fenceChar = ch
+      fenceLength = len
+    } else if (ch === fenceChar && len >= fenceLength && fence[3].trim() === '') {
+      fenceChar = null
+      fenceLength = 0
+    }
+  }
+  return false
 }
 
 function defaultIgnore(path: string): boolean {
@@ -246,23 +275,21 @@ function pickEntry(diagrams: string[]): string | null {
   return null
 }
 
-export function analyzeCoverage(
-  files: FileInfo[],
-  options: CoverageOptions = {}
-): CoverageReport {
+export function analyzeCoverage(files: FileInfo[], options: CoverageOptions = {}): CoverageReport {
   const isSource = options.isSourceFile ?? defaultIsSourceFile
   const isDiagram = options.isDiagram ?? defaultIsDiagram
   const ignore = options.ignore ?? defaultIgnore
 
   const filtered = files.filter((f) => !ignore(f.path))
   const fileSet = new Set(filtered.map((f) => f.path))
-  const diagrams = filtered.filter((f) => isDiagram(f.path)).map((f) => f.path)
+  const byPath = new Map(filtered.map((f) => [f.path, f]))
+  const diagrams = filtered.filter((f) => isDiagram(f)).map((f) => f.path)
   const sources = filtered.filter((f) => isSource(f.path)).map((f) => f.path)
 
   // Collect all links per diagram.
   const linksByDiagram = new Map<string, Link[]>()
   for (const f of filtered) {
-    if (!isDiagram(f.path)) continue
+    if (!isDiagram(f)) continue
     linksByDiagram.set(f.path, extractLinks(f))
   }
 
@@ -293,8 +320,9 @@ export function analyzeCoverage(
       const links = linksByDiagram.get(current) ?? []
       for (const link of links) {
         const target = link.resolvedPath
-        if (!target || !isDiagram(target) || reachable.has(target)) continue
-        if (!fileSet.has(target)) continue
+        if (!target || reachable.has(target) || !fileSet.has(target)) continue
+        const targetFile = byPath.get(target)
+        if (!targetFile || !isDiagram(targetFile)) continue
         reachable.add(target)
         queue.push(target)
       }

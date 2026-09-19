@@ -105,8 +105,8 @@ export function CoveragePanel(): React.JSX.Element {
           className="coverage-refresh"
           onClick={() => void runCheck()}
           disabled={!rootPath || run.status === 'running'}
-          title="Re-run coverage check"
-          aria-label="Re-run coverage check"
+          title="Re-run specs check"
+          aria-label="Re-run specs check"
         >
           <RefreshIcon />
         </button>
@@ -114,7 +114,7 @@ export function CoveragePanel(): React.JSX.Element {
 
       <div className="coverage-panel-body">
         {!rootPath ? (
-          <div className="coverage-empty">Open a folder to check diagram coverage.</div>
+          <div className="coverage-empty">Open a folder to check specs.</div>
         ) : run.status === 'error' ? (
           <div className="coverage-empty">Check failed: {run.message}</div>
         ) : !report ? (
@@ -267,9 +267,7 @@ function IssueGroup(props: {
               title={item.tooltip}
             >
               <span className="coverage-item-name">{item.primary}</span>
-              {item.secondary ? (
-                <span className="coverage-item-path">{item.secondary}</span>
-              ) : null}
+              {item.secondary ? <span className="coverage-item-path">{item.secondary}</span> : null}
             </button>
           </li>
         ))}
