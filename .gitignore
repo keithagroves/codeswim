@@ -26,3 +26,9 @@ flyer-web/
 .codeswim/agent-state.json
 *agent-state.json
 examples/sample-architecture/.codeswim/agent-state.json
+
+# Local-only third-party brand assets (e.g. Anthropic's Claude Spark from their
+# press kit). Their trademark guidelines require written permission to use the
+# logo in-product, so these never get committed or shipped — see
+# ClaudeIcon in apps/desktop/src/renderer/src/components/ActivityBar.tsx.
+apps/desktop/src/renderer/src/assets/local/

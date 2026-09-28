@@ -60,12 +60,7 @@ function CoverageIcon(): React.JSX.Element {
     <svg width="27" height="27" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <rect x="3" y="3" width="7" height="5.5" rx="1" stroke="currentColor" strokeWidth="1.5" />
       <rect x="3" y="15.5" width="7" height="5.5" rx="1" stroke="currentColor" strokeWidth="1.5" />
-      <path
-        d="M6.5 8.5v7"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
+      <path d="M6.5 8.5v7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       <path
         d="M13.5 12.5l2.5 2.5 5-5.5"
         stroke="currentColor"
@@ -117,9 +112,32 @@ function TerminalIcon(): React.JSX.Element {
   )
 }
 
+// Anthropic's Claude Spark, behind a local-only feature flag. Their trademark
+// guidelines require written permission to use the logo in-product, so the
+// SVG (from Anthropic's press kit, unmodified) lives in the gitignored
+// assets/local/ and is only used when VITE_CLAUDE_BRAND_ICON=1 is also set.
+// Set it in the root .env.development (read by `npm run dev` only), not .env,
+// which production builds also read. The flag is a build-time constant, so with it
+// off the glob below is dropped from the bundle and nothing ships — and a
+// checkout without the file (CI, other devs) just gets {} and the fallback.
+const claudeSparkUrl: string | undefined =
+  import.meta.env.VITE_CLAUDE_BRAND_ICON === '1'
+    ? Object.values(
+        import.meta.glob<string>('../assets/local/claude-spark.svg', {
+          eager: true,
+          query: '?url',
+          import: 'default'
+        })
+      )[0]
+    : undefined
+
 function ClaudeIcon(): React.JSX.Element {
-  // A sparkle/asterisk burst — Claude Code's mark — over a terminal-ish
-  // baseline, distinguishing it from the plain terminal glyph.
+  if (claudeSparkUrl) {
+    // Full colour, as supplied — the guidelines don't allow recolouring.
+    return <img src={claudeSparkUrl} width={22} height={22} alt="" aria-hidden="true" />
+  }
+  // Fallback when the flag is off: our own asterisk-burst glyph, distinct
+  // from the plain terminal icon (not Anthropic's mark).
   return (
     <svg width="27" height="27" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
