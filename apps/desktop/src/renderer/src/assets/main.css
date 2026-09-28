@@ -4652,6 +4652,20 @@ body.is-panning .diagram-canvas-wrap {
   flex-shrink: 0;
 }
 
+.diff-view-badge {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--accent-tint);
+}
+
+.script-btn.diff-view-accept {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 .diff-view-path {
   flex: 1;
   min-width: 0;

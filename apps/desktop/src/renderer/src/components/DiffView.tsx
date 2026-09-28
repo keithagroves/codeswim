@@ -27,9 +27,13 @@ function classifyLine(line: string): LineKind {
 
 // Renders a raw unified diff with per-line coloring. The diff itself is loaded
 // into app state by showFileDiff (Sync → click a changed file).
+// Also shows a Claude Code proposed edit (state.claudeDiffTab, from the CLI's
+// openDiff via main/claude-ide.ts) with Accept/Reject in place of Close. The
+// CLI writes the file itself on accept; answering in the terminal instead
+// closes this view through the bridge.
 export function DiffView(): React.JSX.Element {
-  const { state, hideDiff } = useStore()
-  const { diffPath, diffContent, diffLoading } = state
+  const { state, hideDiff, resolveClaudeDiff } = useStore()
+  const { diffPath, diffContent, diffLoading, claudeDiffTab } = state
 
   const lines = useMemo(() => {
     if (!diffContent) return []
@@ -41,12 +45,32 @@ export function DiffView(): React.JSX.Element {
   return (
     <div className="diff-view">
       <div className="diff-view-header">
+        {claudeDiffTab ? <span className="diff-view-badge">Claude Code proposed edit</span> : null}
         <span className="diff-view-path" title={diffPath ?? undefined}>
           {diffPath ?? 'Diff'}
         </span>
-        <button className="script-btn" onClick={hideDiff} title="Close diff">
-          Close
-        </button>
+        {claudeDiffTab ? (
+          <>
+            <button
+              className="script-btn"
+              onClick={() => void resolveClaudeDiff(false)}
+              title="Reject this edit"
+            >
+              Reject
+            </button>
+            <button
+              className="script-btn diff-view-accept"
+              onClick={() => void resolveClaudeDiff(true)}
+              title="Accept this edit — Claude Code writes the file"
+            >
+              Accept
+            </button>
+          </>
+        ) : (
+          <button className="script-btn" onClick={hideDiff} title="Close diff">
+            Close
+          </button>
+        )}
       </div>
       <div className="diff-view-body">
         {diffLoading ? (

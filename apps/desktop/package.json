@@ -56,13 +56,15 @@
     "@lezer/highlight": "^1.2.3",
     "@opencode-ai/sdk": "^1.18.21",
     "chokidar": "^5.0.0",
+    "diff": "^9.0.0",
     "electron-updater": "^6.8.9",
     "ghostty-web": "^0.4.0",
     "gray-matter": "^4.0.3",
     "js-yaml": "^5.3.0",
     "mermaid": "^11.17.0",
     "node-pty": "^1.1.0",
-    "opencode-ai": "^1.18.21"
+    "opencode-ai": "^1.18.21",
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "@opencode-ai/plugin": "^1.18.21",
@@ -70,6 +72,7 @@
     "@types/js-yaml": "^4.0.9",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^5.2.0",
     "electron": "43.4.1",
     "electron-builder": "^26.15.3",

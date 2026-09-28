@@ -46,6 +46,7 @@ import {
 } from '@codeswim/domain-git'
 import { getRoomIdentity } from '@codeswim/domain-github'
 import { readAgentTabsFile, writeAgentTabsFile } from './agent-tabs-file'
+import { ClaudeIdeBridge } from './claude-ide'
 import {
   UNBIASED_PROVIDER_ID,
   cancelSignIn as unbiasedCancelSignIn,
@@ -83,7 +84,7 @@ import {
   writeKanbanBoard
 } from '@codeswim/domain-kanban'
 import { readSourceExplanation, resolveWorkspaceFile } from '@codeswim/domain-skills'
-import type { PersistedAgentTabs, ScreenContextV2 } from '@codeswim/contract'
+import type { ClaudeIdeEditorState, PersistedAgentTabs, ScreenContextV2 } from '@codeswim/contract'
 
 // Host of the deployed party server, no scheme. Mirrors the renderer's
 // VITE_PARTY_HOST (chat/connection.ts) — needed here too so the harness
@@ -112,6 +113,16 @@ let sidecarStarting: Promise<SidecarHandle> | null = null
 // tools — one instance for the app's lifetime; issueCapability/revoke rotate
 // which workspace (if any) it currently trusts. See command-server.ts.
 const commandServer = new CommandServer(() => mainWindow)
+
+// Codeswim as "the IDE" for the `claude` CLI in the Claude Code tab — see
+// claude-ide.ts. Its lockfile tracks the watched workspace (startWatching /
+// stopWatching); the Claude tab's pty gets its env in terminal:create.
+const claudeIde = new ClaudeIdeBridge({
+  version: app.getVersion(),
+  send: (channel: string, payload: unknown) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload)
+  }
+})
 
 // Starts (or reuses) the opencode harness for this workspace. Shared by the
 // renderer's harness:start and by main-side callers that need the server,
@@ -338,6 +349,7 @@ function stopWatching(): void {
     watcher = null
     watchedRoot = null
   }
+  void claudeIde.setWorkspace(null)
 }
 
 let treeChangeTimer: NodeJS.Timeout | null = null
@@ -345,6 +357,7 @@ let treeChangeTimer: NodeJS.Timeout | null = null
 function startWatching(rootPath: string): void {
   if (watchedRoot === rootPath && watcher) return
   stopWatching()
+  void claudeIde.setWorkspace(rootPath).catch(() => {})
 
   watcher = chokidar.watch(rootPath, {
     // Mirrors walkTree's ignore set — dotfiles/dot-directories are watched
@@ -1148,6 +1161,15 @@ app.whenReady().then(async () => {
   ipcMain.handle('unbiased:sign-out', (_event, rootPath: string) =>
     unbiasedSignOut(rootPath, unbiasedHost)
   )
+
+  // Claude Code IDE bridge: the renderer reports the open file/selection and
+  // answers proposed diffs (claude-ide.ts pushes 'claude-ide:*' events).
+  ipcMain.on('claude-ide:report-editor', (_event, editorState: ClaudeIdeEditorState) =>
+    claudeIde.reportEditor(editorState)
+  )
+  ipcMain.handle('claude-ide:resolve-diff', (_event, tabName: string, accepted: boolean) =>
+    claudeIde.resolveDiff(tabName, accepted)
+  )
   ipcMain.handle(
     'github:pull-requests',
     (_event, rootPath: string, state?: 'open' | 'closed' | 'all') =>
@@ -1185,7 +1207,14 @@ app.whenReady().then(async () => {
     await writeAgentTabsFile(rootPath, data)
   })
 
-  ipcMain.handle('terminal:create', (_event, cwd?: string, command?: string) => {
+  ipcMain.handle('terminal:create', async (_event, cwd?: string, command?: string) => {
+    // The Claude Code tab: point its CLI at our IDE bridge so it auto-connects
+    // (selection context, diffs shown here for accept/reject).
+    let env = process.env as Record<string, string>
+    if (command === 'claude') {
+      await claudeIde.start()
+      env = claudeIde.claudeEnv(process.env)
+    }
     const id = String(++terminalIdCounter)
     const shell = process.env.SHELL || '/bin/zsh'
     // With no command we spawn a plain interactive shell. With one (e.g. the
@@ -1201,7 +1230,7 @@ app.whenReady().then(async () => {
       cols: 80,
       rows: 24,
       cwd: cwd || process.env.HOME || '/',
-      env: process.env as Record<string, string>
+      env
     })
     ptyProcess.onData((data) => {
       mainWindow?.webContents.send('terminal:data', id, data)
@@ -1254,6 +1283,7 @@ app.on('before-quit', () => {
   stopWatching()
   killActiveRun()
   killTerminals()
+  claudeIde.stop()
   void commandServer.close()
   if (sidecar) {
     void sidecar.stop()

@@ -1,6 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type {
+  ClaudeIdeDiff,
+  ClaudeIdeEditorState,
+  ClaudeIdeOpenFile,
   CommandRendererRequest,
   CommandRendererResponse,
   KanbanBoard,
@@ -450,6 +453,26 @@ const api = {
     const listener = (_event: Electron.IpcRendererEvent, e: UnbiasedAuthEvent): void => cb(e)
     ipcRenderer.on('unbiased:auth-changed', listener)
     return () => ipcRenderer.removeListener('unbiased:auth-changed', listener)
+  },
+  claudeIdeReportEditor: (editorState: ClaudeIdeEditorState): void =>
+    ipcRenderer.send('claude-ide:report-editor', editorState),
+  claudeIdeResolveDiff: (tabName: string, accepted: boolean): Promise<void> =>
+    ipcRenderer.invoke('claude-ide:resolve-diff', tabName, accepted),
+  onClaudeIdeOpenFile: (cb: (req: ClaudeIdeOpenFile) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, req: ClaudeIdeOpenFile): void => cb(req)
+    ipcRenderer.on('claude-ide:open-file', listener)
+    return () => ipcRenderer.removeListener('claude-ide:open-file', listener)
+  },
+  onClaudeIdeShowDiff: (cb: (diff: ClaudeIdeDiff) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, diff: ClaudeIdeDiff): void => cb(diff)
+    ipcRenderer.on('claude-ide:show-diff', listener)
+    return () => ipcRenderer.removeListener('claude-ide:show-diff', listener)
+  },
+  onClaudeIdeCloseDiff: (cb: (tabName: string | null) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, tabName: string | null): void =>
+      cb(tabName)
+    ipcRenderer.on('claude-ide:close-diff', listener)
+    return () => ipcRenderer.removeListener('claude-ide:close-diff', listener)
   },
   terminalCreate: (cwd?: string, command?: string): Promise<string> =>
     ipcRenderer.invoke('terminal:create', cwd, command),

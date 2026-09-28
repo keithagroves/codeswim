@@ -191,6 +191,46 @@ export interface GitHubSignInResult {
   verificationUri: string
 }
 
+// Claude Code IDE bridge (apps/desktop/src/main/claude-ide.ts): Codeswim
+// plays the part VS Code's Claude extension does for a `claude` CLI running
+// in the Claude Code tab — it serves the CLI's IDE MCP tools, so the CLI can
+// see what's open/selected here and route its proposed edits through our
+// diff view for accept/reject. Lines/characters are 0-based, as the CLI
+// expects; the renderer converts from CodeMirror's 1-based lines.
+export interface ClaudeIdePosition {
+  line: number
+  character: number
+}
+
+export interface ClaudeIdeSelection {
+  start: ClaudeIdePosition
+  end: ClaudeIdePosition
+  isEmpty: boolean
+}
+
+// What the renderer reports whenever the open file or its selection changes.
+export interface ClaudeIdeEditorState {
+  // Absolute path of the file in the code view, or null when none is open.
+  filePath: string | null
+  selection: ClaudeIdeSelection | null
+  text: string
+}
+
+// The CLI asked to open a file (optionally at a text match). Main resolves the
+// match to a 1-based line range; relPath is root-relative posix.
+export interface ClaudeIdeOpenFile {
+  relPath: string
+  range: { start: number; end: number } | null
+}
+
+// A proposed edit awaiting accept/reject. `diff` is a unified diff of the
+// file on disk against the CLI's proposed contents.
+export interface ClaudeIdeDiff {
+  tabName: string
+  relPath: string
+  diff: string
+}
+
 // "Sign in with Unbiased" (packages/domain-unbiased). The Pareto API key the
 // device flow mints goes straight from main into opencode's auth store and
 // never crosses IPC; the renderer only sees these display labels.
@@ -430,6 +470,13 @@ export interface DiagramNavApi {
   unbiasedCancelSignIn(): Promise<void>
   unbiasedSignOut(rootPath: string): Promise<void>
   onUnbiasedAuthChanged(cb: (event: UnbiasedAuthEvent) => void): () => void
+  // Claude Code IDE bridge — see ClaudeIdeEditorState above.
+  claudeIdeReportEditor(state: ClaudeIdeEditorState): void
+  claudeIdeResolveDiff(tabName: string, accepted: boolean): Promise<void>
+  onClaudeIdeOpenFile(cb: (req: ClaudeIdeOpenFile) => void): () => void
+  onClaudeIdeShowDiff(cb: (diff: ClaudeIdeDiff) => void): () => void
+  // null closes every Claude diff.
+  onClaudeIdeCloseDiff(cb: (tabName: string | null) => void): () => void
   terminalCreate(cwd?: string, command?: string): Promise<string>
   terminalWrite(id: string, data: string): void
   terminalResize(id: string, cols: number, rows: number): void

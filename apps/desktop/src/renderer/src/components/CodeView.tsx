@@ -104,16 +104,46 @@ export function CodeView({
     ]
     if (lang) extensions.push(lang)
 
+    // Report the open file and its selection to the Claude Code IDE bridge
+    // (main/claude-ide.ts), debounced — this is what lets the `claude` CLI in
+    // the Claude Code tab see "the current selection". Positions are 0-based
+    // for the CLI.
+    const absPath = state.rootPath ? `${state.rootPath}/${path}` : null
+    let reportTimer: ReturnType<typeof setTimeout> | null = null
+    const report = (v: EditorView): void => {
+      if (reportTimer) clearTimeout(reportTimer)
+      reportTimer = setTimeout(() => {
+        const sel = v.state.selection.main
+        const pos = (offset: number): { line: number; character: number } => {
+          const line = v.state.doc.lineAt(offset)
+          return { line: line.number - 1, character: offset - line.from }
+        }
+        window.api.claudeIdeReportEditor({
+          filePath: absPath,
+          selection: { start: pos(sel.from), end: pos(sel.to), isEmpty: sel.empty },
+          text: v.state.sliceDoc(sel.from, sel.to)
+        })
+      }, 120)
+    }
+    extensions.push(
+      EditorView.updateListener.of((update) => {
+        if (update.selectionSet) report(update.view)
+      })
+    )
+
     const view = new EditorView({
       state: EditorState.create({ doc: contents, extensions }),
       parent: hostRef.current
     })
     viewRef.current = view
+    report(view)
     return () => {
+      if (reportTimer) clearTimeout(reportTimer)
+      window.api.claudeIdeReportEditor({ filePath: null, selection: null, text: '' })
       view.destroy()
       viewRef.current = null
     }
-  }, [path, contents])
+  }, [path, contents, state.rootPath])
 
   // searchKeymap's Mod-f binding only fires while CodeMirror's own contentDOM
   // has focus — but this is a read-only viewer people don't reflexively click

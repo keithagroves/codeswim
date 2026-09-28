@@ -138,6 +138,24 @@ npm dies but its children leak.
 The script names come from package.json — they're validated against the
 parsed scripts before spawning, then shell-quoted defensively.
 
+## Claude Code tab (IDE bridge)
+
+The Claude Code tab runs the user's own `claude` CLI in a pty (they sign in
+to it themselves — Codeswim never offers Claude login). Codeswim then acts
+as "the IDE" for it, the way VS Code's Claude extension does:
+[claude-ide.ts](apps/desktop/src/main/claude-ide.ts) runs a loopback
+WebSocket MCP server, writes a `~/.claude/ide/<port>.lock` for the open
+folder, and sets `CLAUDE_CODE_SSE_PORT` in the Claude tab's env so the CLI
+auto-connects. The CLI then gets the code view's selection, and its proposed
+edits (`openDiff`) show in the diff view with Accept/Reject — accept hands
+the contents back and the CLI writes the file.
+
+This protocol is **not published** — it was read off the shipped VS Code
+extension and CLI (tool names, `FILE_SAVED`/`DIFF_REJECTED` results, the
+auth header). If a CLI update stops connecting or diffs stop appearing,
+re-check it against the current extension's `extension.js` first.
+`claude-ide.test.ts` drives the server the way the CLI does.
+
 ## Hooks
 
 The bundled system prompt ([packages/harness/src/prompt/](packages/harness/src/prompt/))

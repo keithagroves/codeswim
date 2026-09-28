@@ -193,6 +193,9 @@ export interface AppState {
   diffPath: string | null
   diffContent: string | null
   diffLoading: boolean
+  // Set while the diff shown is a Claude Code proposed edit (main/claude-ide.ts)
+  // awaiting accept/reject; the CLI's tab name for it.
+  claudeDiffTab: string | null
   tree: TreeNode[] | null
   // Side-panel layout. ActivityBar lives at the very left and stays
   // visible; SidePanel sits to its right and shows whichever section is
@@ -371,6 +374,8 @@ export interface StoreApi {
   showFileDiff(path: string, dir?: string): Promise<void>
   // Closes the main-panel diff viewer, returning to the previous view.
   hideDiff(): void
+  // Answers the Claude Code proposed edit on screen (claudeDiffTab).
+  resolveClaudeDiff(accepted: boolean): Promise<void>
   // Opens the agent panel and asks it to review the given pull request,
   // handing it the PR's diff so it can inspect the changes.
   reviewPullRequest(pr: PullRequest): Promise<void>

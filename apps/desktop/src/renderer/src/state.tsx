@@ -138,6 +138,7 @@ const initialState: AppState = {
   diffPath: null,
   diffContent: null,
   diffLoading: false,
+  claudeDiffTab: null,
   tree: null,
   activeSection: 'agent',
   lastActiveSection: 'agent',
@@ -217,6 +218,8 @@ export type Action =
   | { type: 'show-diff'; path: string }
   | { type: 'set-diff-content'; path: string; content: string }
   | { type: 'hide-diff' }
+  | { type: 'show-claude-diff'; tabName: string; path: string; content: string }
+  | { type: 'close-claude-diff'; tabName: string | null }
   | { type: 'set-tree'; tree: TreeNode[] }
   | { type: 'toggle-sidebar' }
   | {
@@ -447,8 +450,27 @@ function reducer(state: AppState, action: Action): AppState {
         prevView,
         diffPath: action.path,
         diffContent: null,
-        diffLoading: true
+        diffLoading: true,
+        claudeDiffTab: null
       }
+    }
+    case 'show-claude-diff': {
+      const transient = state.view === 'output' || state.view === 'diff'
+      const prevView = transient ? state.prevView : (state.view as FileView)
+      return {
+        ...state,
+        view: 'diff',
+        prevView,
+        diffPath: action.path,
+        diffContent: action.content,
+        diffLoading: false,
+        claudeDiffTab: action.tabName
+      }
+    }
+    case 'close-claude-diff': {
+      if (state.claudeDiffTab === null) return state
+      if (action.tabName !== null && action.tabName !== state.claudeDiffTab) return state
+      return reducer(state, { type: 'hide-diff' })
     }
     case 'set-diff-content': {
       // A newer request may have superseded this one; only apply if the path
@@ -460,7 +482,14 @@ function reducer(state: AppState, action: Action): AppState {
       if (state.view !== 'diff') return state
       const target: View =
         state.prevView ?? (state.currentFile ? fileViewFor(state.currentFile) : 'diagram')
-      return { ...state, view: target, prevView: null, diffPath: null, diffContent: null }
+      return {
+        ...state,
+        view: target,
+        prevView: null,
+        diffPath: null,
+        diffContent: null,
+        claudeDiffTab: null
+      }
     }
     case 'set-tree':
       return { ...state, tree: action.tree }
@@ -2216,7 +2245,40 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
     }
   }, [])
 
-  const hideDiff = useCallback(() => dispatch({ type: 'hide-diff' }), [])
+  // Closing a Claude Code proposal counts as rejecting it (as closing the
+  // diff tab does in VS Code); a plain git diff just closes.
+  const hideDiff = useCallback(() => {
+    const tab = stateRef.current.claudeDiffTab
+    if (tab) void window.api.claudeIdeResolveDiff(tab, false)
+    dispatch({ type: 'hide-diff' })
+  }, [])
+
+  const resolveClaudeDiff = useCallback(async (accepted: boolean): Promise<void> => {
+    const tab = stateRef.current.claudeDiffTab
+    if (!tab) return
+    dispatch({ type: 'hide-diff' })
+    await window.api.claudeIdeResolveDiff(tab, accepted)
+  }, [])
+
+  // The `claude` CLI in the Claude Code tab drives these through the IDE
+  // bridge: proposed edits land in the diff view for accept/reject, and
+  // openFile navigates the code view (main resolves text matches to lines).
+  useEffect(() => {
+    const offShow = window.api.onClaudeIdeShowDiff(({ tabName, relPath, diff }) =>
+      dispatch({ type: 'show-claude-diff', tabName, path: relPath, content: diff })
+    )
+    const offClose = window.api.onClaudeIdeCloseDiff((tabName) =>
+      dispatch({ type: 'close-claude-diff', tabName })
+    )
+    const offOpen = window.api.onClaudeIdeOpenFile(({ relPath, range }) => {
+      void commands.run('nav.openSourceCode', { relPath, range }, HUMAN_ORIGIN)
+    })
+    return () => {
+      offShow()
+      offClose()
+      offOpen()
+    }
+  }, [commands])
 
   const reload = useCallback(async () => {
     if (!state.rootPath || !state.currentFile) return
@@ -2613,6 +2675,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       addToGitignore,
       showFileDiff,
       hideDiff,
+      resolveClaudeDiff,
       reviewPullRequest,
       showPullRequestDiff,
       refreshOpenPrCount,
@@ -2715,6 +2778,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       addToGitignore,
       showFileDiff,
       hideDiff,
+      resolveClaudeDiff,
       reviewPullRequest,
       showPullRequestDiff,
       refreshOpenPrCount,
