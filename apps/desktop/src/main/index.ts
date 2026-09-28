@@ -1212,7 +1212,7 @@ app.whenReady().then(async () => {
     // (selection context, diffs shown here for accept/reject).
     let env = process.env as Record<string, string>
     if (command === 'claude') {
-      await claudeIde.start()
+      await claudeIde.activate()
       env = claudeIde.claudeEnv(process.env)
     }
     const id = String(++terminalIdCounter)

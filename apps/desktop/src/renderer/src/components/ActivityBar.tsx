@@ -119,7 +119,8 @@ function TerminalIcon(): React.JSX.Element {
 // Set it in the root .env.development (read by `npm run dev` only), not .env,
 // which production builds also read. The flag is a build-time constant, so with it
 // off the glob below is dropped from the bundle and nothing ships — and a
-// checkout without the file (CI, other devs) just gets {} and the fallback.
+// checkout without the file (CI, other devs) just gets {}. Without the spark
+// the Claude Code tab isn't shown at all (see ActivityBar below).
 const claudeSparkUrl: string | undefined =
   import.meta.env.VITE_CLAUDE_BRAND_ICON === '1'
     ? Object.values(
@@ -131,24 +132,10 @@ const claudeSparkUrl: string | undefined =
       )[0]
     : undefined
 
+// Only rendered when claudeSparkUrl is set — the tab is hidden otherwise.
 function ClaudeIcon(): React.JSX.Element {
-  if (claudeSparkUrl) {
-    // Full colour, as supplied — the guidelines don't allow recolouring.
-    return <img src={claudeSparkUrl} width={22} height={22} alt="" aria-hidden="true" />
-  }
-  // Fallback when the flag is off: our own asterisk-burst glyph, distinct
-  // from the plain terminal icon (not Anthropic's mark).
-  return (
-    <svg width="27" height="27" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M12 3v8m0 0v8m0-8h8m-8 0H4m6.5-6.5L12 11m1.5-6.5L12 11m-1.5 8.5L12 13m1.5 6.5L12 13"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
+  // Full colour, as supplied — the guidelines don't allow recolouring.
+  return <img src={claudeSparkUrl} width={22} height={22} alt="" aria-hidden="true" />
 }
 
 function GitIcon(): React.JSX.Element {
@@ -267,6 +254,9 @@ export function ActivityBar(): React.JSX.Element {
       {state.activityOrder.map((key) => {
         const item = ITEM_BY_KEY[key]
         if (!item) return null
+        // The Claude Code tab stays hidden unless the real Claude Spark is
+        // available (see claudeSparkUrl) — it looked wrong with our stand-in.
+        if (key === 'claude' && !claudeSparkUrl) return null
         const isActive = active === key
         const isDropTarget = dropBeforeKey === key && dragKey !== key
         const count = badgeFor(key, state)

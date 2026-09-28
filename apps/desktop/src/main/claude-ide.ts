@@ -176,6 +176,10 @@ export class ClaudeIdeBridge {
   private readonly diffs = new Map<string, PendingDiff>()
   private starting: Promise<void> | null = null
   private lockOps: Promise<void> = Promise.resolve()
+  // Off until the Claude Code tab launches the CLI (activate()): until then
+  // there's no lockfile, so a `claude` the user runs in their own terminal
+  // never finds Codeswim as an IDE it didn't ask for.
+  private active = false
 
   constructor(
     private readonly host: ClaudeIdeHost,
@@ -252,8 +256,16 @@ export class ClaudeIdeBridge {
     return run
   }
 
+  // Called when the Claude Code tab spawns the CLI: starts the server and
+  // publishes the lockfile for the open folder from then on.
+  async activate(): Promise<void> {
+    this.active = true
+    await this.start()
+    await this.setWorkspace(this.root)
+  }
+
   private async syncLockfile(root: string | null): Promise<void> {
-    if (!root) return this.removeLockfile()
+    if (!root || !this.active) return this.removeLockfile()
     await this.start()
     const dir = join(this.configDir, 'ide')
     await fs.mkdir(dir, { recursive: true, mode: 0o700 })

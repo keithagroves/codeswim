@@ -90,6 +90,7 @@ beforeEach(async () => {
   } as ClaudeIdeHost
   bridge = new ClaudeIdeBridge(host, join(dir, 'claude'))
   await bridge.setWorkspace(root)
+  await bridge.activate()
 })
 
 afterEach(() => {
@@ -102,6 +103,18 @@ function lock(): Record<string, unknown> {
 }
 
 describe('ClaudeIdeBridge', () => {
+  it('publishes no lockfile until the Claude tab activates it', async () => {
+    const idle = new ClaudeIdeBridge(
+      { version: 'x', send: () => {} } as ClaudeIdeHost,
+      join(dir, 'idle-claude')
+    )
+    await idle.setWorkspace(root)
+    expect(existsSync(join(dir, 'idle-claude', 'ide'))).toBe(false)
+    await idle.activate()
+    expect(existsSync(join(dir, 'idle-claude', 'ide', `${idle.getPort()}.lock`))).toBe(true)
+    idle.stop()
+  })
+
   it('writes an owner-only lockfile the CLI can discover', () => {
     const l = lock()
     expect(l).toMatchObject({
