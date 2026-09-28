@@ -19,10 +19,15 @@ electron-vite bundles the workspace source directly:
 
 - `@codeswim/contract` — IPC payload types + the `DiagramNavApi` surface;
   the versioned seam between main, preload, and renderer.
-- `@codeswim/domain-git` / `-github` / `-kanban` / `-skills` — Electron-free
+- `@codeswim/domain-git` / `-github` / `-kanban` / `-skills` / `-unbiased` — Electron-free
   domain logic. Electron-coupled pieces (auth secret storage, `shell.open`,
   the built-in skills dir) are *injected* by `apps/desktop/src/main` rather
   than imported, so the packages stay portable.
+- `@codeswim/domain-unbiased` — "Sign in with Unbiased" (partner device
+  flow that mints a Pareto key into opencode's auth store). Unbiased's rule:
+  never re-send a token poll — a second poll after the 200 revokes the key.
+  `npm run conformance --workspace @codeswim/domain-unbiased` runs their
+  vendored kit (`conformance/`, kept verbatim); must stay 6/6.
 - `@codeswim/coverage` — the diagram/source drift checker.
 - `@codeswim/commit` — prompt-commit synthesis + triage.
 - `@codeswim/harness` — the opencode plugin, session gate, tools, and

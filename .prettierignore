@@ -4,3 +4,7 @@ pnpm-lock.yaml
 LICENSE.md
 tsconfig.json
 tsconfig.*.json
+# Unbiased's vendored partner kit (see eslint.config) — kept verbatim.
+packages/domain-unbiased/conformance/*.ts
+packages/domain-unbiased/conformance/adapters/reference.ts
+packages/domain-unbiased/partner-integration-guide.md

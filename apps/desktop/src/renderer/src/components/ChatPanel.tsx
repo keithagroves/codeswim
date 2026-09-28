@@ -443,6 +443,102 @@ interface ProviderOption {
   hasOauth: boolean
 }
 
+// "Sign in with Unbiased" — the recommended way to get a model: a browser
+// approval (device flow, main/unbiased.ts) mints a Pareto key straight into
+// opencode's auth store, no key copying. Sits above the paste-a-key form.
+function UnbiasedSignIn(): React.JSX.Element {
+  const { state, unbiasedSignIn, unbiasedCancelSignIn, unbiasedSignOut } = useStore()
+  const { account, pending, error } = state.unbiased
+  const [starting, setStarting] = useState(false)
+  const [codeCopied, setCodeCopied] = useState(false)
+
+  const signIn = async (): Promise<void> => {
+    setStarting(true)
+    try {
+      await unbiasedSignIn()
+    } finally {
+      setStarting(false)
+    }
+  }
+
+  const copyCode = async (code: string): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(code)
+      setCodeCopied(true)
+      setTimeout(() => setCodeCopied(false), 1500)
+    } catch {
+      // Clipboard blocked — the code stays visible to type by hand.
+    }
+  }
+
+  return (
+    <div className="unbiased-signin">
+      {pending ? (
+        // Show the URL and code even though the browser opened itself — it
+        // may not have, and the user matches this code on the approval page.
+        <div className="chat-device">
+          <p className="chat-help-note">
+            Approve in your browser, or open{' '}
+            <a href={pending.verificationUriComplete} target="_blank" rel="noreferrer">
+              {pending.verificationUri.replace(/^https?:\/\//, '')}
+            </a>{' '}
+            and enter:
+          </p>
+          <button
+            className="chat-device-code"
+            type="button"
+            title="Copy code to clipboard"
+            onClick={() => void copyCode(pending.userCode)}
+          >
+            {pending.userCode}
+            <span className="chat-device-copy">{codeCopied ? 'Copied' : 'Copy'}</span>
+          </button>
+          <p className="chat-help-note">Waiting for approval…</p>
+          <div className="chat-help-actions">
+            <button className="secondary" onClick={() => void unbiasedCancelSignIn()}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : account ? (
+        <>
+          <p>
+            Signed in to Unbiased
+            {account.workloadName ? (
+              <>
+                {' '}
+                · workload <strong>{account.workloadName}</strong>
+              </>
+            ) : null}
+            {account.userName ? <> as {account.userName}</> : null}
+          </p>
+          <div className="chat-help-actions">
+            <button className="secondary" onClick={() => void unbiasedSignOut()}>
+              Sign out
+            </button>
+            <button className="secondary" onClick={() => void signIn()} disabled={starting}>
+              Sign in again
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p>
+            Codeswim runs best on <strong>Unbiased AI’s Pareto</strong> model. Sign in or create an
+            account in your browser — no API key to copy.
+          </p>
+          <div className="chat-help-actions">
+            <button className="primary" onClick={() => void signIn()} disabled={starting}>
+              {starting ? 'Opening browser…' : 'Sign in with Unbiased'}
+            </button>
+          </div>
+        </>
+      )}
+      {error ? <p className="chat-help-error">{error}</p> : null}
+    </div>
+  )
+}
+
 function ProviderSetup({ onCancel }: { onCancel?: () => void } = {}): React.JSX.Element {
   const { fetchProviderMethods, configureProvider } = useStore()
   const [methods, setMethods] = useState<ProviderOption[] | null>(null)
@@ -514,14 +610,16 @@ function ProviderSetup({ onCancel }: { onCancel?: () => void } = {}): React.JSX.
   return (
     <div className="chat-help">
       <div className="chat-help-title">Configure an AI provider</div>
+      <UnbiasedSignIn />
       {loadError ? (
         <p className="chat-help-error">Couldn’t load providers: {loadError}</p>
       ) : methods === null ? (
         <p className="chat-help-note">Loading providers…</p>
       ) : (
         <>
-          <p>
-            Pick a provider and paste an API key. The key is sent only to the local opencode server.
+          <p className="chat-help-subtitle">Or paste an API key</p>
+          <p className="chat-help-note">
+            Any provider works. The key is sent only to the local opencode server.
           </p>
           <label className="chat-help-label">
             Provider

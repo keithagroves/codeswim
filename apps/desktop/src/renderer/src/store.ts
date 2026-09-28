@@ -26,7 +26,9 @@ import type {
   SkillFileContent,
   SkillFileNode,
   SkillListResult,
-  SkillScope
+  SkillScope,
+  UnbiasedAccount,
+  UnbiasedSignInPending
 } from '@codeswim/contract'
 import type { LineRange } from './path-utils'
 import type { SurfaceContextRegistry } from './context/surface-context'
@@ -248,6 +250,14 @@ export interface AppState {
   // Populated on connect — this is what the model-switcher lists, so
   // switching models never re-prompts for an API key.
   availableProviders: ConfiguredProvider[]
+  // "Sign in with Unbiased" status (main/unbiased.ts). `pending` holds the
+  // code to show while the user approves in the browser; `error` is
+  // user-facing copy from the last failed attempt.
+  unbiased: {
+    account: UnbiasedAccount | null
+    pending: UnbiasedSignInPending | null
+    error: string | null
+  }
   // Root-relative posix paths (files or whole directories) the user has
   // right-clicked "Ignore for spec coverage" on in the file tree — see
   // coverage/ignore.ts. Excluded from the Sync/coverage report and from
@@ -320,6 +330,11 @@ export interface StoreApi {
   toggleChatSettings(): void
   fetchProviderMethods(): Promise<Record<string, Array<{ type: 'oauth' | 'api'; label: string }>>>
   configureProvider(provider: string, apiKey: string): Promise<void>
+  // Starts the Unbiased device flow; progress lands in state.unbiased and a
+  // successful sign-in reconnects the agent pinned to Pareto.
+  unbiasedSignIn(): Promise<void>
+  unbiasedCancelSignIn(): Promise<void>
+  unbiasedSignOut(): Promise<void>
   // Pins new chat sends (any tab) to this provider/model. Doesn't touch
   // credentials — only ever offers providers already in availableProviders.
   selectModel(model: SelectedModel | null): void

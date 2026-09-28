@@ -6,7 +6,19 @@ import eslintPluginReactHooks from 'eslint-plugin-react-hooks'
 import eslintPluginReactRefresh from 'eslint-plugin-react-refresh'
 
 export default defineConfig(
-  { ignores: ['**/node_modules', '**/dist', '**/out', '.wrangler/**', 'party/**'] },
+  {
+    ignores: [
+      '**/node_modules',
+      '**/dist',
+      '**/out',
+      '.wrangler/**',
+      'party/**',
+      // Unbiased's partner conformance kit, vendored verbatim so a new kit
+      // drop diffs cleanly. Our adapter (adapters/codeswim.ts) is linted.
+      'packages/domain-unbiased/conformance/*.ts',
+      'packages/domain-unbiased/conformance/adapters/reference.ts'
+    ]
+  },
   tseslint.configs.recommended,
   eslintPluginReact.configs.flat.recommended,
   eslintPluginReact.configs.flat['jsx-runtime'],

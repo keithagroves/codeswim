@@ -14,7 +14,7 @@
       // main: MAIN_VITE_*). Declared here so Turbo passes them through to the
       // task AND keys the cache on them — otherwise a changed host replays a
       // stale build and the app ships pointing at 127.0.0.1.
-      "env": ["VITE_PARTY_HOST", "MAIN_VITE_GITHUB_CLIENT_ID"],
+      "env": ["VITE_PARTY_HOST", "MAIN_VITE_GITHUB_CLIENT_ID", "MAIN_VITE_UNBIASED_CLIENT_ID"],
       "outputs": ["out/**", "dist/**"]
     }
   }

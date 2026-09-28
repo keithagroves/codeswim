@@ -46,6 +46,14 @@ import {
 } from '@codeswim/domain-git'
 import { getRoomIdentity } from '@codeswim/domain-github'
 import { readAgentTabsFile, writeAgentTabsFile } from './agent-tabs-file'
+import {
+  UNBIASED_PROVIDER_ID,
+  cancelSignIn as unbiasedCancelSignIn,
+  getStatus as unbiasedStatus,
+  signOut as unbiasedSignOut,
+  startSignIn as unbiasedSignIn,
+  type UnbiasedHost
+} from './unbiased'
 import { CommandServer, type CommandRendererResponse } from './command-server'
 import { createCardWorktree, listCardWorktrees, removeCardWorktree } from './kanban-worktree'
 import {
@@ -104,6 +112,86 @@ let sidecarStarting: Promise<SidecarHandle> | null = null
 // tools — one instance for the app's lifetime; issueCapability/revoke rotate
 // which workspace (if any) it currently trusts. See command-server.ts.
 const commandServer = new CommandServer(() => mainWindow)
+
+// Starts (or reuses) the opencode harness for this workspace. Shared by the
+// renderer's harness:start and by main-side callers that need the server,
+// e.g. storing an Unbiased key in opencode's auth store.
+async function ensureSidecar(rootPath: string): Promise<SidecarHandle> {
+  if (sidecar && sidecarRoot === rootPath) {
+    return sidecar
+  }
+  if (sidecar && sidecarRoot !== rootPath) {
+    await sidecar.stop()
+    sidecar = null
+    sidecarRoot = null
+    commandServer.revoke()
+  }
+  if (!sidecarStarting) {
+    const [identity, token, capability] = await Promise.all([
+      getRoomIdentity(rootPath),
+      githubToken(),
+      commandServer.issueCapability(rootPath)
+    ])
+    sidecarStarting = startSidecar({
+      workspaceRoot: rootPath,
+      chat: identity
+        ? {
+            partyHost: PARTY_HOST,
+            slug: identity.slug,
+            publicRoomId: identity.publicRoomId,
+            teamRoomId: identity.roomId,
+            token
+          }
+        : null,
+      command: capability,
+      onStdout: (line) => mainWindow?.webContents.send('harness:log', { stream: 'stdout', line }),
+      onStderr: (line) => mainWindow?.webContents.send('harness:log', { stream: 'stderr', line }),
+      onExit: (code, info) => {
+        mainWindow?.webContents.send('harness:exit', {
+          code,
+          signal: info.signal,
+          stderrTail: info.stderrTail
+        })
+        sidecar = null
+        sidecarRoot = null
+        commandServer.revoke()
+      }
+    }).finally(() => {
+      sidecarStarting = null
+    })
+  }
+  sidecar = await sidecarStarting
+  sidecarRoot = rootPath
+  return sidecar
+}
+
+// Writes/removes a provider credential in opencode's auth store. The store
+// lives in the app's shared opencode XDG dir (sidecar-env.ts), not per
+// workspace, so whichever harness is up can take it; only start one for
+// `rootPath` when none is running or starting.
+async function opencodeAuth(
+  rootPath: string,
+  provider: string,
+  body: { type: 'api'; key: string } | null
+): Promise<void> {
+  const handle = sidecar ?? (await (sidecarStarting ?? ensureSidecar(rootPath)))
+  const res = await fetch(new URL(`auth/${encodeURIComponent(provider)}`, handle.url), {
+    method: body ? 'PUT' : 'DELETE',
+    headers: body ? { 'content-type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined
+  })
+  if (!res.ok) throw new Error(`opencode auth ${body ? 'set' : 'remove'} failed (${res.status})`)
+}
+
+const unbiasedHost: UnbiasedHost = {
+  applyKey: (rootPath, key) => opencodeAuth(rootPath, UNBIASED_PROVIDER_ID, { type: 'api', key }),
+  removeKey: (rootPath) => opencodeAuth(rootPath, UNBIASED_PROVIDER_ID, null),
+  notify: (event) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('unbiased:auth-changed', event)
+    }
+  }
+}
 
 const terminals = new Map<string, pty.IPty>()
 let terminalIdCounter = 0
@@ -839,52 +927,8 @@ app.whenReady().then(async () => {
   })
 
   ipcMain.handle('harness:start', async (_event, rootPath: string) => {
-    if (sidecar && sidecarRoot === rootPath) {
-      return { url: sidecar.url.toString() }
-    }
-    if (sidecar && sidecarRoot !== rootPath) {
-      await sidecar.stop()
-      sidecar = null
-      sidecarRoot = null
-      commandServer.revoke()
-    }
-    if (!sidecarStarting) {
-      const [identity, token, capability] = await Promise.all([
-        getRoomIdentity(rootPath),
-        githubToken(),
-        commandServer.issueCapability(rootPath)
-      ])
-      sidecarStarting = startSidecar({
-        workspaceRoot: rootPath,
-        chat: identity
-          ? {
-              partyHost: PARTY_HOST,
-              slug: identity.slug,
-              publicRoomId: identity.publicRoomId,
-              teamRoomId: identity.roomId,
-              token
-            }
-          : null,
-        command: capability,
-        onStdout: (line) => mainWindow?.webContents.send('harness:log', { stream: 'stdout', line }),
-        onStderr: (line) => mainWindow?.webContents.send('harness:log', { stream: 'stderr', line }),
-        onExit: (code, info) => {
-          mainWindow?.webContents.send('harness:exit', {
-            code,
-            signal: info.signal,
-            stderrTail: info.stderrTail
-          })
-          sidecar = null
-          sidecarRoot = null
-          commandServer.revoke()
-        }
-      }).finally(() => {
-        sidecarStarting = null
-      })
-    }
-    sidecar = await sidecarStarting
-    sidecarRoot = rootPath
-    return { url: sidecar.url.toString() }
+    const handle = await ensureSidecar(rootPath)
+    return { url: handle.url.toString() }
   })
 
   ipcMain.handle('harness:stop', async () => {
@@ -1092,6 +1136,18 @@ app.whenReady().then(async () => {
   })
   ipcMain.handle('github:sign-out', () => githubSignOut())
   ipcMain.handle('github:token', () => githubToken())
+
+  // "Sign in with Unbiased" — device flow like GitHub's, but the result is a
+  // Pareto key stored in opencode's auth store (see unbiased.ts). Completion
+  // is pushed via 'unbiased:auth-changed'.
+  ipcMain.handle('unbiased:status', () => unbiasedStatus())
+  ipcMain.handle('unbiased:sign-in', (_event, rootPath: string) =>
+    unbiasedSignIn(rootPath, unbiasedHost)
+  )
+  ipcMain.handle('unbiased:cancel-sign-in', () => unbiasedCancelSignIn())
+  ipcMain.handle('unbiased:sign-out', (_event, rootPath: string) =>
+    unbiasedSignOut(rootPath, unbiasedHost)
+  )
   ipcMain.handle(
     'github:pull-requests',
     (_event, rootPath: string, state?: 'open' | 'closed' | 'all') =>

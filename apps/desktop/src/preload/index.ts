@@ -7,6 +7,9 @@ import type {
   KanbanWorktreeInfo,
   PersistedAgentTabs,
   ScreenContextV2,
+  UnbiasedAuthEvent,
+  UnbiasedSignInPending,
+  UnbiasedStatus,
   UpdateStatusPayload
 } from '@codeswim/contract'
 
@@ -436,6 +439,17 @@ const api = {
     const listener = (_event: Electron.IpcRendererEvent, user: GitHubUser | null): void => cb(user)
     ipcRenderer.on('github:auth-changed', listener)
     return () => ipcRenderer.removeListener('github:auth-changed', listener)
+  },
+  unbiasedStatus: (): Promise<UnbiasedStatus> => ipcRenderer.invoke('unbiased:status'),
+  unbiasedSignIn: (rootPath: string): Promise<UnbiasedSignInPending | { error: string }> =>
+    ipcRenderer.invoke('unbiased:sign-in', rootPath),
+  unbiasedCancelSignIn: (): Promise<void> => ipcRenderer.invoke('unbiased:cancel-sign-in'),
+  unbiasedSignOut: (rootPath: string): Promise<void> =>
+    ipcRenderer.invoke('unbiased:sign-out', rootPath),
+  onUnbiasedAuthChanged: (cb: (event: UnbiasedAuthEvent) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, e: UnbiasedAuthEvent): void => cb(e)
+    ipcRenderer.on('unbiased:auth-changed', listener)
+    return () => ipcRenderer.removeListener('unbiased:auth-changed', listener)
   },
   terminalCreate: (cwd?: string, command?: string): Promise<string> =>
     ipcRenderer.invoke('terminal:create', cwd, command),

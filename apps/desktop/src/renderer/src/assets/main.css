@@ -3038,6 +3038,25 @@ body.is-mac .header {
   margin-bottom: 6px;
 }
 
+.unbiased-signin {
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.unbiased-signin a {
+  color: var(--accent);
+}
+
+.unbiased-signin a:hover {
+  color: var(--accent-hover);
+}
+
+.chat-help .chat-help-subtitle {
+  font-weight: 600;
+  margin-top: 0;
+}
+
 .chat-help p {
   margin: 6px 0;
 }

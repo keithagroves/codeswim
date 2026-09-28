@@ -191,6 +191,38 @@ export interface GitHubSignInResult {
   verificationUri: string
 }
 
+// "Sign in with Unbiased" (packages/domain-unbiased). The Pareto API key the
+// device flow mints goes straight from main into opencode's auth store and
+// never crosses IPC; the renderer only sees these display labels.
+export interface UnbiasedAccount {
+  workloadName: string
+  keyName: string
+  // Approving member's profile name; null when the platform didn't send one.
+  userName: string | null
+  signedInAt: string
+}
+
+// What to show while the user approves in the browser. Show both the code
+// and the URL even though the browser opens itself — it may not have.
+export interface UnbiasedSignInPending {
+  userCode: string
+  verificationUri: string
+  verificationUriComplete: string
+  expiresAt: number
+}
+
+export interface UnbiasedStatus {
+  account: UnbiasedAccount | null
+  pending: UnbiasedSignInPending | null
+}
+
+// Pushed when a background sign-in finishes: 'signed-in' once the key is in
+// opencode's auth store, 'error' with user-facing copy otherwise.
+export type UnbiasedAuthEvent =
+  | { status: 'signed-in'; account: UnbiasedAccount }
+  | { status: 'signed-out' }
+  | { status: 'error'; message: string }
+
 export interface PullRequest {
   number: number
   title: string
@@ -390,6 +422,14 @@ export interface DiagramNavApi {
   mergePullRequest(rootPath: string, number: number, method?: MergeMethod): Promise<MergeResult>
   pullRequestDiff(rootPath: string, number: number): Promise<PullRequestDiff>
   onGitHubAuthChanged(cb: (user: GitHubUser | null) => void): () => void
+  // Unbiased sign-in. signIn starts the device flow (rootPath picks the
+  // harness whose auth store receives the key) and returns the code to show;
+  // completion arrives via onUnbiasedAuthChanged.
+  unbiasedStatus(): Promise<UnbiasedStatus>
+  unbiasedSignIn(rootPath: string): Promise<UnbiasedSignInPending | { error: string }>
+  unbiasedCancelSignIn(): Promise<void>
+  unbiasedSignOut(rootPath: string): Promise<void>
+  onUnbiasedAuthChanged(cb: (event: UnbiasedAuthEvent) => void): () => void
   terminalCreate(cwd?: string, command?: string): Promise<string>
   terminalWrite(id: string, data: string): void
   terminalResize(id: string, cols: number, rows: number): void

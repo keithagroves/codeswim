@@ -52,7 +52,8 @@ import type {
   SkillFileContent,
   SkillFileNode,
   SkillListResult,
-  SkillScope
+  SkillScope,
+  UnbiasedAuthEvent
 } from '@codeswim/contract'
 import { CommandRegistry, CommandRegistryError } from './commands/registry'
 import { registerNavCommands } from './commands/nav'
@@ -158,6 +159,7 @@ const initialState: AppState = {
   activeAgentTabId: null,
   selectedModel: null,
   availableProviders: [],
+  unbiased: { account: null, pending: null, error: null },
   coverageIgnore: []
 }
 
@@ -278,7 +280,26 @@ export type Action =
   | { type: 'set-open-pr-count'; count: number }
   | { type: 'set-selected-model'; model: SelectedModel | null }
   | { type: 'set-available-providers'; providers: ConfiguredProvider[] }
+  | { type: 'set-unbiased'; patch: Partial<AppState['unbiased']> }
   | { type: 'set-coverage-ignore'; paths: string[] }
+
+// opencode provider (and model) id for Unbiased AI's Pareto — see
+// main/sidecar.ts's provider config and main/unbiased.ts.
+const UNBIASED_PROVIDER = 'pareto'
+
+// A 401/403 from api.unbiased.ai means the key was revoked in the Unbiased
+// dashboard or the account lost access; the only fix is signing in again, so
+// say that instead of surfacing the raw provider error.
+function describeAgentError(err: unknown, model: SelectedModel | null): string {
+  const msg = err instanceof Error ? err.message : String(err)
+  if (
+    model?.providerID === UNBIASED_PROVIDER &&
+    /\b40[13]\b|unauthori[sz]ed|forbidden|invalid[\s_-]*api[\s_-]*key/i.test(msg)
+  ) {
+    return 'Unbiased rejected the API key — it may have been revoked, or the account lost access. Sign in with Unbiased again.'
+  }
+  return msg
+}
 
 function fileViewFor(rel: string): 'diagram' | 'code' {
   return extname(rel) === '.md' ? 'diagram' : 'code'
@@ -625,6 +646,8 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, selectedModel: action.model }
     case 'set-available-providers':
       return { ...state, availableProviders: action.providers }
+    case 'set-unbiased':
+      return { ...state, unbiased: { ...state.unbiased, ...action.patch } }
     case 'set-coverage-ignore':
       return { ...state, coverageIgnore: action.paths }
     default:
@@ -946,7 +969,8 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
               (p) => p.id === current.providerID && p.models.some((m) => m.id === current.modelID)
             )
           if (stillValid) return
-          const first = providers[0]
+          // Unbiased's Pareto is the house default whenever it has a key.
+          const first = providers.find((p) => p.id === UNBIASED_PROVIDER) ?? providers[0]
           if (!first) return
           const defaultModelId = defaults[first.id]
           const modelID =
@@ -1017,7 +1041,7 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
           dispatch({ type: 'chat-status', status: 'ready' })
           return
         }
-        const msg = err instanceof Error ? err.message : String(err)
+        const msg = describeAgentError(err, stateRef.current.selectedModel)
         dispatch({ type: 'chat-status', status: 'error', error: msg })
         toast(`Agent error: ${msg}`, 'error')
       }
@@ -1279,7 +1303,7 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
           patch({ status: 'ready' })
           return
         }
-        const msg = err instanceof Error ? err.message : String(err)
+        const msg = describeAgentError(err, stateRef.current.selectedModel)
         patch({ status: 'error', error: msg })
         toast(`Agent error: ${msg}`, 'error')
       }
@@ -1370,24 +1394,89 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
     return getProviderAuthMethods(conn.url, root)
   }, [])
 
+  // Reconnect with new credentials. If we already had a connected agent
+  // (settings opened from a working session), close it first so the next
+  // call picks up the new provider list.
+  const reconnectAgent = useCallback(
+    async (root: string): Promise<void> => {
+      if (agentRef.current) {
+        await agentRef.current.close().catch(() => {})
+        agentRef.current = null
+      }
+      await ensureAgent(root)
+    },
+    [ensureAgent]
+  )
+
   const configureProvider = useCallback(
     async (provider: string, apiKey: string): Promise<void> => {
       const root = stateRef.current.rootPath
       if (!root) throw new Error('Open a folder first')
       const conn = await window.api.startHarness(root)
       await setApiKey(conn.url, root, provider, apiKey)
-      // Reconnect with the new credentials. If we already had a connected
-      // agent (settings opened from a working session), close it first so
-      // the next call picks up the new provider list.
-      if (agentRef.current) {
-        await agentRef.current.close().catch(() => {})
-        agentRef.current = null
-      }
-      await ensureAgent(root)
+      await reconnectAgent(root)
       dispatch({ type: 'chat-set-settings', open: false })
     },
-    [ensureAgent]
+    [reconnectAgent]
   )
+
+  const unbiasedSignIn = useCallback(async (): Promise<void> => {
+    const root = stateRef.current.rootPath
+    if (!root) throw new Error('Open a folder first')
+    dispatch({ type: 'set-unbiased', patch: { error: null } })
+    const result = await window.api.unbiasedSignIn(root)
+    if ('error' in result) {
+      dispatch({ type: 'set-unbiased', patch: { pending: null, error: result.error } })
+    } else {
+      dispatch({ type: 'set-unbiased', patch: { pending: result } })
+    }
+  }, [])
+
+  const unbiasedCancelSignIn = useCallback(async (): Promise<void> => {
+    await window.api.unbiasedCancelSignIn()
+    dispatch({ type: 'set-unbiased', patch: { pending: null } })
+  }, [])
+
+  const unbiasedSignOut = useCallback(async (): Promise<void> => {
+    const root = stateRef.current.rootPath
+    if (!root) throw new Error('Open a folder first')
+    await window.api.unbiasedSignOut(root)
+  }, [])
+
+  // Sign-in status on boot, then whatever main pushes as the background
+  // device flow resolves. A new key means a new provider list, so reconnect
+  // — pinned to Pareto on sign-in, since that's what the user just chose.
+  useEffect(() => {
+    void window.api
+      .unbiasedStatus()
+      .then((s) => dispatch({ type: 'set-unbiased', patch: s }))
+      .catch(() => {})
+    return window.api.onUnbiasedAuthChanged((event: UnbiasedAuthEvent) => {
+      if (event.status === 'error') {
+        dispatch({ type: 'set-unbiased', patch: { pending: null, error: event.message } })
+        return
+      }
+      const signedIn = event.status === 'signed-in'
+      dispatch({
+        type: 'set-unbiased',
+        patch: { account: signedIn ? event.account : null, pending: null, error: null }
+      })
+      if (signedIn) {
+        dispatch({
+          type: 'set-selected-model',
+          model: { providerID: UNBIASED_PROVIDER, modelID: UNBIASED_PROVIDER }
+        })
+        dispatch({ type: 'chat-set-settings', open: false })
+        toast(
+          event.account.workloadName
+            ? `Signed in to Unbiased (${event.account.workloadName})`
+            : 'Signed in to Unbiased'
+        )
+      }
+      const root = stateRef.current.rootPath
+      if (root) void reconnectAgent(root)
+    })
+  }, [reconnectAgent, toast])
 
   const selectModel = useCallback((model: SelectedModel | null) => {
     dispatch({ type: 'set-selected-model', model })
@@ -2505,6 +2594,9 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       toggleChatSettings,
       fetchProviderMethods,
       configureProvider,
+      unbiasedSignIn,
+      unbiasedCancelSignIn,
+      unbiasedSignOut,
       selectModel,
       toggleCoverageIgnore,
       newSession,
@@ -2604,6 +2696,9 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       toggleChatSettings,
       fetchProviderMethods,
       configureProvider,
+      unbiasedSignIn,
+      unbiasedCancelSignIn,
+      unbiasedSignOut,
       selectModel,
       toggleCoverageIgnore,
       newSession,

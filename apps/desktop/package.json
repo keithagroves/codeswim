@@ -50,6 +50,7 @@
     "@codeswim/domain-github": "*",
     "@codeswim/domain-kanban": "*",
     "@codeswim/domain-skills": "*",
+    "@codeswim/domain-unbiased": "*",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@lezer/highlight": "^1.2.3",
