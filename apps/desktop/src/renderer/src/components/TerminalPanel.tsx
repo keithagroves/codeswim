@@ -89,6 +89,17 @@ function TerminalInstance({
           },
         })
 
+        // ghostty-web 0.4 encodes Shift+Tab as a plain Tab (it treats Shift
+        // like no modifier for special keys), so the back-tab sequence TUIs
+        // bind — Claude Code's mode switch, shell reverse-completion — never
+        // arrives. Send CSI Z ourselves. Returning true tells ghostty-web the
+        // key is handled (the reverse of xterm.js's convention).
+        term.attachCustomKeyEventHandler((e) => {
+          if (e.key !== 'Tab' || !e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return false
+          if (terminalId) window.api.terminalWrite(terminalId, '\x1b[Z')
+          return true
+        })
+
         fitAddon = new Fit()
         term.loadAddon(fitAddon)
         term.open(el)
