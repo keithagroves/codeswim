@@ -1,0 +1,42 @@
+name: Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch/PR supersedes the run in flight.
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      # Unbiased's partner conformance kit (packages/domain-unbiased/conformance):
+      # drives our device-flow client against a scripted mock of their sign-in
+      # endpoints and checks the polling rules on the wire — above all, that a
+      # token poll is never re-sent (a re-poll after the 200 revokes the user's
+      # key). Local only, touches no Unbiased systems; takes ~40s.
+      - name: Unbiased sign-in conformance
+        run: npm run conformance --workspace @codeswim/domain-unbiased
