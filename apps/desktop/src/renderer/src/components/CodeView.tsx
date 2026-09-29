@@ -228,7 +228,7 @@ export function CodeView({
       ) : !state.sourceExplanationExists && !isCoverageIgnored(path, state.coverageIgnore) ? (
         <div className="code-banner code-banner-empty">
           <span>This file has not been explained yet.</span>
-          <button className="secondary" onClick={() => void createCurrentExplanation()}>
+          <button className="primary" onClick={() => void createCurrentExplanation()}>
             Explain file
           </button>
         </div>

@@ -522,17 +522,15 @@ function UnbiasedSignIn(): React.JSX.Element {
           </div>
         </>
       ) : (
-        <>
+        <div className="unbiased-offer">
           <p>
             Codeswim runs best on <strong>Unbiased AI’s Pareto</strong> model. Sign in or create an
             account in your browser — no API key to copy.
           </p>
-          <div className="chat-help-actions">
-            <button className="primary" onClick={() => void signIn()} disabled={starting}>
-              {starting ? 'Opening browser…' : 'Sign in with Unbiased'}
-            </button>
-          </div>
-        </>
+          <button className="primary" onClick={() => void signIn()} disabled={starting}>
+            {starting ? 'Opening browser…' : 'Sign in with Unbiased'}
+          </button>
+        </div>
       )}
       {error ? <p className="chat-help-error">{error}</p> : null}
     </div>
@@ -657,7 +655,11 @@ function ProviderSetup({ onCancel }: { onCancel?: () => void } = {}): React.JSX.
                 Cancel
               </button>
             ) : null}
-            <button className="primary" onClick={() => void onSave()} disabled={!canSave}>
+            <button
+              className="secondary chat-help-save"
+              onClick={() => void onSave()}
+              disabled={!canSave}
+            >
               {saving ? 'Saving…' : 'Save and connect'}
             </button>
           </div>
@@ -984,6 +986,21 @@ export function ChatPanel(): React.JSX.Element {
       <div className="chat-list" ref={listRef}>
         {state.chatMessages.length === 0 ? (
           <div className="chat-empty">
+            <svg
+              className="chat-empty-icon"
+              width="28"
+              height="28"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H10l-4 4v-4H5.5A1.5 1.5 0 0 1 4 14.5v-9z"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinejoin="round"
+              />
+            </svg>
             {state.rootPath
               ? 'Describe a feature, change, or question. The agent will edit diagrams first, then code.'
               : 'Open a folder to start chatting with the agent.'}

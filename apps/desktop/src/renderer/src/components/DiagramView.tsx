@@ -80,8 +80,33 @@ function decorateNavigationTargets(container: HTMLElement, targets: Map<string, 
   const nodes = Array.from(container.querySelectorAll<SVGGElement>('.node'))
   for (const [nodeId, target] of targets) {
     const node = nodes.find((candidate) => nodeMatchesId(candidate, nodeId))
-    if (node) addNodeTooltip(node, target)
+    if (!node) continue
+    addNodeTooltip(node, target)
+    addDrillChevron(node)
   }
+}
+
+// A "›" at the right edge of a navigable node, so drill-down targets read as
+// clickable before hover. Placed in the node's own coordinates from its
+// rendered bbox; skipped for shapes too narrow to hold it beside the label.
+function addDrillChevron(node: SVGGElement): void {
+  if (node.querySelector('.node-drill-chevron')) return
+  const shape = node.querySelector<SVGGraphicsElement>(
+    ':scope > rect, :scope > polygon, :scope > path'
+  )
+  if (!shape) return
+  const box = shape.getBBox()
+  const label = node.querySelector<SVGGraphicsElement>('.label')
+  const labelBox = label?.getBBox()
+  if (labelBox && box.width - labelBox.width < 36) return
+  const chevron = document.createElementNS('http://www.w3.org/2000/svg', 'text')
+  chevron.setAttribute('class', 'node-drill-chevron')
+  chevron.setAttribute('x', String(box.x + box.width - 14))
+  chevron.setAttribute('y', String(box.y + box.height / 2))
+  chevron.setAttribute('text-anchor', 'middle')
+  chevron.setAttribute('dominant-baseline', 'central')
+  chevron.textContent = '›'
+  node.appendChild(chevron)
 }
 
 declare global {

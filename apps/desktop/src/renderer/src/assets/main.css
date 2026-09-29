@@ -8,6 +8,10 @@
   --accent: #6e9bff;
   --accent-hover: #8db0ff;
   --accent-tint: rgba(110, 155, 255, 0.12);
+  /* Filled primary actions (Send, Sync, Start, Explain file…). --accent is
+   * too light for white text; this deeper blue keeps it readable. */
+  --accent-strong: #3569e0;
+  --accent-strong-hover: #4577ea;
   --success: #3ecf8e;
   --warning: #d9a73e;
   --warning-bg: rgba(217, 167, 62, 0.1);
@@ -147,7 +151,16 @@ body {
 }
 
 .activity-btn.is-active {
-  color: var(--text);
+  color: var(--accent);
+}
+
+/* Rounded tint behind the active icon (box-shadow follows the radius, so the
+ * icon keeps its size). */
+.activity-btn.is-active > svg,
+.activity-btn.is-active > img {
+  border-radius: 6px;
+  background: var(--accent-tint);
+  box-shadow: 0 0 0 7px var(--accent-tint);
 }
 
 .activity-btn.is-active::before {
@@ -877,8 +890,8 @@ body.is-resizing {
 }
 
 button.primary {
-  background: var(--text);
-  color: #131316;
+  background: var(--accent-strong);
+  color: #ffffff;
   border: none;
   padding: 8px 16px;
   border-radius: 8px;
@@ -887,8 +900,20 @@ button.primary {
   cursor: pointer;
 }
 
-button.primary:hover {
-  background: #ffffff;
+button.primary:hover:not(:disabled) {
+  background: var(--accent-strong-hover);
+}
+
+button.primary:disabled {
+  background: var(--bg-raised);
+  color: var(--text-muted);
+  cursor: default;
+}
+
+button.primary:focus-visible,
+button.secondary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 button.secondary {
@@ -994,10 +1019,12 @@ body.is-mac .header {
 }
 
 .workspace-view-switch button.is-active {
+  --tab-tint: var(--accent);
+  --tab-wash: var(--accent-tint);
   background: var(--tab-wash);
   color: var(--tab-tint);
   box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--tab-tint) 30%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--tab-tint) 55%, transparent),
     0 1px 3px rgb(0 0 0 / 28%);
 }
 
@@ -1167,7 +1194,7 @@ body.is-mac .header {
   overflow: hidden;
   margin: 0;
   color: var(--text);
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 600;
   letter-spacing: 0;
   text-overflow: ellipsis;
@@ -1340,10 +1367,10 @@ body.is-mac .header {
 .kanban-card {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  padding: 11px 12px;
+  gap: 8px;
+  padding: 14px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 10px;
   background: var(--bg-raised);
   cursor: pointer;
   outline: none;
@@ -1409,7 +1436,7 @@ body.is-mac .header {
   overflow-wrap: anywhere;
   margin: 0;
   color: var(--text);
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 600;
   letter-spacing: 0;
   line-height: 1.35;
@@ -1419,8 +1446,8 @@ body.is-mac .header {
   display: -webkit-box;
   overflow: hidden;
   margin: 0;
-  color: var(--text-muted);
-  font-size: 11.5px;
+  color: #b4b4bf;
+  font-size: 12px;
   line-height: 1.45;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
@@ -1435,12 +1462,12 @@ body.is-mac .header {
 .kanban-label {
   max-width: 100%;
   overflow: hidden;
-  padding: 2px 6px;
+  padding: 2px 8px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--bg);
   color: var(--text-muted);
-  font-size: 9.5px;
+  font-size: 10.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1485,20 +1512,29 @@ body.is-mac .header {
   padding-top: 4px;
 }
 
+/* "Start" is the card's primary action; "Start in background" stays
+ * outlined. */
 .kanban-start-btn {
-  padding: 3px 9px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: transparent;
-  color: var(--text-muted);
+  padding: 4px 10px;
+  border: 1px solid var(--accent-strong);
+  border-radius: 6px;
+  background: var(--accent-strong);
+  color: #ffffff;
   cursor: pointer;
   font: inherit;
-  font-size: 10.5px;
+  font-size: 11px;
+  white-space: nowrap;
+  font-weight: 500;
 }
 
 .kanban-start-btn:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--accent-strong-hover);
+  border-color: var(--accent-strong-hover);
+}
+
+.kanban-start-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .kanban-start-btn:disabled {
@@ -1506,8 +1542,17 @@ body.is-mac .header {
   opacity: 0.6;
 }
 
-.kanban-start-btn-bg {
-  color: var(--text-muted);
+.kanban-start-btn.kanban-start-btn-bg {
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text);
+  font-weight: 400;
+}
+
+.kanban-start-btn.kanban-start-btn-bg:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: transparent;
+  color: var(--accent);
 }
 
 .kanban-empty-column {
@@ -1705,13 +1750,14 @@ body.is-mac .header {
 }
 
 .diagram-name {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 600;
+  letter-spacing: -0.01em;
   margin: 0;
 }
 
 .diagram-description {
-  color: var(--text-muted);
+  color: #b4b4bf;
   margin: 0;
 }
 
@@ -1724,11 +1770,17 @@ body.is-mac .header {
 
 .diagram-tag {
   font-size: 11px;
-  padding: 2px 8px;
+  padding: 2px 10px;
   background: var(--bg-muted);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 999px;
   color: var(--text-muted);
+}
+
+.diagram-tag:first-child {
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: var(--accent-tint);
+  color: var(--text);
 }
 
 .diagram-prose {
@@ -1879,6 +1931,18 @@ body.is-mac .header {
 .diagram-canvas .clickable,
 .diagram-canvas .has-navigation-target {
   cursor: pointer;
+}
+
+.diagram-canvas .node-drill-chevron {
+  fill: var(--text-muted);
+  font-size: 16px;
+  font-weight: 600;
+  pointer-events: none;
+  transition: fill 120ms ease;
+}
+
+.diagram-canvas .has-navigation-target:hover .node-drill-chevron {
+  fill: var(--accent);
 }
 
 .diagram-canvas .clickable > rect,
@@ -2442,8 +2506,18 @@ body.is-mac .header {
 .chat-empty {
   color: var(--text-muted);
   font-size: 13px;
+  line-height: 1.5;
   text-align: center;
-  padding: 24px 12px;
+  padding: 28px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.chat-empty-icon {
+  color: var(--text-muted);
+  opacity: 0.8;
 }
 
 .chat-message {
@@ -3025,10 +3099,10 @@ body.is-mac .header {
 }
 
 .chat-help {
-  background: var(--warning-bg);
-  border: 1px solid var(--warning-border);
-  border-radius: 8px;
-  padding: 12px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
   font-size: 13px;
   line-height: 1.5;
 }
@@ -3039,9 +3113,40 @@ body.is-mac .header {
 }
 
 .unbiased-signin {
-  padding-bottom: 12px;
-  margin-bottom: 12px;
+  padding-bottom: 14px;
+  margin-bottom: 14px;
   border-bottom: 1px solid var(--border);
+}
+
+/* The recommended option: an accent-edged box with its sign-in button
+ * attached full-width along the bottom. */
+.unbiased-offer {
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 8px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg-muted));
+}
+
+.chat-help .unbiased-offer p {
+  margin: 0;
+  padding: 12px 12px 10px;
+}
+
+.unbiased-offer button.primary {
+  display: block;
+  width: 100%;
+  border-radius: 0;
+  padding: 10px 16px;
+}
+
+.chat-help button.chat-help-save:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+  color: var(--text);
+}
+
+.chat-help button.chat-help-save:disabled {
+  color: var(--text-muted);
+  cursor: default;
 }
 
 .unbiased-signin a {
@@ -3544,10 +3649,12 @@ body.is-mac .header {
   display: flex;
   align-items: center;
   gap: 6px;
-  width: 100%;
-  padding: 6px 12px;
-  background: transparent;
-  border: 0;
+  width: calc(100% - 16px);
+  margin: 6px 8px;
+  padding: 7px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
   cursor: pointer;
   text-align: left;
   color: var(--text-muted);
@@ -3821,9 +3928,13 @@ body.is-mac .header {
    * alone collapses to this floor once prose claims the leftover space. */
   min-height: 75vh;
   overflow: hidden;
+  /* Framed canvas: the diagram reads as its own surface, set off from the
+   * page's title and prose. */
+  border: 1px solid var(--border);
+  border-radius: 10px;
   background:
     radial-gradient(circle, rgba(255, 255, 255, 0.05) 1px, transparent 1px) 0 0 / 24px 24px,
-    var(--bg);
+    #0b0b0e;
   cursor: grab;
 }
 
@@ -3857,8 +3968,8 @@ body.is-panning .diagram-canvas-wrap {
 
 .diagram-zoom-reset {
   position: absolute;
-  top: 8px;
-  right: 16px;
+  top: 12px;
+  right: 12px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -4584,8 +4695,10 @@ body.is-panning .diagram-canvas-wrap {
   color: inherit;
   font-family: inherit;
   text-align: left;
-  padding: 3px 6px;
-  border-radius: 4px;
+  min-height: 34px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
   cursor: pointer;
 }
 
@@ -4595,17 +4708,27 @@ body.is-panning .diagram-canvas-wrap {
 
 .git-file-row.is-active {
   background: var(--accent-tint);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
+.git-file-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Square status chip; its colour comes from the git-verb-* class. */
 .git-file-badge {
   flex-shrink: 0;
-  width: 16px;
-  text-align: center;
+  width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
   font-weight: 600;
-  border-radius: 3px;
+  border-radius: 4px;
   color: var(--accent);
+  background: color-mix(in srgb, currentColor 16%, transparent);
 }
 
 .git-badge-D {
@@ -4692,13 +4815,14 @@ body.is-panning .diagram-canvas-wrap {
 .diff-view-pre {
   margin: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 12.5px;
+  line-height: 1.7;
   tab-size: 2;
 }
 
 .diff-line {
   padding: 0 16px;
+  border-left: 3px solid transparent;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -4716,11 +4840,13 @@ body.is-panning .diagram-canvas-wrap {
 .diff-line-add {
   color: #b5f0c9;
   background: rgba(120, 220, 170, 0.12);
+  border-left-color: var(--success);
 }
 
 .diff-line-del {
   color: #f5b7bd;
   background: rgba(240, 110, 120, 0.12);
+  border-left-color: var(--error-text);
 }
 
 .diff-line-context {
@@ -4851,10 +4977,27 @@ body.is-panning .diagram-canvas-wrap {
   color: var(--accent);
 }
 
-/* The one big button. */
-.git-sync-btn {
+/* The one big button: full-width primary. */
+.git-sync-btn,
+.git-sync-btn.script-run {
   flex: 1;
+  min-height: 36px;
   font-weight: 600;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent-strong);
+  color: #ffffff;
+}
+
+.git-sync-btn:hover:not(:disabled),
+.git-sync-btn.script-run:hover:not(:disabled) {
+  background: var(--accent-strong-hover);
+  color: #ffffff;
+}
+
+.git-sync-btn:disabled {
+  background: var(--bg-raised);
+  color: var(--text-muted);
 }
 
 .git-plan {
@@ -5830,16 +5973,39 @@ body.is-panning .diagram-canvas-wrap {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-raised);
+  margin: 12px 16px 4px;
+  padding: 10px 12px 10px 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg-muted));
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--text);
+}
+
+.code-banner-empty button.primary {
+  padding: 6px 14px;
+  font-size: 13px;
 }
 
 .code-view .cm-scroller {
   font-family:
     ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+/* Roomier reading rhythm for the full-page code view (snippet cards keep
+ * their compact spacing). */
+.code-view .cm-line {
+  line-height: 1.65;
+}
+
+.code-view .cm-content {
+  padding-block: 10px;
+}
+
+.code-view .cm-lineNumbers .cm-gutterElement {
+  padding: 0 12px 0 16px;
+  line-height: 1.65;
 }
 
 /* Line-range highlight in CodeView — applied to each line in the navigate
