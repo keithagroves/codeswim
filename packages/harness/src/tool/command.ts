@@ -3,7 +3,7 @@
 // config resolved once from env, HTTP I/O injected so this stays testable
 // without a real server, no module-level state.
 
-import type { CommandDescriptor, CommandOutcome } from '@codeswim/contract'
+import type { CommandDescriptor, CommandOutcome, JSONSchema } from '@codeswim/contract'
 
 export interface CommandConfig {
   url: string
@@ -94,7 +94,49 @@ export async function runCommand(
   return { ok: true, value: outcome.value }
 }
 
+// A schema as a compact type the model can fill in: `{url: string, all?: boolean}`.
+export function formatSchema(schema: JSONSchema): string {
+  const base = (() => {
+    if (schema.enum) return schema.enum.map((v) => JSON.stringify(v)).join(' | ')
+    switch (schema.type) {
+      case 'object': {
+        const props = Object.entries(schema.properties ?? {})
+        if (!props.length) return '{}'
+        const required = new Set(schema.required ?? [])
+        return `{${props.map(([k, v]) => `${k}${required.has(k) ? '' : '?'}: ${formatSchema(v)}`).join(', ')}}`
+      }
+      case 'array':
+        return `${schema.items ? formatSchema(schema.items) : 'any'}[]`
+      case undefined:
+        return 'any'
+      default:
+        return schema.type
+    }
+  })()
+  return schema.nullable ? `${base} | null` : base
+}
+
+// One line per command: id, args shape, description — enough to call it
+// with run_command without guessing.
 export function formatCommandList(commands: CommandDescriptor[]): string {
   if (commands.length === 0) return 'No commands matched.'
-  return commands.map((c) => `- ${c.id}: ${c.description}`).join('\n')
+  return commands
+    .map((c) => `- ${c.id}${c.schema.type ? ` ${formatSchema(c.schema)}` : ''}: ${c.description}`)
+    .join('\n')
+}
+
+const MAX_RESULT_CHARS = 12_000
+
+// What run_command shows the model: the command's real return value as JSON,
+// cut at a size that won't swamp the context.
+export function formatCommandResult(id: string, value: unknown): string {
+  if (value === undefined || value === null) return `Ran ${id}.`
+  let json: string
+  try {
+    json = JSON.stringify(value, null, 1)
+  } catch {
+    return `Ran ${id}. (Its result couldn't be shown.)`
+  }
+  if (json.length > MAX_RESULT_CHARS) json = `${json.slice(0, MAX_RESULT_CHARS)}\n… (cut at ${MAX_RESULT_CHARS} characters)`
+  return `Ran ${id}. Result:\n${json}`
 }

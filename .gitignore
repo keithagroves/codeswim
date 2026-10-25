@@ -1,5 +1,7 @@
 node_modules
 dist
+# The whiteboard's speech models, fetched at build time (apps/desktop/scripts/fetch-models.mjs).
+apps/desktop/models/
 out
 .turbo
 .DS_Store

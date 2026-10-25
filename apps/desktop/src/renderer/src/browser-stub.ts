@@ -7,6 +7,7 @@
 // fail with a friendly error; everything that just reads state works.
 
 import type {
+  BrowserState,
   DiagramNavApi,
   HarnessConnection,
   NewProjectResult,
@@ -18,6 +19,15 @@ import {
   normalizeKanbanBoard,
   type KanbanBoard
 } from '@codeswim/contract'
+
+const emptyBrowserState: BrowserState = {
+  url: '',
+  title: '',
+  loading: false,
+  canGoBack: false,
+  canGoForward: false,
+  error: null
+}
 
 function notInBrowser<T>(name: string): () => Promise<T> {
   return () => Promise.reject(new Error(`${name} is only available inside the Electron app`))
@@ -414,6 +424,64 @@ The companion document belongs at \`${documentPath}\`.
     publishAgentState: async () => {},
     agentTabsRead: async () => null,
     agentTabsWrite: async () => {},
+    // Like startHarness: set localStorage codeswim:test:narratorUrl and
+    // codeswim:test:narratorDir to talk to a manually started narrator
+    // (`opencode serve` with the whiteboard agents). The board persists to
+    // localStorage instead of .codeswim/whiteboard/.
+    whiteboardStart: async () => {
+      const url = localStorage.getItem('codeswim:test:narratorUrl')
+      const directory = localStorage.getItem('codeswim:test:narratorDir')
+      if (!url || !directory) {
+        throw new Error(
+          'whiteboardStart is only available inside the Electron app (or set localStorage codeswim:test:narratorUrl and codeswim:test:narratorDir)'
+        )
+      }
+      return { url, directory }
+    },
+    whiteboardRead: async (rootPath: string) =>
+      localStorage.getItem(`codeswim:test:whiteboard:${rootPath}`),
+    whiteboardWrite: async (rootPath: string, json: string) => {
+      localStorage.setItem(`codeswim:test:whiteboard:${rootPath}`, json)
+    },
+    // No voice process in a plain browser: the whiteboard uses the system voice.
+    voiceStatus: async () => ({
+      available: false,
+      installed: false,
+      state: 'idle' as const,
+      progress: null,
+      error: null,
+      downloadMb: 163
+    }),
+    voiceInstall: notInBrowser('voiceInstall'),
+    voiceSpeak: notInBrowser('voiceSpeak'),
+    voiceCancel: async () => {},
+    onVoiceStatus: () => () => {},
+    // No speech process either, so speech mode says it needs the app.
+    listenStatus: async () => ({
+      available: false,
+      installed: false,
+      state: 'idle' as const,
+      progress: null,
+      error: null,
+      downloadMb: 77
+    }),
+    listenInstall: notInBrowser('listenInstall'),
+    listenTranscribe: notInBrowser('listenTranscribe'),
+    onListenStatus: () => () => {},
+    micAccess: async () => false,
+    // No native page view in a plain browser: the panel shows its empty
+    // state, and opening a page says why it can't.
+    browserOpen: notInBrowser('browserOpen'),
+    browserNavigate: async () => emptyBrowserState,
+    browserState: async () => emptyBrowserState,
+    browserSetBounds: async () => {},
+    browserClose: async () => {},
+    browserInspect: notInBrowser('browserInspect'),
+    browserPoint: notInBrowser('browserPoint'),
+    browserMeasure: notInBrowser('browserMeasure'),
+    browserScreenshot: notInBrowser('browserScreenshot'),
+    browserReload: async () => emptyBrowserState,
+    onBrowserState: () => () => {},
     onUpdateStatus: () => () => {},
     installUpdate: async () => {}
   }

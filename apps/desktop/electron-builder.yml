@@ -14,6 +14,9 @@ files:
   - out/main/**
   - out/preload/**
   - out/renderer/**
+  # Kokoro's voice style files for the whiteboard's natural voice
+  # (copied by electron.vite.config.ts, copyKokoroVoices).
+  - out/voices/**
   # The opencode binary + our harness output need to be inside the package.
   - out/harness/**
   # Under npm workspaces these runtime packages are hoisted to the *monorepo
@@ -36,6 +39,12 @@ files:
 extraResources:
   - from: ../../examples/sample-architecture
     to: demo
+  # The whiteboard's speech models (~240 MB): the natural voice and speech
+  # mode's speech recognition, so neither needs a download after install.
+  # Fetched by scripts/fetch-models.mjs (the build:* scripts run it); outside
+  # the asar so onnxruntime reads them from disk.
+  - from: models
+    to: models
 asarUnpack:
   - resources/**
   # opencode is a spawned binary — must live on disk, not inside app.asar.
@@ -46,21 +55,30 @@ asarUnpack:
   - out/harness/**
   # node-pty ships a native .node binary that cannot be loaded from inside asar.
   - node_modules/node-pty/**
+  # Same for onnxruntime-node's binding and its shared library.
+  - node_modules/onnxruntime-node/**
 win:
   executableName: codeswim
+  # onnxruntime-node (the whiteboard's natural voice) ships every OS's
+  # binaries (~210 MB); keep only this one's. It's collected automatically as
+  # a production dependency.
+  files:
+    - '!node_modules/onnxruntime-node/bin/napi-v3/{darwin,linux}/**'
 nsis:
   artifactName: ${productName}-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
 mac:
+  files:
+    - '!node_modules/onnxruntime-node/bin/napi-v3/{linux,win32}/**'
   hardenedRuntime: true
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.
-    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
+    - NSMicrophoneUsageDescription: Speech mode listens so you can talk to the whiteboard. What you say is transcribed on this Mac.
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
   notarize: false
@@ -68,6 +86,8 @@ dmg:
   artifactName: ${productName}-${version}.${ext}
 linux:
   executableName: codeswim
+  files:
+    - '!node_modules/onnxruntime-node/bin/napi-v3/{darwin,win32}/**'
   target:
     - AppImage
     - deb

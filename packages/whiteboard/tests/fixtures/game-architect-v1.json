@@ -1,0 +1,98 @@
+[
+  {
+    "question": "I'm building a little space shooter in the browser. Where should I even start?",
+    "lines": [
+      "{\"say\": \"Start with a game loop, then draw and move your ship.\"}",
+      "{\"box\": \"input\", \"at\": [0, 1], \"label\": \"Keyboard\", \"color\": \"violet\"}",
+      "{\"box\": \"ship\", \"at\": [1, 1], \"label\": \"Player ship\", \"color\": \"blue\"}",
+      "{\"arrow\": [\"input\", \"ship\"], \"label\": \"Movement\"}",
+      "{\"say\": \"Use the browser's built-in canvas for drawing, and make a game loop update movement before redrawing each frame.\"}",
+      "{\"box\": \"loop\", \"at\": [1, 0], \"label\": \"Game loop\", \"color\": \"blue\"}",
+      "{\"box\": \"screen\", \"at\": [2, 0], \"label\": \"Canvas\", \"color\": \"grey\"}",
+      "{\"arrow\": [\"loop\", \"screen\"], \"label\": \"Draw frame\"}",
+      "{\"say\": \"Once movement feels good, add shots fired with the space bar and one enemy drifting toward you.\"}",
+      "{\"box\": \"shots\", \"at\": [2, 1], \"label\": \"Shots\", \"color\": \"blue\"}",
+      "{\"arrow\": [\"ship\", \"shots\"], \"label\": \"Fire\"}",
+      "{\"box\": \"enemy\", \"at\": [3, 1], \"label\": \"Enemy\", \"color\": \"blue\"}",
+      "{\"say\": \"Next, check whether shots overlap enemies, remove anything hit, and increase the score.\"}",
+      "{\"say\": \"Aim for one playable minute before adding fancy graphics, sound, or more enemy types.\"}"
+    ]
+  },
+  {
+    "question": "Nice. I want player accounts and a global high score board. What stack would you use?",
+    "lines": [
+      "{\"say\": \"Use TypeScript and Canvas, with Supabase for accounts, PostgreSQL leaderboards, and server-side score validation.\"}",
+      "{\"say\": \"Keep your canvas game, add TypeScript with Vite, and deploy the browser app on Cloudflare Pages.\"}",
+      "{\"highlight\": \"screen\"}",
+      "{\"box\": \"web\", \"at\": [0, 2], \"label\": \"Cloudflare Pages\", \"color\": \"blue\"}",
+      "{\"say\": \"Use Supabase Auth for signups and login, so you don't have to manage passwords yourself.\"}",
+      "{\"box\": \"auth\", \"at\": [1, 2], \"label\": \"Supabase Auth\", \"color\": \"blue\"}",
+      "{\"arrow\": [\"web\", \"auth\"], \"label\": \"Sign in\"}",
+      "{\"say\": \"Store player profiles and scores in Supabase Postgres, with an index for fetching the highest scores quickly.\"}",
+      "{\"box\": \"db\", \"at\": [3, 2], \"label\": \"Supabase Postgres\", \"color\": \"green\", \"shape\": \"ellipse\"}",
+      "{\"note\": \"Ranked score index\", \"at\": [4, 2]}",
+      "{\"say\": \"Submit scores through a Supabase Edge Function that verifies login and rejects obviously impossible results.\"}",
+      "{\"box\": \"submit\", \"at\": [2, 3], \"label\": \"Score validation\", \"color\": \"blue\"}",
+      "{\"say\": \"Use database access policies to allow public leaderboard reads but block direct score writes from players.\"}",
+      "{\"say\": \"Browser scores are still forgeable; if competition gets serious, validate gameplay replays rather than trusting submitted totals.\"}"
+    ]
+  },
+  {
+    "question": "Where would I actually host all of this?",
+    "lines": [
+      "{\"say\": \"Host the game on Cloudflare Pages and the backend on Supabase.\"}",
+      "{\"box\": \"cf\", \"at\": [0, 0], \"label\": \"Cloudflare Pages\", \"color\": \"blue\"}",
+      "{\"box\": \"sb\", \"at\": [2, 0], \"label\": \"Supabase\", \"color\": \"green\"}",
+      "{\"arrow\": [\"cf\", \"sb\"], \"label\": \"API Calls\"}",
+      "{\"say\": \"First, connect your Git repository to Cloudflare Pages so each push can automatically deploy your game.\"}",
+      "{\"highlight\": \"web\"}",
+      "{\"say\": \"Create one Supabase project to host authentication, your database, and the score validation function.\"}",
+      "{\"highlight\": \"auth\"}",
+      "{\"highlight\": \"db\"}",
+      "{\"highlight\": \"submit\"}",
+      "{\"say\": \"Your browser calls that function to submit scores, and the function writes accepted results into the database.\"}",
+      "{\"arrow\": [\"screen\", \"submit\"], \"label\": \"Submit score\"}",
+      "{\"arrow\": [\"submit\", \"db\"], \"label\": \"Save score\"}",
+      "{\"say\": \"Put only Supabase's public project settings in your frontend; keep privileged keys inside the hosted function.\"}",
+      "{\"say\": \"Start with their free tiers, check current limits, and add a custom domain when you're ready.\"}",
+      "{\"say\": \"You won't need to rent a server or manage operating system updates for this setup.\"}"
+    ]
+  },
+  {
+    "question": "Okay, big change. I want it multiplayer, so friends can fly together in real time. What changes?",
+    "lines": [
+      "{\"say\": \"Real-time multiplayer means moving game state off the browser and onto a server that players share.\"}",
+      "{\"box\": \"ws\", \"at\": [2, 0], \"label\": \"WebSocket server\", \"color\": \"blue\"}",
+      "{\"box\": \"room\", \"at\": [3, 0], \"label\": \"Game room state\", \"color\": \"blue\"}",
+      "{\"arrow\": [\"ws\", \"room\"], \"label\": \"Owns\"}",
+      "{\"say\": \"The server runs the authoritative game loop, so every player's client just sends inputs and renders what it receives.\"}",
+      "{\"box\": \"input\", \"at\": [0, 0], \"label\": \"Player input\", \"color\": \"violet\"}",
+      "{\"arrow\": [\"input\", \"ws\"], \"label\": \"Send keys\"}",
+      "{\"say\": \"Clients predict their own movement locally so controls still feel instant despite network delay.\"}",
+      "{\"box\": \"pred\", \"at\": [0, 1], \"label\": \"Client prediction\", \"color\": \"blue\"}",
+      "{\"say\": \"Interpolate other players' positions between snapshots so remote ships glide instead of teleporting.\"}",
+      "{\"box\": \"interp\", \"at\": [1, 1], \"label\": \"Interpolation\", \"color\": \"blue\"}",
+      "{\"say\": \"Run the WebSocket server on Cloudflare Durable Objects, one per game room, keeping state in memory.\"}",
+      "{\"box\": \"do\", \"at\": [2, 2], \"label\": \"Durable Object\", \"color\": \"blue\"}",
+      "{\"say\": \"Friends join through a room code; the first player creates it and shares the link with the group.\"}",
+      "{\"say\": \"Add a dedicated Colyseus game server on Fly.io to own movement, enemies, and collisions for each match.\"}",
+      "{\"box\": \"match\", \"at\": [3, 0], \"label\": \"Colyseus server\", \"color\": \"blue\"}",
+      "{\"say\": \"Each player's browser sends controls over WebSockets; the server broadcasts the shared game state.\"}",
+      "{\"arrow\": [\"screen\", \"match\"], \"label\": \"Controls\"}",
+      "{\"arrow\": [\"match\", \"screen\"], \"label\": \"Game state\", \"back\": true}",
+      "{\"say\": \"Keep Cloudflare Pages for hosting the game files, and Supabase for accounts and persistent scores, not live movement.\"}",
+      "{\"highlight\": \"web\"}",
+      "{\"highlight\": \"auth\"}",
+      "{\"highlight\": \"db\"}",
+      "{\"say\": \"Start with one invite-only room for two friends, adding client prediction and interpolation to hide network delays.\"}",
+      "{\"highlight\": \"pred\"}",
+      "{\"highlight\": \"interp\"}",
+      "{\"say\": \"Have the game server verify login tokens and save final scores, replacing score submissions from the browser.\"}",
+      "{\"remove\": \"screen->submit\"}",
+      "{\"arrow\": [\"match\", \"auth\"], \"label\": \"Verify token\"}",
+      "{\"arrow\": [\"match\", \"submit\"], \"label\": \"Final score\"}",
+      "{\"say\": \"Run a single server near your players initially; add regional hosting and room allocation when demand grows.\"}",
+      "{\"highlight\": \"match\"}"
+    ]
+  }
+]

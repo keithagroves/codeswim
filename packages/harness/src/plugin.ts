@@ -26,6 +26,7 @@ import {
 import {
   findCommand,
   formatCommandList,
+  formatCommandResult,
   resolveCommandConfig,
   runCommand,
   type CommandIo
@@ -55,7 +56,7 @@ Use this to *show* the user something — a diagram, a doc, or a source file —
 
 const FIND_COMMAND_DESCRIPTION = `Search the app's command registry for something you can invoke with run_command.
 
-Covers the long tail of app actions beyond the tools listed here directly — e.g. switching the workspace tab, or stepping through navigation history. Returns matching command ids, titles, and argument shapes. Most everyday "show the user a file" requests should use open_file instead of searching for a nav command.`
+Covers the long tail of app actions beyond the tools listed here directly — e.g. switching the workspace tab, stepping through navigation history, or the in-app browser panel (search "browser": open the user's dev server, read the page's outline, measure elements, point at something for the user, take a screenshot you can read). Returns matching command ids, argument shapes, and descriptions. Most everyday "show the user a file" requests should use open_file instead of searching for a nav command.`
 
 const RUN_COMMAND_DESCRIPTION = `Invoke a command by id, typically one found via find_command.
 
@@ -356,7 +357,7 @@ export const CodeswimPlugin: Plugin = async (input) => {
                   commandIo
                 )
                 if (!result.ok) return { output: `error: ${result.error}` }
-                return { output: `Ran ${args.id}.`, metadata: { value: result.value } }
+                return { output: formatCommandResult(args.id, result.value) }
               }
             })
           }
@@ -401,4 +402,8 @@ export const CodeswimPlugin: Plugin = async (input) => {
   }
 }
 
-export default { server: CodeswimPlugin }
+// opencode >= 1.18 refuses a path plugin that doesn't export an `id` ("Path
+// plugin … must export id"), which silently left every harness tool —
+// diagram_edit included — unregistered and the diagrams-first gate
+// unenforceable. See plans/talking-whiteboard.md, Phase 0.
+export default { id: 'codeswim', server: CodeswimPlugin }

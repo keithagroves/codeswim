@@ -34,6 +34,13 @@ jobs:
 
       - run: npm ci
 
+      # The speech models the app ships with (~240 MB, pinned in
+      # fetch-models.mjs), kept between releases instead of re-downloaded.
+      - uses: actions/cache@v4
+        with:
+          path: apps/desktop/models
+          key: speech-models-${{ hashFiles('apps/desktop/scripts/fetch-models.mjs') }}
+
       # electron-builder 26.15.3 passes the certificate password to
       # set-key-partition-list, but macOS 26.6 requires the temporary
       # keychain's own password (electron-builder#10101). Import the cert into

@@ -23,6 +23,23 @@ export interface KanbanSurfaceContext {
   runningCardIds: string[]
 }
 
+export interface WhiteboardSurfaceContext {
+  // Topic pages on the whiteboard, in tab order; the current one by name.
+  pages: string[]
+  currentPage: string | null
+  // 'building': a design the person agreed to is being built by the agent.
+  mode: 'idle' | 'talking' | 'building' | 'walkthrough'
+}
+
+// The browser panel, while it's open (it sits beside every view, so it's
+// never the focused surface). `error`: the page didn't load.
+export interface BrowserSurfaceContext {
+  url: string
+  title: string
+  loading: boolean
+  error: string | null
+}
+
 export interface DiffSurfaceContext {
   path: string | null
   hunkCount: number
@@ -42,11 +59,12 @@ export interface ScriptOutputSurfaceContext {
   tail: string[]
 }
 
-export type FocusSurface = 'navigator' | 'kanban' | 'agents' | 'diff' | 'terminal' | 'script-output'
+export type FocusSurface =
+  'navigator' | 'kanban' | 'agents' | 'whiteboard' | 'diff' | 'terminal' | 'script-output'
 
 export interface ScreenContextV2 {
   version: 2
-  workspaceView: 'navigator' | 'kanban' | 'agents'
+  workspaceView: 'navigator' | 'kanban' | 'agents' | 'whiteboard'
   focus: {
     surface: FocusSurface
     itemId: string | null
@@ -61,6 +79,8 @@ export interface ScreenContextV2 {
   surfaces: {
     navigator?: NavigatorSurfaceContext
     kanban?: KanbanSurfaceContext
+    whiteboard?: WhiteboardSurfaceContext
+    browser?: BrowserSurfaceContext
     diff?: DiffSurfaceContext
     terminal?: TerminalSurfaceContext
     scriptOutput?: ScriptOutputSurfaceContext

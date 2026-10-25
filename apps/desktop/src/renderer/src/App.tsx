@@ -1,7 +1,16 @@
-import { useCallback, useEffect, useRef } from 'react'
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore
+} from 'react'
 import { ActivityBar } from './components/ActivityBar'
 import { AgentsView } from './components/AgentsView'
 import { Breadcrumbs } from './components/Breadcrumbs'
+import { BrowserPanelView } from './components/BrowserPanelView'
 import { ChatPanel } from './components/ChatPanel'
 import { CodeView } from './components/CodeView'
 import { DiagramView } from './components/DiagramView'
@@ -25,6 +34,11 @@ import { Toasts } from './components/Toasts'
 import { StoreProvider } from './state'
 import { useStore } from './store'
 import logoUrl from './assets/codeswim.svg'
+
+// The whiteboard pulls in tldraw, which is large; load it only when opened.
+const WhiteboardView = lazy(() =>
+  import('./components/WhiteboardView').then((m) => ({ default: m.WhiteboardView }))
+)
 
 function SidePanel(): React.JSX.Element | null {
   const { state, setSidePanelWidth } = useStore()
@@ -60,21 +74,18 @@ function SidePanel(): React.JSX.Element | null {
     widthRef.current = state.sidePanelWidth
   }, [state.sidePanelWidth])
 
-  // The terminal owns live pty processes, so it must survive section
+  // Claude Code runs in a pty-backed panel, so it must survive section
   // switches and panel collapse. We mount it lazily on first open and then
   // keep it mounted, hiding it with display:none instead of unmounting.
-  // (A conditional unmount would fire its cleanup and kill the shell.)
-  const terminalOpened = useRef(false)
-  if (state.activeSection === 'terminal') terminalOpened.current = true
-  // Claude Code runs in the same pty-backed panel and needs the same
-  // keep-alive so switching sections doesn't kill the running session.
+  // (A conditional unmount would fire its cleanup and kill the session.)
+  // The plain terminal lives in the bottom panel (TerminalDock).
   const claudeOpened = useRef(false)
   if (state.activeSection === 'claude') claudeOpened.current = true
 
   const collapsed = state.activeSection === null
-  // When collapsed we keep the container in the tree (display:none) so the
-  // background terminal stays alive; an unmount here would destroy it.
-  if (collapsed && !terminalOpened.current && !claudeOpened.current) return null
+  // When collapsed we keep the container in the tree (display:none) so a
+  // background Claude Code session stays alive; an unmount would destroy it.
+  if (collapsed && !claudeOpened.current) return null
   return (
     <div
       className="side-panel"
@@ -88,14 +99,6 @@ function SidePanel(): React.JSX.Element | null {
       {state.activeSection === 'git' ? <GitPanel /> : null}
       {state.activeSection === 'pulls' ? <PullRequestsPanel /> : null}
       {state.activeSection === 'chat' ? <RoomChatPanel /> : null}
-      {terminalOpened.current ? (
-        <div
-          className="terminal-host"
-          style={{ display: state.activeSection === 'terminal' ? 'flex' : 'none' }}
-        >
-          <TerminalPanel />
-        </div>
-      ) : null}
       {claudeOpened.current ? (
         <div
           className="terminal-host"
@@ -114,11 +117,133 @@ function SidePanel(): React.JSX.Element | null {
   )
 }
 
+// The terminal panel along the bottom of the main column, like VS Code's:
+// Ctrl+` or the Terminal icon toggles it, its top edge resizes it, and it can
+// be maximized over the view. Its shells are live pty processes, so once
+// opened it stays mounted and hides with display:none.
+function TerminalDock(): React.JSX.Element | null {
+  const { state, toggleTerminal, setTerminalHeight } = useStore()
+  const open = state.terminalOpen
+  const [everOpened, setEverOpened] = useState(open)
+  const [maximized, setMaximized] = useState(false)
+  const [prevOpen, setPrevOpen] = useState(open)
+  const dockRef = useRef<HTMLDivElement>(null)
+
+  if (open !== prevOpen) {
+    setPrevOpen(open)
+    if (open) setEverOpened(true)
+    else setMaximized(false)
+  }
+
+  const onResizeStart = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      e.preventDefault()
+      const dock = dockRef.current
+      if (!dock) return
+      const startY = e.clientY
+      const startHeight = dock.getBoundingClientRect().height
+      const column = dock.parentElement?.getBoundingClientRect().height ?? window.innerHeight
+      setMaximized(false)
+      const onMove = (ev: MouseEvent): void => {
+        setTerminalHeight(Math.min(column - 120, startHeight - (ev.clientY - startY)))
+      }
+      const onUp = (): void => {
+        document.removeEventListener('mousemove', onMove)
+        document.removeEventListener('mouseup', onUp)
+        document.body.classList.remove('is-resizing-rows')
+      }
+      document.addEventListener('mousemove', onMove)
+      document.addEventListener('mouseup', onUp)
+      document.body.classList.add('is-resizing-rows')
+    },
+    [setTerminalHeight]
+  )
+
+  if (!everOpened) return null
+  return (
+    <div
+      ref={dockRef}
+      className={`terminal-dock${maximized ? ' is-maximized' : ''}`}
+      style={{
+        display: open ? 'flex' : 'none',
+        height: maximized ? undefined : state.terminalHeight
+      }}
+    >
+      <div
+        className="terminal-dock-resizer"
+        onMouseDown={onResizeStart}
+        onDoubleClick={() => setMaximized((m) => !m)}
+        title="Drag to resize"
+        aria-hidden="true"
+      />
+      <TerminalPanel
+        // Opening it puts the cursor in the shell (not when restored at startup).
+        focusSignal={state.terminalFocus}
+        trailing={
+          <>
+            <button
+              className="terminal-dock-btn"
+              onClick={() => setMaximized((m) => !m)}
+              title={maximized ? 'Restore panel size' : 'Maximize panel'}
+              aria-label={maximized ? 'Restore panel size' : 'Maximize panel'}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <path
+                  d={maximized ? 'M2.5 4.5 6 8l3.5-3.5' : 'M2.5 7.5 6 4l3.5 3.5'}
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+            <button
+              className="terminal-dock-btn"
+              onClick={() => toggleTerminal(false)}
+              title="Hide the terminal (Ctrl+`)"
+              aria-label="Hide the terminal"
+            >
+              ×
+            </button>
+          </>
+        }
+      />
+    </div>
+  )
+}
+
 // A slim draggable strip standing in for the header on views that don't
 // render one (start screen, skills). Keeps the whole top of the app a window
 // drag handle — drag to move, double-click to zoom/maximize.
 function DragStrip(): React.JSX.Element {
   return <div className="drag-strip" />
+}
+
+// The globe in the header: opens and closes the browser panel.
+function BrowserToggle(): React.JSX.Element {
+  const { browser } = useStore()
+  const { open } = useSyncExternalStore(browser.subscribe, browser.getSnapshot)
+  return (
+    <button
+      className="icon-btn browser-toggle"
+      aria-pressed={open}
+      title={open ? 'Hide the browser' : 'Show the browser'}
+      aria-label={open ? 'Hide the browser' : 'Show the browser'}
+      onClick={() => browser.toggle()}
+    >
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <circle cx="8" cy="8" r="6.25" stroke="currentColor" strokeWidth="1.3" />
+        <ellipse cx="8" cy="8" rx="2.6" ry="6.25" stroke="currentColor" strokeWidth="1.3" />
+        <path d="M2 6h12M2 10h12" stroke="currentColor" strokeWidth="1.3" />
+      </svg>
+    </button>
+  )
+}
+
+function BrowserColumn(): React.JSX.Element | null {
+  const { browser } = useStore()
+  const { open } = useSyncExternalStore(browser.subscribe, browser.getSnapshot)
+  return open ? <BrowserPanelView /> : null
 }
 
 function Header(): React.JSX.Element {
@@ -157,6 +282,14 @@ function Header(): React.JSX.Element {
         >
           Agents
         </button>
+        <button
+          className={`tab-whiteboard ${!inTools && state.workspaceView === 'whiteboard' ? 'is-active' : ''}`}
+          role="tab"
+          aria-selected={!inTools && state.workspaceView === 'whiteboard'}
+          onClick={() => setWorkspaceView('whiteboard')}
+        >
+          Whiteboard
+        </button>
       </div>
       {inTools || inNavigator ? (
         <div className="header-spacer" />
@@ -182,6 +315,7 @@ function Header(): React.JSX.Element {
             </button>
           ) : null}
           <ScriptControls />
+          <BrowserToggle />
         </div>
       )}
     </div>
@@ -247,6 +381,13 @@ function Body(): React.JSX.Element {
   }
   if (state.workspaceView === 'agents') {
     return <AgentsView />
+  }
+  if (state.workspaceView === 'whiteboard') {
+    return (
+      <Suspense fallback={<div className="empty-state">Loading the whiteboard…</div>}>
+        <WhiteboardView />
+      </Suspense>
+    )
   }
   if (!state.currentFile || state.fileContents === null) {
     return (
@@ -338,17 +479,17 @@ function StartScreen(): React.JSX.Element {
 // keys off the physical backquote key regardless of keyboard layout, and
 // the capture phase so focused inputs can't swallow it.
 function useTerminalShortcut(): void {
-  const { toggleActiveSection } = useStore()
+  const { toggleTerminal } = useStore()
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && e.code === 'Backquote') {
         e.preventDefault()
-        toggleActiveSection('terminal')
+        toggleTerminal()
       }
     }
     window.addEventListener('keydown', onKeyDown, true)
     return () => window.removeEventListener('keydown', onKeyDown, true)
-  }, [toggleActiveSection])
+  }, [toggleTerminal])
 }
 
 function Shell(): React.JSX.Element {
@@ -381,6 +522,7 @@ function Shell(): React.JSX.Element {
             <div className="content">
               <Body />
             </div>
+            <TerminalDock />
           </div>
         </div>
         <Toasts />
@@ -408,7 +550,9 @@ function Shell(): React.JSX.Element {
           <div className="content">
             <Body />
           </div>
+          <TerminalDock />
         </div>
+        <BrowserColumn />
       </div>
       <Toasts />
     </div>

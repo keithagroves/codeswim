@@ -4,7 +4,10 @@ import {
   useMemo,
   useReducer,
   useRef,
+  useState,
   useSyncExternalStore,
+  type Dispatch,
+  type RefObject,
   type ReactNode
 } from 'react'
 import {
@@ -63,10 +66,40 @@ import { registerGitCommands } from './commands/git'
 import { registerSkillsCommands } from './commands/skills'
 import { registerHooksCommands } from './commands/hooks'
 import { registerGitHubCommands } from './commands/github'
+import { registerWhiteboardCommands } from './commands/whiteboard'
+import { registerBrowserCommands } from './commands/browser'
+import { BrowserPanel } from './browser/panel'
+import { detectDevUrls } from './browser/dev-url'
+import {
+  CONFIRM_BUILD,
+  FILLERS,
+  formatFiles,
+  looksLikeServer,
+  mentionedPaths,
+  projectSummary,
+  WALKTHROUGH_OPENER,
+  type ProjectDoc
+} from '@codeswim/whiteboard'
+import { WhiteboardController, type BuildOutcome } from './whiteboard/controller'
+import { OpencodeNarrator } from './whiteboard/narrator'
+import { WhiteboardSpeaker } from './whiteboard/speech'
+import { KokoroSpeaker, type AudioOut } from './whiteboard/kokoro-speaker'
+import { VoiceSettings } from './whiteboard/voice'
+import { openMicrophone, SpeechMode } from './whiteboard/speech-mode'
+import {
+  applyPronunciations,
+  parsePronunciations,
+  PRONUNCIATIONS_FILE,
+  type Pronunciations
+} from './whiteboard/pronounce'
+import { runWhiteboardBuild, type SendOutcome } from './whiteboard/build'
+import { runResearch, type ResearchOutcome } from './whiteboard/research'
+import { parseMarkdown } from './parse'
 import type { CommandCtxFactory } from './commands/context'
 import { SurfaceContextRegistry } from './context/surface-context'
 import { composeScreenContext } from './context/compose-screen-context'
 import {
+  flattenTreeFiles,
   prDiffLabel,
   StoreContext,
   type AgentTab,
@@ -103,6 +136,36 @@ const HUMAN_ORIGIN: CommandOrigin = { kind: 'human' }
 // registry or any command definition.
 function humanConfirmAdapter(summary: string): Promise<boolean> {
   return Promise.resolve(window.confirm(summary))
+}
+
+const TERMINAL_DEFAULT_HEIGHT = 260
+const TERMINAL_MIN_HEIGHT = 100
+const TERMINAL_MAX_HEIGHT = 2000
+
+// Layout preferences that belong to the person, not the workspace: they
+// survive opening or closing a folder (and are persisted to localStorage).
+function layoutOf(
+  state: AppState
+): Pick<AppState, 'sidePanelWidth' | 'activityOrder' | 'terminalOpen' | 'terminalHeight'> {
+  return {
+    sidePanelWidth: state.sidePanelWidth,
+    activityOrder: state.activityOrder,
+    terminalOpen: state.terminalOpen,
+    terminalHeight: state.terminalHeight
+  }
+}
+
+function openTerminal(state: AppState, open: boolean): AppState {
+  if (open === state.terminalOpen) return state
+  return {
+    ...state,
+    terminalOpen: open,
+    terminalFocus: open ? state.terminalFocus + 1 : state.terminalFocus
+  }
+}
+
+function clampTerminalHeight(h: number): number {
+  return Math.round(Math.max(TERMINAL_MIN_HEIGHT, Math.min(TERMINAL_MAX_HEIGHT, h)))
 }
 
 const DEFAULT_ACTIVITY_ORDER: Section[] = [
@@ -143,6 +206,9 @@ const initialState: AppState = {
   activeSection: 'agent',
   lastActiveSection: 'agent',
   sidePanelWidth: 320,
+  terminalOpen: false,
+  terminalHeight: TERMINAL_DEFAULT_HEIGHT,
+  terminalFocus: 0,
   activityOrder: [...DEFAULT_ACTIVITY_ORDER],
   currentSkill: null,
   toolsTab: 'skills',
@@ -210,7 +276,9 @@ export type Action =
   | { type: 'add-toast'; toast: Toast }
   | { type: 'remove-toast'; id: number }
   | { type: 'set-runs'; runs: RunEntry[] }
-  | { type: 'script-started'; name: string; startedAt: number }
+  // `background`: start without switching to the output view (the whiteboard
+  // starting a dev server mid-conversation; the run chip still shows it).
+  | { type: 'script-started'; name: string; startedAt: number; background?: boolean }
   | { type: 'script-output'; name: string; chunk: string }
   | { type: 'script-exited'; name: string; code: number | null; signal: string | null }
   | { type: 'show-output' }
@@ -231,6 +299,9 @@ export type Action =
       section: Section
     }
   | { type: 'set-side-panel-width'; width: number }
+  // `restore`: reopened from localStorage at startup, so don't grab focus.
+  | { type: 'toggle-terminal'; open?: boolean; restore?: boolean }
+  | { type: 'set-terminal-height'; height: number }
   | {
       type: 'set-activity-order'
       order: Section[]
@@ -311,9 +382,14 @@ function fileViewFor(rel: string): 'diagram' | 'code' {
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case 'set-root':
-      return { ...initialState, rootPath: action.rootPath, recents: state.recents }
+      return {
+        ...initialState,
+        ...layoutOf(state),
+        rootPath: action.rootPath,
+        recents: state.recents
+      }
     case 'clear-root':
-      return { ...initialState, recents: state.recents }
+      return { ...initialState, ...layoutOf(state), recents: state.recents }
     case 'load-success': {
       const breadcrumbs =
         action.pushBreadcrumb && action.previous
@@ -403,6 +479,7 @@ function reducer(state: AppState, action: Action): AppState {
         output: '',
         startedAt: action.startedAt
       }
+      if (action.background) return { ...state, runningScript: running }
       const prevView = state.view === 'output' ? state.prevView : (state.view as FileView)
       return { ...state, runningScript: running, view: 'output', prevView }
     }
@@ -499,12 +576,15 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, activeSection: state.lastActiveSection }
     }
     case 'set-active-section':
+      // The terminal lives in the bottom panel now, not the side panel.
+      if (action.section === 'terminal') return openTerminal(state, true)
       return {
         ...state,
         activeSection: action.section,
         lastActiveSection: action.section ?? state.lastActiveSection
       }
     case 'toggle-active-section': {
+      if (action.section === 'terminal') return openTerminal(state, !state.terminalOpen)
       // Clicking the already-active icon collapses; clicking a different
       // icon switches to it (and opens the panel if collapsed).
       const next = state.activeSection === action.section ? null : action.section
@@ -516,6 +596,12 @@ function reducer(state: AppState, action: Action): AppState {
         lastActiveSection: action.section
       }
     }
+    case 'toggle-terminal': {
+      const open = action.open ?? !state.terminalOpen
+      return action.restore ? { ...state, terminalOpen: open } : openTerminal(state, open)
+    }
+    case 'set-terminal-height':
+      return { ...state, terminalHeight: clampTerminalHeight(action.height) }
     case 'set-side-panel-width':
       return { ...state, sidePanelWidth: Math.max(180, Math.min(700, action.width)) }
     case 'set-activity-order': {
@@ -562,12 +648,23 @@ function reducer(state: AppState, action: Action): AppState {
     case 'chat-status':
       return { ...state, chatStatus: action.status, chatError: action.error ?? null }
     case 'chat-add-message':
-      return { ...state, chatMessages: [...state.chatMessages, action.message] }
+      return {
+        ...state,
+        chatMessages: [
+          ...state.chatMessages,
+          { ...action.message, createdAt: action.message.createdAt ?? Date.now() }
+        ]
+      }
     case 'chat-upsert-part': {
       const messages = state.chatMessages.slice()
       const msgIdx = messages.findIndex((m) => m.id === action.messageID)
       if (msgIdx < 0) {
-        messages.push({ id: action.messageID, role: 'assistant', parts: [action.part] })
+        messages.push({
+          id: action.messageID,
+          role: 'assistant',
+          parts: [action.part],
+          createdAt: Date.now()
+        })
         return { ...state, chatMessages: messages }
       }
       const msg = messages[msgIdx]
@@ -684,6 +781,261 @@ function reducer(state: AppState, action: Action): AppState {
   }
 }
 
+// The model the whiteboard narrator speaks with: Unbiased's Pareto whenever it
+// has a key (the prototype's measurements were all on Pareto), otherwise the
+// model the chat uses.
+function narratorModel(state: AppState): SelectedModel | undefined {
+  if (state.availableProviders.some((p) => p.id === UNBIASED_PROVIDER)) {
+    return { providerID: UNBIASED_PROVIDER, modelID: UNBIASED_PROVIDER }
+  }
+  return state.selectedModel ?? undefined
+}
+
+// Folders whose markdown is never the project's own diagrams.
+const NOT_DIAGRAMS = /(^|\/)(dist|out|build|coverage|vendor|target|\.codeswim)\//
+const MAX_PROJECT_DOCS = 80
+
+// The workspace's real diagrams (markdown with a mermaid block), with their
+// frontmatter names, for the whiteboard narrator's <project> block.
+async function listProjectDiagrams(root: string): Promise<ProjectDoc[]> {
+  const abs = await window.api.listMarkdown(root).catch(() => [] as string[])
+  const rel = abs
+    .map((p) => relativeToRoot(root, p))
+    .filter((p): p is string => !!p && !NOT_DIAGRAMS.test(p))
+    .slice(0, MAX_PROJECT_DOCS)
+  const docs = await Promise.all(
+    rel.map(async (path): Promise<ProjectDoc | null> => {
+      try {
+        const parsed = parseMarkdown(await window.api.readWorkspaceFile(root, path))
+        if (!parsed.mermaidBlocks.length) return null
+        return { path, name: parsed.frontmatter.name, description: parsed.frontmatter.description }
+      } catch {
+        return null
+      }
+    })
+  )
+  return docs.filter((d): d is ProjectDoc => d !== null)
+}
+
+interface ProjectCache {
+  root: string
+  text: string
+  at: number
+}
+
+const PROJECT_CACHE_MS = 60_000
+
+const PRONUNCIATION_CACHE_MS = 30_000
+
+// The natural voice: Kokoro in main's voice process, played through Web
+// Audio, with the workspace's pronunciation table applied first.
+function createNaturalVoice(
+  stateRef: RefObject<AppState>,
+  log: (message: string, detail?: unknown) => void
+): { voice: VoiceSettings; speaker: KokoroSpeaker } {
+  const voice = new VoiceSettings(window.api)
+  let pronunciations: { root: string; table: Pronunciations; at: number } | null = null
+  const loadPronunciations = async (root: string): Promise<Pronunciations> => {
+    if (pronunciations?.root === root && Date.now() - pronunciations.at < PRONUNCIATION_CACHE_MS) {
+      return pronunciations.table
+    }
+    const raw = await window.api.readWorkspaceFile(root, PRONUNCIATIONS_FILE).catch(() => null)
+    const table = parsePronunciations(raw)
+    pronunciations = { root, table, at: Date.now() }
+    return table
+  }
+  const currentVoice = (): string => {
+    const p = voice.getSnapshot().preference
+    return p.kind === 'natural' ? p.voice : 'af_heart'
+  }
+  let out: AudioContext | null = null
+  const speaker = new KokoroSpeaker({
+    synth: async (text, background) => {
+      const root = stateRef.current.rootPath
+      const table = root ? await loadPronunciations(root) : {}
+      return window.api.voiceSpeak(applyPronunciations(text, table), currentVoice(), 1, background)
+    },
+    cancelRemote: () => void window.api.voiceCancel().catch(() => {}),
+    voiceKey: currentVoice,
+    audio: (): AudioOut => (out ??= new AudioContext())
+  })
+  // Once the voice is loaded, render the stock phrases so they play instantly.
+  let keptFor: string | null = null
+  voice.subscribe(() => {
+    const id = voice.naturalVoice
+    if (!id || keptFor === id) return
+    keptFor = id
+    speaker.keep([...FILLERS, WALKTHROUGH_OPENER, CONFIRM_BUILD])
+    log('[whiteboard] natural voice ready', id)
+  })
+  return { voice, speaker }
+}
+
+// How long the whiteboard waits for a dev server it started to print its address.
+const DEV_SERVER_WAIT_MS = 45_000
+
+// Start a run (npm script or .codeswim/runs.json entry) through main's script
+// runner, which stops whatever was running first.
+async function startRun(
+  root: string,
+  entry: RunEntry,
+  dispatch: Dispatch<Action>,
+  background = false
+): Promise<void> {
+  dispatch({ type: 'script-started', name: entry.name, startedAt: Date.now(), background })
+  try {
+    await window.api.runEntry(root, entry.source, entry.name)
+  } catch (err) {
+    dispatch({ type: 'script-exited', name: entry.name, code: -1, signal: null })
+    throw err
+  }
+}
+
+// Builds the whiteboard controller for StoreProvider. Module-level so its
+// dependencies read refs only when called, never during render.
+function createWhiteboardController(refs: {
+  stateRef: RefObject<AppState>
+  commandsRef: RefObject<CommandRegistry | null>
+  buildRef: RefObject<(brief: string, pages: string, conversation: string) => Promise<BuildOutcome>>
+  researchRef: RefObject<(question: string, signal: AbortSignal) => Promise<ResearchOutcome>>
+  projectCacheRef: RefObject<ProjectCache | null>
+  dispatch: Dispatch<Action>
+  toast: (message: string, kind?: 'info' | 'error') => void
+  browser: BrowserPanel
+}): { controller: WhiteboardController; voice: VoiceSettings } {
+  const {
+    stateRef,
+    commandsRef,
+    buildRef,
+    researchRef,
+    projectCacheRef,
+    dispatch,
+    toast,
+    browser
+  } = refs
+  // eslint-disable-next-line no-console
+  const log = (message: string, detail?: unknown): void => console.info(message, detail ?? '')
+  const natural = createNaturalVoice(stateRef, log)
+  const loadProject = async (): Promise<string> => {
+    const root = stateRef.current.rootPath
+    if (!root) return ''
+    const cached = projectCacheRef.current
+    if (cached && cached.root === root && Date.now() - cached.at < PROJECT_CACHE_MS) {
+      return cached.text
+    }
+    const text = projectSummary(await listProjectDiagrams(root))
+    projectCacheRef.current = { root, text, at: Date.now() }
+    return text
+  }
+  const controller: WhiteboardController = new WhiteboardController({
+    connect: async () => {
+      const conn = await window.api.whiteboardStart()
+      return new OpencodeNarrator(conn.url, conn.directory, () => narratorModel(stateRef.current))
+    },
+    speaker: new WhiteboardSpeaker(
+      () => controller.isMuted,
+      { speaker: natural.speaker, active: () => natural.voice.naturalVoice !== null },
+      log
+    ),
+    project: loadProject,
+    build: (brief, pages, conversation) => buildRef.current(brief, pages, conversation),
+    research: (question, signal) => researchRef.current(question, signal),
+    chatSession: () => stateRef.current.currentSessionId,
+    files: async (question) => {
+      const root = stateRef.current.rootPath
+      if (!root) return ''
+      const { files, folders } = mentionedPaths(question, flattenTreeFiles(stateRef.current.tree))
+      if (!files.length && !folders.length) return ''
+      const read = await Promise.all(
+        files.map(async (path) => ({
+          path,
+          text: await window.api.readWorkspaceFile(root, path).catch(() => '')
+        }))
+      )
+      return formatFiles(
+        read.filter((f) => f.text),
+        folders
+      )
+    },
+    openLink: async (path) => {
+      await commandsRef.current?.run<void>(
+        'nav.navigateAbsolute',
+        { relPath: path, pushBreadcrumb: true },
+        HUMAN_ORIGIN
+      )
+    },
+    showDiff: (label, diff) => {
+      dispatch({ type: 'show-diff', path: label })
+      dispatch({ type: 'set-diff-content', path: label, content: diff })
+    },
+    load: (root) => window.api.whiteboardRead(root),
+    save: (root, json) => window.api.whiteboardWrite(root, json),
+    isVisible: () => {
+      const s = stateRef.current
+      return (
+        s.workspaceView === 'whiteboard' &&
+        s.activeSection !== 'tools' &&
+        s.view !== 'diff' &&
+        s.view !== 'output'
+      )
+    },
+    browser: {
+      snapshot: async () => (browser.currentUrl ? browser.inspect() : null),
+      currentUrl: () => browser.currentUrl,
+      context: () => {
+        const s = stateRef.current
+        const run = s.runningScript?.status === 'running' ? s.runningScript : null
+        const devUrls = run ? detectDevUrls(run.output) : []
+        return {
+          devUrls,
+          // Starting a run stops the one running, so offer servers only when nothing runs.
+          servers: run
+            ? []
+            : s.runs
+                .filter(looksLikeServer)
+                .map((r) => r.name)
+                .slice(0, 4),
+          running: run && !devUrls.length ? run.name : null
+        }
+      },
+      startServer: async (name) => {
+        const s = stateRef.current
+        const entry = s.runs.find((r) => r.name === name)
+        if (!s.rootPath || !entry) throw new Error(`there's no run named "${name}"`)
+        if (s.runningScript?.status === 'running') throw new Error('another script is running')
+        // In the background, so the whiteboard stays on screen.
+        await startRun(s.rootPath, entry, dispatch, true)
+        // Wait for it to print where it's listening (dev servers take a few seconds).
+        const deadline = Date.now() + DEV_SERVER_WAIT_MS
+        while (Date.now() < deadline) {
+          const run = stateRef.current.runningScript
+          if (run?.name === name) {
+            const url = detectDevUrls(run.output)[0]
+            if (url) return url
+            if (run.status === 'exited') return null
+          }
+          await new Promise((r) => setTimeout(r, 250))
+        }
+        return null
+      },
+      point: async (target, all) => {
+        await browser.point(target, all)
+      },
+      show: async (url) => {
+        await browser.open(url)
+      },
+      reload: async () => {
+        await browser.reload()
+        // Let late scripts and fonts settle before measuring.
+        await new Promise((r) => setTimeout(r, 400))
+      }
+    },
+    notify: (message, kind) => toast(message, kind),
+    log
+  })
+  return { controller, voice: natural.voice }
+}
+
 let toastSeq = 1
 // Numbers new agent tabs ("Agent 1", "Agent 2", …) until opencode auto-titles
 // the session from the first prompt.
@@ -728,11 +1080,61 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
     setTimeout(() => dispatch({ type: 'remove-toast', id }), 4000)
   }, [])
 
+  // The talking whiteboard (plans/talking-whiteboard.md): one controller for
+  // the provider's lifetime, so a conversation and a running build survive
+  // switching views. Its build hand-off needs ensureAgent and the chat send,
+  // so it's defined further down and reached through whiteboardBuildRef.
+  const whiteboardBuildRef = useRef<
+    (brief: string, pages: string, conversation: string) => Promise<BuildOutcome>
+  >(async () => {
+    throw new Error('The whiteboard build is not ready yet.')
+  })
+  // Same for its read-only research, which needs ensureAgent too.
+  const whiteboardResearchRef = useRef<
+    (question: string, signal: AbortSignal) => Promise<ResearchOutcome>
+  >(async () => {
+    throw new Error('The agent is not ready yet.')
+  })
+  const projectCacheRef = useRef<ProjectCache | null>(null)
+  const commandsRef = useRef<CommandRegistry | null>(null)
+  // The browser panel (browser/panel.ts): one per provider, shared by its
+  // component, the browser commands and the whiteboard.
+  const [browser] = useState(() => new BrowserPanel(window.api))
+  // The controller reads these refs only from event handlers and async work,
+  // never during render.
+  // eslint-disable-next-line react-hooks/refs
+  const [{ controller: whiteboard, voice }] = useState(() =>
+    createWhiteboardController({
+      stateRef,
+      commandsRef,
+      buildRef: whiteboardBuildRef,
+      researchRef: whiteboardResearchRef,
+      projectCacheRef,
+      dispatch,
+      toast,
+      browser
+    })
+  )
+  // Speech mode: what's heard goes to the narrator the same way typing does.
+  const [speech] = useState(
+    () =>
+      new SpeechMode({
+        api: window.api,
+        board: {
+          talking: () => whiteboard.getSnapshot().talking,
+          ask: (text) =>
+            void commandsRef.current?.run('whiteboard.ask', { text }, { kind: 'human' }),
+          unmute: () => whiteboard.setMuted(false)
+        },
+        openMic: openMicrophone,
+        log: (...args) => console.warn(...args)
+      })
+  )
+
   // The command registry — one instance for the lifetime of this provider.
   // buildCtx reads stateRef/dispatch/toast at call time (all stable refs or
   // stable useCallback identities), so every command sees live state
   // regardless of when the registry itself was constructed.
-  const commandsRef = useRef<CommandRegistry | null>(null)
   const kanbanRunTrackerRef = useRef<KanbanRunTracker | null>(null)
   if (!commandsRef.current) {
     const buildCtx: CommandCtxFactory = (origin) => ({
@@ -764,9 +1166,12 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
     registerSkillsCommands(registry)
     registerHooksCommands(registry)
     registerGitHubCommands(registry)
+    registerWhiteboardCommands(registry, () => whiteboard)
+    registerBrowserCommands(registry, () => browser)
     commandsRef.current = registry
   }
   const commands = commandsRef.current
+
   const kanbanRunTracker = kanbanRunTrackerRef.current as KanbanRunTracker
 
   // Registry of context blocks contributed by mounted surfaces (see
@@ -837,6 +1242,7 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
       .map((m) => ({
         id: m.id,
         role: m.role,
+        ...(m.createdAt !== undefined ? { createdAt: m.createdAt } : {}),
         parts: m.parts.map((p) => ({
           id: p.id,
           kind: p.kind,
@@ -1023,21 +1429,23 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
     }
   }, [])
 
-  const sendChat = useCallback(
-    async (text: string) => {
+  // The chat send, reporting how the turn ended (sendChat below drops it).
+  // The whiteboard's build hand-off uses the outcome for its checkpoint.
+  const sendChatWithOutcome = useCallback(
+    async (text: string): Promise<SendOutcome> => {
       const trimmed = text.trim()
-      if (!trimmed) return
+      if (!trimmed) return { status: 'error', error: 'Nothing to send.', finalText: '' }
       const root = stateRef.current.rootPath
       if (!root) {
         toast('Open a folder before chatting with the agent.', 'error')
-        return
+        return { status: 'error', error: 'No folder is open.', finalText: '' }
       }
       const agent = await ensureAgent(root)
-      if (!agent) return
+      if (!agent) return { status: 'error', error: 'The agent is not connected.', finalText: '' }
       const sessionId = stateRef.current.currentSessionId
       if (!sessionId) {
         toast('No active session — try opening the folder again.', 'error')
-        return
+        return { status: 'error', error: 'No active agent session.', finalText: '' }
       }
 
       const userMsgId = `u-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -1054,7 +1462,7 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
           undefined,
           stateRef.current.selectedModel ?? undefined
         )
-        stoppingSessionsRef.current.delete(sessionId)
+        const stopped = stoppingSessionsRef.current.delete(sessionId)
         for (const part of reply.parts) {
           dispatch({ type: 'chat-upsert-part', messageID: reply.messageID, part })
         }
@@ -1065,18 +1473,96 @@ export function StoreProvider({ children }: { children: ReactNode }): React.JSX.
         void agent.listSessions().then((sessions) => {
           dispatch({ type: 'sessions-set', sessions })
         })
+        const finalText = reply.parts
+          .filter((p) => p.kind === 'text' && p.text)
+          .map((p) => p.text as string)
+          .join('')
+          .trim()
+        return { status: stopped ? 'stopped' : 'ok', finalText }
       } catch (err) {
         if (stoppingSessionsRef.current.delete(sessionId)) {
           dispatch({ type: 'chat-status', status: 'ready' })
-          return
+          return { status: 'stopped', finalText: '' }
         }
         const msg = describeAgentError(err, stateRef.current.selectedModel)
         dispatch({ type: 'chat-status', status: 'error', error: msg })
         toast(`Agent error: ${msg}`, 'error')
+        return { status: 'error', error: msg, finalText: '' }
       }
     },
     [ensureAgent, toast]
   )
+
+  const sendChat = useCallback(
+    async (text: string): Promise<void> => {
+      await sendChatWithOutcome(text)
+    },
+    [sendChatWithOutcome]
+  )
+
+  // The whiteboard's build hand-off: the agreed brief goes to the session the
+  // Agent panel shows, so the person can watch it there if they want; the
+  // whiteboard itself stays quiet until the checkpoint.
+  const whiteboardBuild = useCallback(
+    async (brief: string, pages: string, conversation: string): Promise<BuildOutcome> => {
+      const root = stateRef.current.rootPath
+      if (!root) throw new Error('Open a folder first.')
+      const agent = await ensureAgent(root)
+      if (!agent) {
+        throw new Error('The agent is not connected. Configure an AI provider in the Agent panel.')
+      }
+      const sessionId = stateRef.current.currentSessionId
+      if (!sessionId) throw new Error('There is no active agent session.')
+      if (stateRef.current.chatStatus === 'thinking') {
+        throw new Error('The agent is busy with another request. Ask again once it finishes.')
+      }
+      return runWhiteboardBuild(
+        {
+          agent,
+          sessionId,
+          root,
+          send: sendChatWithOutcome,
+          gitFileDiff: (path) => window.api.gitFileDiff(root, path)
+        },
+        brief,
+        pages,
+        conversation
+      )
+    },
+    [ensureAgent, sendChatWithOutcome]
+  )
+  useEffect(() => {
+    whiteboardBuildRef.current = whiteboardBuild
+  }, [whiteboardBuild])
+
+  // The whiteboard's research: a hidden, read-only session on the same
+  // opencode server (whiteboard/research.ts).
+  const whiteboardResearch = useCallback(
+    async (question: string, signal: AbortSignal): Promise<ResearchOutcome> => {
+      const root = stateRef.current.rootPath
+      if (!root) throw new Error('Open a folder first.')
+      const agent = await ensureAgent(root)
+      if (!agent) throw new Error('The agent is not connected.')
+      return runResearch(
+        { agent, root, model: stateRef.current.selectedModel ?? undefined, signal },
+        question
+      )
+    },
+    [ensureAgent]
+  )
+  useEffect(() => {
+    whiteboardResearchRef.current = whiteboardResearch
+  }, [whiteboardResearch])
+
+  // Load the whiteboard saved for whichever workspace is open.
+  useEffect(() => {
+    void whiteboard.open(state.rootPath)
+    projectCacheRef.current = null
+  }, [state.rootPath, whiteboard])
+
+  useEffect(() => () => whiteboard.dispose(), [whiteboard])
+
+  useEffect(() => browser.start(), [browser])
 
   const stopChat = useCallback(async (): Promise<void> => {
     const agent = agentRef.current
@@ -1395,6 +1881,14 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
   )
   const setSidePanelWidth = useCallback(
     (width: number) => dispatch({ type: 'set-side-panel-width', width }),
+    []
+  )
+  const toggleTerminal = useCallback(
+    (open?: boolean) => dispatch({ type: 'toggle-terminal', open }),
+    []
+  )
+  const setTerminalHeight = useCallback(
+    (height: number) => dispatch({ type: 'set-terminal-height', height }),
     []
   )
   const setActivityOrder = useCallback(
@@ -2302,12 +2796,10 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
     async (entry: RunEntry) => {
       if (!state.rootPath) return
       try {
-        dispatch({ type: 'script-started', name: entry.name, startedAt: Date.now() })
-        await window.api.runEntry(state.rootPath, entry.source, entry.name)
+        await startRun(state.rootPath, entry, dispatch)
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         toast(`Could not run ${entry.name}: ${msg}`, 'error')
-        dispatch({ type: 'script-exited', name: entry.name, code: -1, signal: null })
       }
     },
     [state.rootPath, toast]
@@ -2532,6 +3024,33 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
     }
   }, [state.sidePanelWidth])
 
+  // Same for the bottom terminal panel: whether it's open, and its height.
+  useEffect(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem('codeswim:terminalPanel') ?? 'null') as {
+        open?: unknown
+        height?: unknown
+      } | null
+      if (typeof raw?.height === 'number' && Number.isFinite(raw.height)) {
+        dispatch({ type: 'set-terminal-height', height: raw.height })
+      }
+      if (raw?.open === true) dispatch({ type: 'toggle-terminal', open: true, restore: true })
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        'codeswim:terminalPanel',
+        JSON.stringify({ open: state.terminalOpen, height: state.terminalHeight })
+      )
+    } catch {
+      // ignore
+    }
+  }, [state.terminalOpen, state.terminalHeight])
+
   useEffect(() => {
     try {
       const stored = localStorage.getItem('codeswim:activityOrder')
@@ -2627,6 +3146,10 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       state,
       commands,
       surfaceContext,
+      whiteboard,
+      voice,
+      speech,
+      browser,
       pickRoot,
       navigateRelative,
       readSnippet,
@@ -2653,6 +3176,8 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       toggleActiveSection,
       setSidePanelWidth,
       setActivityOrder,
+      toggleTerminal,
+      setTerminalHeight,
       toggleChatSettings,
       fetchProviderMethods,
       configureProvider,
@@ -2730,6 +3255,10 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       state,
       commands,
       surfaceContext,
+      whiteboard,
+      voice,
+      speech,
+      browser,
       pickRoot,
       navigateRelative,
       readSnippet,
@@ -2756,6 +3285,8 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       toggleActiveSection,
       setSidePanelWidth,
       setActivityOrder,
+      toggleTerminal,
+      setTerminalHeight,
       toggleChatSettings,
       fetchProviderMethods,
       configureProvider,

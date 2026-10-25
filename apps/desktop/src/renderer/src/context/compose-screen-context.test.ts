@@ -60,6 +60,27 @@ describe('composeScreenContext', () => {
     expect(out.surfaces.navigator).toBeUndefined()
   })
 
+  it('whiteboard: focuses the current page and surfaces the whiteboard block', () => {
+    const block = { pages: ['Accounts'], currentPage: 'Accounts', mode: 'talking' }
+    const out = composeScreenContext(baseState({ workspaceView: 'whiteboard' }), { whiteboard: block })
+    expect(out.focus).toEqual({ surface: 'whiteboard', itemId: 'Accounts' })
+    expect(out.surfaces.whiteboard).toEqual(block)
+    expect(out.surfaces.navigator).toBeUndefined()
+  })
+
+  it('whiteboard: a stale block is not published from another view', () => {
+    const out = composeScreenContext(baseState(), { whiteboard: { pages: [], currentPage: null, mode: 'idle' } })
+    expect(out.surfaces.whiteboard).toBeUndefined()
+  })
+
+  it('browser: the open panel is published beside any view, without taking focus', () => {
+    const block = { url: 'http://localhost:5173/', title: 'Acme', loading: false, error: null }
+    const out = composeScreenContext(baseState({ workspaceView: 'kanban' }), { browser: block })
+    expect(out.surfaces.browser).toEqual(block)
+    expect(out.focus.surface).toBe('kanban')
+    expect(composeScreenContext(baseState(), {}).surfaces.browser).toBeUndefined()
+  })
+
   it('agents: focuses the active agent tab', () => {
     const out = composeScreenContext(
       baseState({ workspaceView: 'agents', activeAgentTabId: 'tab-1' }),
@@ -84,13 +105,17 @@ describe('composeScreenContext', () => {
     expect(out.surfaces.diff).toEqual({ path: 'src/foo.ts', hunkCount: 2 })
   })
 
-  it('terminal: focuses the active tab from the terminal:terminal block', () => {
+  it('terminal panel: published under any view while open, without taking focus', () => {
     const terminalBlock = { tabCount: 2, activeTabId: 't2', activeTabLabel: 'Terminal 2' }
-    const out = composeScreenContext(baseState({ activeSection: 'terminal' }), {
+    const open = composeScreenContext(baseState({ terminalOpen: true }), {
       'terminal:terminal': terminalBlock
     })
-    expect(out.focus).toEqual({ surface: 'terminal', itemId: 't2' })
-    expect(out.surfaces.terminal).toEqual(terminalBlock)
+    expect(open.focus.surface).toBe('navigator')
+    expect(open.surfaces.terminal).toEqual(terminalBlock)
+    const closed = composeScreenContext(baseState({ terminalOpen: false }), {
+      'terminal:terminal': terminalBlock
+    })
+    expect(closed.surfaces.terminal).toBeUndefined()
   })
 
   it('terminal (claude section): reads terminal:claude, not terminal:terminal', () => {

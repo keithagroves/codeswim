@@ -30,6 +30,9 @@ electron-vite bundles the workspace source directly:
   vendored kit (`conformance/`, kept verbatim); must stay 6/6.
 - `@codeswim/coverage` — the diagram/source drift checker.
 - `@codeswim/commit` — prompt-commit synthesis + triage.
+- `@codeswim/whiteboard` — the talking whiteboard's pure core: line
+  protocol, board model, guards, turn scheduler and narrator prompts
+  ([architecture/whiteboard.md](architecture/whiteboard.md)).
 - `@codeswim/harness` — the opencode plugin, session gate, tools, and
   prompts that get bundled into `out/harness/`.
 
@@ -45,7 +48,8 @@ Run everything from the repo root: `npm run dev` / `build` / `typecheck` /
 | `npm run typecheck` | runs `typecheck:node` (main + preload) then `typecheck:web` (renderer) |
 | `npm run lint` | eslint, cached |
 | `npm run format` | prettier --write |
-| `npm run build:mac` / `:win` / `:linux` | electron-builder packaging |
+| `npm run build:mac` / `:win` / `:linux` | electron-builder packaging (fetches the speech models first) |
+| `npm run fetch:models --workspace @codeswim/desktop` | the whiteboard's voice and speech-recognition models (~240 MB, gitignored) into `apps/desktop/models`; the app ships them, and dev uses them when present |
 
 ## Process layout
 
@@ -156,6 +160,25 @@ auth header). If a CLI update stops connecting or diffs stop appearing,
 re-check it against the current extension's `extension.js` first.
 `claude-ide.test.ts` drives the server the way the CLI does.
 
+## Browser panel
+
+The globe in the header opens a right-side panel holding a real web page:
+a sandboxed `WebContentsView` that main lays over the panel's viewport
+([browser-host.ts](apps/desktop/src/main/browser-host.ts)). People and the
+agent drive it through the `browser.*` commands, and the whiteboard narrator
+points at it ([architecture/renderer.md](architecture/renderer.md#browser-panel)).
+Three things that aren't obvious:
+
+- The native view draws above all DOM. Nothing in the renderer can overlap
+  it, so anything the panel needs to say shows only while the view is hidden.
+- The page script ([browser-page.ts](apps/desktop/src/main/browser-page.ts))
+  is a plain string run in an isolated world, not a `fn.toString()`. esbuild
+  can inject helpers into a bundled function that don't exist inside the page.
+- Playwright's window screenshots don't include the native view; capture the
+  page's own `webContents` instead. A link a test clicks from script needs
+  `executeJavaScript(code, true)` (a user gesture), or Chromium won't let
+  Back return past it.
+
 ## Hooks
 
 The bundled system prompt ([packages/harness/src/prompt/](packages/harness/src/prompt/))
@@ -173,7 +196,10 @@ follows the same tolerant-validation precedent as `.codeswim/runs.json`
 (missing file, bad JSON, or a bad entry is silently skipped, never fatal),
 and wiring is in `plugin.ts` via opencode's `experimental.chat.system.transform`
 hook. There's no dedicated settings UI yet, same as `runs.json` — it's a
-hand-edited file. This is the seam to extend if we add more hook events
+hand-edited file. `.codeswim/pronunciations.json` is the same kind of hand-edited file: it fixes
+how the whiteboard's natural voice says product names
+([architecture/whiteboard.md](architecture/whiteboard.md)).
+This is the seam to extend if we add more hook events
 (`PreToolUse`/`PostToolUse`) or a global (`~/.codeswim/`) scope later.
 
 ## Test fixture
@@ -198,7 +224,9 @@ shows up in CI sandboxes. Unset it before `npm run dev`.
 
 - Don't add an in-app diagram editor. The plan is explicit: this is a
   read-only navigator. Authoring happens in the user's editor; we just
-  watch and re-render.
+  watch and re-render. The Whiteboard view isn't an exception: the narrator
+  draws it, it's read-only for the human, and it is not a source of truth
+  (mermaid stays the spec).
 - Don't introduce a markdown renderer for prose more elaborate than
   what's needed for the diagram-page meta block. The rich markdown
   renderer lives in the VS Code extension's webview, not here.

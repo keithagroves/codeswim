@@ -39,6 +39,13 @@ flowchart TD
     Diagram --> ErrBanner[MermaidErrorBanner]
     Read --> Prose[MarkdownProse]
     AppRoot --> ScriptCtl[ScriptControls]
+    AppRoot --> Whiteboard[WhiteboardView<br/>lazy-loaded tldraw]
+    Whiteboard --> WbCtl[whiteboard/controller.ts]
+    AppRoot --> Browser[BrowserPanelView<br/>right-side column]
+    Browser --> BrowserStore[browser/panel.ts]
+    BrowserCommands[browser.* commands] --> BrowserStore
+    Whiteboard --> BrowserStore
+    BrowserStore -->|IPC| BrowserHost[Sandboxed WebContentsView<br/>main process]
     State --> PathUtil[path-utils.ts]
 
     click Entry call navigate("../apps/desktop/src/renderer/src/main.tsx")
@@ -62,10 +69,39 @@ flowchart TD
     click SkillsP call navigate("../apps/desktop/src/renderer/src/components/SkillsPanel.tsx")
     click Toasts call navigate("../apps/desktop/src/renderer/src/components/Toasts.tsx")
     click ScriptCtl call navigate("../apps/desktop/src/renderer/src/components/ScriptControls.tsx")
+    click Whiteboard call navigate("./whiteboard.md")
+    click WbCtl call navigate("../apps/desktop/src/renderer/src/whiteboard/controller.ts")
+    click Browser call navigate("../apps/desktop/src/renderer/src/components/BrowserPanelView.tsx")
+    click BrowserStore call navigate("../apps/desktop/src/renderer/src/browser/panel.ts")
+    click BrowserCommands call navigate("../apps/desktop/src/renderer/src/commands/browser.ts")
+    click BrowserHost call navigate("./main-process.md")
     click ErrBanner call navigate("../apps/desktop/src/renderer/src/components/MermaidErrorBanner.tsx")
     click View call navigate("../architecture/renderer.md")
     click Prose call navigate("../apps/desktop/src/renderer/src/components/MarkdownProse.tsx")
 ```
+
+## Browser panel
+
+The globe button in the header opens a right-side browser panel next to whatever view is showing, so the agent chat stays available beside it. React owns the address bar, navigation controls and layout ([BrowserPanelView.tsx](../apps/desktop/src/renderer/src/components/BrowserPanelView.tsx)), and its state lives in an external store, one per provider ([browser/panel.ts](../apps/desktop/src/renderer/src/browser/panel.ts)). Main owns a sandboxed `WebContentsView` inside the window ([browser-host.ts](../apps/desktop/src/main/browser-host.ts)). That view follows the panel's viewport bounds, hides when the panel closes (the page keeps running), and is destroyed with its window. No external browser window opens.
+
+- **Commands.** People and the agent share the `browser.*` commands ([commands/browser.ts](../apps/desktop/src/renderer/src/commands/browser.ts)) through the registry and the authenticated command bridge: `open`, `back`, `forward`, `reload`, `close`, `inspect`, `point`, `measure` and `screenshot`. Each one returns real data. `inspect` returns a bounded outline (elements with refs, boxes and key computed styles, plus visible text), marked as page data rather than instructions.
+- **Screenshots.** They land in the workspace (or the agent's worktree) under `.codeswim/browser/`, which ignores itself in git and keeps the newest 20. The agent reads the PNG from there.
+- **Command discovery.** `find_command` shows each command's argument shape, and `run_command` returns the command's result as JSON.
+- **Navigation.** Only http(s) loads. A bare `localhost:5173` gets http://, and `0.0.0.0` becomes localhost. Pages get no preload or Node access, run in their own session, and have every permission denied. Popups open in the same view.
+- **Dev servers.** When a running script prints a local address, the empty panel offers to open it ([dev-url.ts](../apps/desktop/src/renderer/src/browser/dev-url.ts)).
+- **Native view limits.** Nothing in the DOM can draw over the native view, so load errors and the empty state show only while it's hidden. The panel shrinks first when the window is tight, the main column keeps at least 420px, and its header wraps rather than sliding under the panel.
+
+The whiteboard uses the same panel: it describes the page to its narrator, points at elements, and measures the page before and after a build ([whiteboard.md](./whiteboard.md#the-page-beside-the-board)).
+
+## Whiteboard view
+
+The fourth workspace view, next to Explore / Plan / Agents. Its conversation
+and board live in `WhiteboardController`, one per `StoreProvider`, so they
+outlive the view's mounts; the tldraw canvas attaches while the view is
+mounted and is rebuilt from the board model. You talk to it in the Agent
+panel's chat, whose thread merges the narrator's replies with the agent's
+messages by time ([chat/thread.ts](../apps/desktop/src/renderer/src/chat/thread.ts)).
+See [whiteboard.md](./whiteboard.md).
 
 ## Notes
 
@@ -109,7 +145,7 @@ flowchart TD
 - [KanbanView.tsx](../apps/desktop/src/renderer/src/components/KanbanView.tsx) — board view for the workspace kanban.
 - [McpView.tsx](../apps/desktop/src/renderer/src/components/McpView.tsx) — MCP tools tab inside the Tools side panel.
 - [PullRequestsPanel.tsx](../apps/desktop/src/renderer/src/components/PullRequestsPanel.tsx) — pull request listing, filtering, and inline merge flow.
-- [TerminalPanel.tsx](../apps/desktop/src/renderer/src/components/TerminalPanel.tsx) — terminal emulator panel (Ctrl+` toggle).
+- [TerminalPanel.tsx](../apps/desktop/src/renderer/src/components/TerminalPanel.tsx) — terminal emulator with tabs. The plain terminal sits in a VS Code-style panel along the bottom of the main column (`TerminalDock` in App.tsx). Ctrl+` or the Terminal icon toggles it, its top edge resizes it, and it can be maximized. It stays mounted while hidden so shells survive, and its open state and height persist. The Claude Code tab reuses the same component in the side panel.
 - [Toasts.tsx](../apps/desktop/src/renderer/src/components/Toasts.tsx) — transient notifications.
 - [AgentsView.tsx](../apps/desktop/src/renderer/src/components/AgentsView.tsx) — multi-tab agent workspace: browser-style tabs, one opencode session per tab, independent streaming.
 - [CodeSnippetCard.tsx](../apps/desktop/src/renderer/src/components/CodeSnippetCard.tsx) — inline CodeMirror editor that renders a line-range slice of a source file inside [MarkdownProse](../apps/desktop/src/renderer/src/components/MarkdownProse.tsx).

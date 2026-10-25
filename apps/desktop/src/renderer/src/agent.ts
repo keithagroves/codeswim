@@ -14,7 +14,50 @@ export interface AssistantPart {
   tool?: string
   status?: 'running' | 'completed' | 'error'
   metadata?: unknown
+  // Tool parts only, and only for the tools a build checkpoint reads (see
+  // CHECKPOINT_TOOLS): what the tool was called with, and opencode's title.
+  input?: Record<string, unknown>
+  title?: string
+  // Same tools only: the start of the tool's output. A tool can finish
+  // "completed" yet report a failure in its output (diagram_edit returns
+  // "error: …" for an invalid diagram), and the checkpoint must tell them apart.
+  output?: string
 }
+
+// Tools whose input the whiteboard needs: for a build checkpoint, which
+// diagrams changed (and to what) and which files the edit tools touched; for
+// research, which files `read` opened. Other tools' inputs (`bash`, `grep`)
+// stay out of renderer state.
+const CHECKPOINT_TOOLS = new Set([
+  'diagram_edit',
+  'write',
+  'edit',
+  'apply_patch',
+  'multiedit',
+  'read'
+])
+
+// opencode's per-file diff for a session or one of its turns. opencode 1.18
+// sends a unified `patch` (plus `status`); the SDK's types still describe the
+// older before/after shape, so both are optional and callers handle either.
+export interface FileDiff {
+  file: string
+  patch?: string
+  status?: string
+  before?: string
+  after?: string
+  additions: number
+  deletions: number
+}
+
+// Session lifecycle events the chat itself doesn't need but a build
+// checkpoint does: when a turn finished (`idle`), what it changed, and which
+// files the agent touched.
+export type SessionEvent =
+  | { type: 'idle'; sessionID: string }
+  | { type: 'diff'; sessionID: string; diff: FileDiff[] }
+  | { type: 'file-edited'; file: string }
+  | { type: 'error'; sessionID?: string; message: string }
 
 export interface PartUpdate {
   sessionID: string
@@ -33,7 +76,15 @@ export interface LoadedMessage {
   id: string
   role: 'user' | 'assistant'
   parts: AssistantPart[]
+  /** When opencode created it (ms). */
+  createdAt?: number
 }
+
+/**
+ * Title prefix for sessions the app runs behind the scenes (the whiteboard's
+ * read-only research). They never show in the session list.
+ */
+export const HIDDEN_SESSION_PREFIX = 'codeswim:'
 
 export interface AgentSendResult {
   messageID: string
@@ -74,7 +125,10 @@ export interface AgentClient {
   // directory-aware per request, so one connection can drive sessions across
   // several directories at once.
   listSessions(directory?: string): Promise<SessionInfo[]>
-  createSession(directory?: string): Promise<SessionInfo>
+  // `title` presets the session's title, which also skips opencode's
+  // auto-titling request for hidden sessions.
+  createSession(directory?: string, title?: string): Promise<SessionInfo>
+  deleteSession(sessionId: string, directory?: string): Promise<void>
   loadMessages(sessionId: string, directory?: string): Promise<LoadedMessage[]>
   // `model` pins the request to a specific provider/model pair (see
   // SelectedModel below); omitted, opencode falls back to its own default.
@@ -82,13 +136,21 @@ export interface AgentClient {
     sessionId: string,
     text: string,
     directory?: string,
-    model?: SelectedModel
+    model?: SelectedModel,
+    agent?: string,
+    // Restricts the tools for this one message, e.g. {"*": false, read: true}
+    // for a read-only look (opencode enforces it: other tools aren't offered).
+    tools?: Record<string, boolean>
   ): Promise<AgentSendResult>
   // Cancels the in-flight turn on the server. The pending send()'s promise
   // still settles on its own (either with whatever partial reply the server
   // hands back, or with an abort-shaped error) — this only requests the stop.
   stop(sessionId: string, directory?: string): Promise<void>
   subscribeParts(handler: (update: PartUpdate) => void): () => void
+  subscribeSessionEvents(handler: (event: SessionEvent) => void): () => void
+  // The files a session changed, or with `messageID` just that user turn's
+  // changes (opencode's per-message summary).
+  sessionDiff(sessionId: string, messageID?: string, directory?: string): Promise<FileDiff[]>
   subscribeQuestions(handler: (event: QuestionEvent) => void): () => void
   listPendingQuestions(sessionId?: string): Promise<PendingQuestion[]>
   replyToQuestion(requestID: string, answers: string[][]): Promise<void>
@@ -96,14 +158,14 @@ export interface AgentClient {
   close(): Promise<void>
 }
 
-interface RawPart {
+export interface RawPart {
   id: string
   sessionID: string
   messageID: string
   type: string
   text?: string
   tool?: string
-  state?: { status?: string; metadata?: unknown }
+  state?: { status?: string; metadata?: unknown; input?: unknown; title?: string; output?: unknown }
   metadata?: unknown
   synthetic?: boolean
   ignored?: boolean
@@ -112,6 +174,13 @@ interface RawPart {
 interface RawEvent {
   type: string
   properties?: { part?: RawPart; delta?: string }
+}
+
+// Pulls a readable message out of opencode's error union (ProviderAuthError,
+// ApiError, …: { name, data: { message } }).
+function errorMessage(error: unknown): string {
+  const e = error as { name?: string; data?: { message?: string } } | undefined
+  return e?.data?.message || e?.name || 'The agent reported an error.'
 }
 
 // /global/event wraps each Event in an envelope. We unwrap once on receipt.
@@ -127,7 +196,7 @@ interface RawSession {
 }
 
 interface RawMessage {
-  info: { id: string; role: 'user' | 'assistant' }
+  info: { id: string; role: 'user' | 'assistant'; time?: { created?: number } }
   parts: RawPart[]
 }
 
@@ -291,6 +360,7 @@ export async function connectAgent(url: string, defaultDirectory: string): Promi
   // and without role-filtering our reducer would render it as a second
   // assistant bubble.
   const handlers = new Set<(update: PartUpdate) => void>()
+  const sessionHandlers = new Set<(event: SessionEvent) => void>()
   const questionHandlers = new Set<(event: QuestionEvent) => void>()
   // messageID → role, learned from `message.updated` events that always
   // precede the corresponding `message.part.updated` events.
@@ -312,6 +382,16 @@ export async function connectAgent(url: string, defaultDirectory: string): Promi
             if (info?.id && (info.role === 'user' || info.role === 'assistant')) {
               messageRole.set(info.id, info.role)
             }
+            continue
+          }
+          if (
+            e.type === 'session.idle' ||
+            e.type === 'session.diff' ||
+            e.type === 'file.edited' ||
+            e.type === 'session.error'
+          ) {
+            const event = toSessionEvent(e)
+            if (event) for (const h of sessionHandlers) h(event)
             continue
           }
           if (e.type === 'question.asked') {
@@ -357,16 +437,29 @@ export async function connectAgent(url: string, defaultDirectory: string): Promi
         signal: abort.signal
       })
       const sessions = (result.data ?? []) as RawSession[]
-      return sessions.map(toSessionInfo).sort((a, b) => b.updatedAt - a.updatedAt)
+      return sessions
+        .map(toSessionInfo)
+        .filter((s) => !s.title.startsWith(HIDDEN_SESSION_PREFIX))
+        .sort((a, b) => b.updatedAt - a.updatedAt)
     },
 
-    async createSession(directory = defaultDirectory): Promise<SessionInfo> {
+    async createSession(directory = defaultDirectory, title?: string): Promise<SessionInfo> {
       const result = await client.session.create({
         query: { directory },
+        ...(title ? { body: { title } } : {}),
         throwOnError: true,
         signal: abort.signal
       })
       return toSessionInfo(result.data as RawSession)
+    },
+
+    async deleteSession(sessionId: string, directory = defaultDirectory): Promise<void> {
+      await client.session.delete({
+        path: { id: sessionId },
+        query: { directory },
+        throwOnError: true,
+        signal: abort.signal
+      })
     },
 
     async loadMessages(sessionId: string, directory = defaultDirectory): Promise<LoadedMessage[]> {
@@ -380,7 +473,8 @@ export async function connectAgent(url: string, defaultDirectory: string): Promi
       return messages.map((m) => ({
         id: m.info.id,
         role: m.info.role,
-        parts: m.parts.map(toAssistantPart).filter((p): p is AssistantPart => p !== null)
+        parts: m.parts.map(toAssistantPart).filter((p): p is AssistantPart => p !== null),
+        ...(typeof m.info.time?.created === 'number' ? { createdAt: m.info.time.created } : {})
       }))
     },
 
@@ -388,14 +482,18 @@ export async function connectAgent(url: string, defaultDirectory: string): Promi
       sessionId: string,
       text: string,
       directory = defaultDirectory,
-      model?: SelectedModel
+      model?: SelectedModel,
+      agent?: string,
+      tools?: Record<string, boolean>
     ): Promise<AgentSendResult> {
       const result = await client.session.prompt({
         path: { id: sessionId },
         query: { directory },
         body: {
           parts: [{ type: 'text', text }] as never,
-          ...(model ? { model: { providerID: model.providerID, modelID: model.modelID } } : {})
+          ...(model ? { model: { providerID: model.providerID, modelID: model.modelID } } : {}),
+          ...(agent ? { agent } : {}),
+          ...(tools ? { tools } : {})
         },
         throwOnError: true,
         signal: abort.signal
@@ -422,6 +520,28 @@ export async function connectAgent(url: string, defaultDirectory: string): Promi
       return () => {
         handlers.delete(handler)
       }
+    },
+
+    subscribeSessionEvents(handler: (event: SessionEvent) => void): () => void {
+      sessionHandlers.add(handler)
+      startStream()
+      return () => {
+        sessionHandlers.delete(handler)
+      }
+    },
+
+    async sessionDiff(
+      sessionId: string,
+      messageID?: string,
+      directory = defaultDirectory
+    ): Promise<FileDiff[]> {
+      const result = await client.session.diff({
+        path: { id: sessionId },
+        query: { directory, ...(messageID ? { messageID } : {}) },
+        throwOnError: true,
+        signal: abort.signal
+      })
+      return ((result.data ?? []) as FileDiff[]).filter((d) => d && typeof d.file === 'string')
     },
 
     subscribeQuestions(handler: (event: QuestionEvent) => void): () => void {
@@ -476,6 +596,7 @@ export async function connectAgent(url: string, defaultDirectory: string): Promi
     async close(): Promise<void> {
       abort.abort()
       handlers.clear()
+      sessionHandlers.clear()
       questionHandlers.clear()
     }
   }
@@ -492,7 +613,7 @@ function toSessionInfo(s: RawSession): SessionInfo {
   }
 }
 
-function toAssistantPart(p: RawPart): AssistantPart | null {
+export function toAssistantPart(p: RawPart): AssistantPart | null {
   if (p.synthetic || p.ignored) return null
   if (p.type === 'text') {
     return { id: p.id, kind: 'text', text: p.text ?? '' }
@@ -501,14 +622,47 @@ function toAssistantPart(p: RawPart): AssistantPart | null {
     return { id: p.id, kind: 'reasoning', text: p.text ?? '' }
   }
   if (p.type === 'tool') {
+    const keepInput =
+      !!p.tool &&
+      CHECKPOINT_TOOLS.has(p.tool) &&
+      p.state?.input &&
+      typeof p.state.input === 'object'
     return {
       id: p.id,
       kind: 'tool',
       tool: p.tool,
       status: (p.state?.status as AssistantPart['status']) ?? 'running',
-      metadata: p.state?.metadata
+      metadata: p.state?.metadata,
+      ...(keepInput ? { input: p.state!.input as Record<string, unknown> } : {}),
+      ...(keepInput && typeof p.state?.output === 'string'
+        ? { output: p.state.output.slice(0, 500) }
+        : {}),
+      ...(p.state?.title ? { title: p.state.title } : {})
     }
   }
   // step-start, step-finish, snapshot, etc. — not user-facing.
   return null
+}
+
+export function toSessionEvent(e: { type: string; properties?: unknown }): SessionEvent | null {
+  const props = (e.properties ?? {}) as {
+    sessionID?: string
+    diff?: unknown
+    file?: string
+    error?: unknown
+  }
+  switch (e.type) {
+    case 'session.idle':
+      return props.sessionID ? { type: 'idle', sessionID: props.sessionID } : null
+    case 'session.diff':
+      return props.sessionID && Array.isArray(props.diff)
+        ? { type: 'diff', sessionID: props.sessionID, diff: props.diff as FileDiff[] }
+        : null
+    case 'file.edited':
+      return props.file ? { type: 'file-edited', file: props.file } : null
+    case 'session.error':
+      return { type: 'error', sessionID: props.sessionID, message: errorMessage(props.error) }
+    default:
+      return null
+  }
 }

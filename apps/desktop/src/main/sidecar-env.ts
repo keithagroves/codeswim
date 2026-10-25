@@ -85,3 +85,23 @@ export function buildSidecarEnv(
   delete env.OPENCODE_SERVER_PASSWORD
   return { env, xdgDirs: Object.values(xdg) }
 }
+
+// The whiteboard narrator's opencode process (sidecar.ts,
+// startNarratorSidecar). Same XDG dirs as the coding agent's sidecar —
+// that's what lets it read the same auth store, so the key is never copied —
+// but none of the workspace-scoped capabilities (no chat room, no command
+// bridge), and opencode's Claude-compat prompt loading off so the user's
+// ~/.claude/CLAUDE.md and a workspace CLAUDE.md never reach the narrator.
+export function buildNarratorEnv(
+  baseEnv: NodeJS.ProcessEnv,
+  xdgRoot: string,
+  config: unknown
+): SidecarEnvResult {
+  const { env, xdgDirs } = buildSidecarEnv(baseEnv, xdgRoot, config, null, null)
+  for (const key of Object.keys(env)) {
+    if (key.startsWith('CODESWIM_')) delete env[key]
+  }
+  env.OPENCODE_DISABLE_CLAUDE_CODE = '1'
+  env.OPENCODE_DISABLE_PROJECT_CONFIG = '1'
+  return { env, xdgDirs }
+}

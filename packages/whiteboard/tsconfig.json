@@ -1,0 +1,9 @@
+{
+  "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
+  "include": ["src/**/*", "tests/**/*"],
+  "compilerOptions": {
+    "composite": false,
+    "resolveJsonModule": true,
+    "types": ["node"]
+  }
+}

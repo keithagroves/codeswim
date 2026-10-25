@@ -22,12 +22,14 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function formatWorkspaceView(view: 'navigator' | 'kanban' | 'agents'): string {
+function formatWorkspaceView(view: 'navigator' | 'kanban' | 'agents' | 'whiteboard'): string {
   return view === 'kanban'
     ? 'Kanban board'
     : view === 'agents'
       ? 'Agents (tabbed agent sessions)'
-      : 'diagram navigator'
+      : view === 'whiteboard'
+        ? 'Whiteboard (spoken design conversation, sketched by the narrator)'
+        : 'diagram navigator'
 }
 
 // The unversioned shape published before ScreenContextV2 — see
@@ -89,6 +91,29 @@ function formatScreenContextV2(context: ScreenContextV2): string {
     if (kanban.runningCardIds.length > 0) {
       lines.push(`Cards running via "Run all": ${kanban.runningCardIds.join(', ')}`)
     }
+  }
+
+  const whiteboard = context.surfaces.whiteboard
+  if (whiteboard) {
+    if (whiteboard.pages.length > 0) {
+      lines.push(
+        `Whiteboard pages: ${whiteboard.pages.join(', ')}${whiteboard.currentPage ? ` (showing "${whiteboard.currentPage}")` : ''}`
+      )
+    } else {
+      lines.push('The whiteboard is blank.')
+    }
+    if (whiteboard.mode !== 'idle') lines.push(`Whiteboard: ${whiteboard.mode}`)
+  }
+
+  const browser = context.surfaces.browser
+  if (browser) {
+    if (!browser.url) lines.push('Browser panel: open, no page loaded.')
+    else if (browser.error)
+      lines.push(`Browser panel: ${browser.url} failed to load (${browser.error})`)
+    else
+      lines.push(
+        `Browser panel: ${browser.title ? `"${browser.title}" — ` : ''}${browser.url}${browser.loading ? ' (loading)' : ''}`
+      )
   }
 
   const diff = context.surfaces.diff

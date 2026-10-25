@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { flattenTreeFiles, useStore } from '../store'
+import { SpeechBar, SpeechModeButton } from './SpeechMode'
+import { buildBriefOf, mergeThread } from '../chat/thread'
+import type { TranscriptEntry } from '../whiteboard/controller'
 import { MarkdownProse } from './MarkdownProse'
 import { resolveWorkspacePath } from '../path-utils'
 import type { ChatMessage, ChatMessagePart, PendingQuestion } from '../store'
@@ -676,6 +679,23 @@ export function MessageView({
   message: ChatMessage
   resolvePath: PathResolver
 }): React.JSX.Element {
+  // A whiteboard build hand-off is a long prompt; show what was handed over.
+  const first = message.parts[0]
+  const brief =
+    message.role === 'user' && first?.kind === 'text' && first.text
+      ? buildBriefOf(first.text)
+      : null
+  if (brief) {
+    return (
+      <div className="chat-message chat-message-handoff">
+        <div className="chat-message-role">Whiteboard → Agent</div>
+        <div className="chat-message-body">
+          <div className="chat-handoff-label">Build this design</div>
+          <div className="chat-text">{brief}</div>
+        </div>
+      </div>
+    )
+  }
   return (
     <div className={`chat-message chat-message-${message.role}`}>
       <div className="chat-message-role">{message.role === 'user' ? 'You' : 'Agent'}</div>
@@ -683,6 +703,20 @@ export function MessageView({
         {message.parts.map((part, i) => (
           <PartView key={part.id ?? i} part={part} role={message.role} resolvePath={resolvePath} />
         ))}
+      </div>
+    </div>
+  )
+}
+
+// One line of the whiteboard conversation, shown in the Agent panel's thread.
+function WhiteboardEntryView({ entry }: { entry: TranscriptEntry }): React.JSX.Element {
+  if (entry.who === 'info') return <div className="chat-note">{entry.text}</div>
+  const you = entry.who === 'you'
+  return (
+    <div className={`chat-message ${you ? 'chat-message-user' : 'chat-message-narrator'}`}>
+      <div className="chat-message-role">{you ? 'You' : 'Whiteboard'}</div>
+      <div className="chat-message-body">
+        <div className="chat-text">{entry.text}</div>
       </div>
     </div>
   )
@@ -919,10 +953,32 @@ export function QuestionPrompt({
 }
 
 export function ChatPanel(): React.JSX.Element {
-  const { state, sendChat, stopChat, toggleChatSettings } = useStore()
+  const { state, sendChat, stopChat, toggleChatSettings, whiteboard, commands, speech } = useStore()
+  const board = useSyncExternalStore(whiteboard.subscribe, whiteboard.getSnapshot)
+  // Speech mode replaces the box with a listening bar until it's ended.
+  const speaking = useSyncExternalStore(speech.subscribe, speech.getSnapshot).state !== 'off'
   const [input, setInput] = useState('')
   const listRef = useRef<HTMLDivElement | null>(null)
   const sending = state.chatStatus === 'thinking' || state.chatStatus === 'connecting'
+  // While the Whiteboard is on screen, this box talks to its narrator (which
+  // answers out loud and sketches); anywhere else it talks to the agent. The
+  // switch above the box sends one message to the agent instead.
+  const boardOnScreen =
+    state.workspaceView === 'whiteboard' &&
+    state.activeSection !== 'tools' &&
+    state.view !== 'diff' &&
+    state.view !== 'output'
+  const [toAgent, setToAgent] = useState(false)
+  const [prevBoardOnScreen, setPrevBoardOnScreen] = useState(boardOnScreen)
+  if (boardOnScreen !== prevBoardOnScreen) {
+    setPrevBoardOnScreen(boardOnScreen)
+    setToAgent(false)
+  }
+  const toBoard = boardOnScreen && !toAgent
+  const thread = useMemo(
+    () => mergeThread(state.chatMessages, board.entries, state.currentSessionId),
+    [state.chatMessages, board.entries, state.currentSessionId]
+  )
   // Only an in-flight turn (not "connecting", which has no session yet) can
   // actually be stopped.
   const canStop = state.chatStatus === 'thinking'
@@ -937,16 +993,24 @@ export function ChatPanel(): React.JSX.Element {
   const hasStreamingAssistant =
     sending && lastMessage?.role === 'assistant' && lastMessage.parts.length > 0
 
+  const lastEntry = board.entries.at(-1)
   useEffect(() => {
     const el = listRef.current
     if (!el) return
     el.scrollTop = el.scrollHeight
-  }, [state.chatMessages.length, state.chatStatus])
+  }, [state.chatMessages.length, state.chatStatus, board.entries.length, lastEntry?.text])
 
   const send = (): void => {
     const text = input.trim()
-    if (!text || sending) return
+    if (!text) return
+    if (toBoard) {
+      setInput('')
+      void commands.run('whiteboard.ask', { text }, { kind: 'human' })
+      return
+    }
+    if (sending) return
     setInput('')
+    setToAgent(false)
     void sendChat(text)
   }
 
@@ -984,7 +1048,7 @@ export function ChatPanel(): React.JSX.Element {
         </div>
       ) : null}
       <div className="chat-list" ref={listRef}>
-        {state.chatMessages.length === 0 ? (
+        {thread.length === 0 ? (
           <div className="chat-empty">
             <svg
               className="chat-empty-icon"
@@ -1001,14 +1065,20 @@ export function ChatPanel(): React.JSX.Element {
                 strokeLinejoin="round"
               />
             </svg>
-            {state.rootPath
-              ? 'Describe a feature, change, or question. The agent will edit diagrams first, then code.'
-              : 'Open a folder to start chatting with the agent.'}
+            {!state.rootPath
+              ? 'Open a folder to start chatting with the agent.'
+              : toBoard
+                ? 'Talk through what to build. The whiteboard answers out loud and sketches it, reads files you name, sends the agent to look into the rest, and builds it once you say yes.'
+                : 'Describe a feature, change, or question. The agent will edit diagrams first, then code.'}
           </div>
         ) : (
-          state.chatMessages.map((m) => (
-            <MessageView key={m.id} message={m} resolvePath={resolvePath} />
-          ))
+          thread.map((item) =>
+            item.kind === 'message' ? (
+              <MessageView key={item.message.id} message={item.message} resolvePath={resolvePath} />
+            ) : (
+              <WhiteboardEntryView key={`wb-${item.entry.id}`} entry={item.entry} />
+            )
+          )
         )}
         {sending && !hasStreamingAssistant ? (
           <div className="chat-message chat-message-assistant chat-message-pending">
@@ -1031,37 +1101,104 @@ export function ChatPanel(): React.JSX.Element {
       </div>
       <QuestionPrompt pending={state.pendingQuestion} />
       <div className="chat-input-row">
-        <textarea
-          className="chat-input"
-          placeholder={
-            hasPendingQuestion
-              ? 'Answer the agent above to continue'
-              : state.rootPath
-                ? 'Ask the agent…  (Enter to send, Shift+Enter for newline)'
-                : 'Open a folder first'
-          }
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={onKeyDown}
-          disabled={!state.rootPath || sending || hasPendingQuestion}
-          rows={3}
-        />
-        <div className="chat-input-toolbar">
-          <ModelPicker />
-          {canStop ? (
-            <button className="secondary chat-stop-btn" onClick={() => void stopChat()}>
+        {board.researching ? (
+          <div className="chat-status-line" title={board.researching}>
+            <span className="status-dot running" />
+            <span className="chat-status-text">Agent is looking into: {board.researching}</span>
+            <button className="link-btn" onClick={() => whiteboard.cancelResearch()}>
               Stop
             </button>
-          ) : (
-            <button
-              className="primary chat-send-btn"
-              onClick={send}
-              disabled={!state.rootPath || sending || hasPendingQuestion || !input.trim()}
-            >
-              Send
-            </button>
-          )}
-        </div>
+          </div>
+        ) : null}
+        {speaking ? (
+          <SpeechBar />
+        ) : (
+          <>
+            {boardOnScreen ? (
+              <div className="chat-target" role="radiogroup" aria-label="Send to">
+                <button
+                  role="radio"
+                  aria-checked={toBoard}
+                  className={toBoard ? 'is-active' : ''}
+                  onClick={() => setToAgent(false)}
+                  title="The whiteboard answers out loud and sketches"
+                >
+                  Whiteboard
+                </button>
+                <button
+                  role="radio"
+                  aria-checked={!toBoard}
+                  className={!toBoard ? 'is-active' : ''}
+                  onClick={() => setToAgent(true)}
+                  title="Send this one message straight to the agent"
+                >
+                  Agent
+                </button>
+              </div>
+            ) : null}
+            <textarea
+              className="chat-input"
+              placeholder={
+                !state.rootPath
+                  ? 'Open a folder first'
+                  : toBoard
+                    ? board.talking
+                      ? 'Type to interrupt…  (Esc stops it)'
+                      : 'Talk to the whiteboard…  (it answers out loud)'
+                    : hasPendingQuestion
+                      ? 'Answer the agent above to continue'
+                      : 'Ask the agent…  (Enter to send, Shift+Enter for newline)'
+              }
+              value={input}
+              onChange={(e) => {
+                // Typing over the narrator interrupts it, like talking over someone.
+                if (toBoard && board.talking && e.target.value && !input) whiteboard.interrupt()
+                setInput(e.target.value)
+              }}
+              onKeyDown={onKeyDown}
+              disabled={!state.rootPath || (!toBoard && (sending || hasPendingQuestion))}
+              aria-label={toBoard ? 'Talk to the whiteboard' : 'Message the agent'}
+              rows={3}
+            />
+            <div className="chat-input-toolbar">
+              <ModelPicker />
+              <div className="chat-input-actions">
+                {/* Speech mode talks to the narrator, so not while "Agent" is picked. */}
+                {toAgent && boardOnScreen ? null : <SpeechModeButton />}
+                {toBoard ? (
+                  board.talking ? (
+                    <button
+                      className="secondary chat-stop-btn"
+                      onClick={() => whiteboard.interrupt()}
+                    >
+                      Stop
+                    </button>
+                  ) : (
+                    <button
+                      className="primary chat-send-btn"
+                      onClick={send}
+                      disabled={!state.rootPath || !input.trim()}
+                    >
+                      Ask
+                    </button>
+                  )
+                ) : canStop ? (
+                  <button className="secondary chat-stop-btn" onClick={() => void stopChat()}>
+                    Stop
+                  </button>
+                ) : (
+                  <button
+                    className="primary chat-send-btn"
+                    onClick={send}
+                    disabled={!state.rootPath || sending || hasPendingQuestion || !input.trim()}
+                  >
+                    Send
+                  </button>
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </aside>
   )

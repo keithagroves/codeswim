@@ -1003,6 +1003,11 @@ body.is-mac .header {
   --tab-wash: rgba(140, 160, 255, 0.14);
 }
 
+.workspace-view-switch button.tab-whiteboard {
+  --tab-tint: var(--pastel-peach);
+  --tab-wash: rgba(255, 200, 150, 0.14);
+}
+
 .workspace-view-switch button::before {
   content: '';
   width: 6px;
@@ -6080,4 +6085,624 @@ body.is-panning .diagram-canvas-wrap {
   padding: 10px 12px;
   font-size: 13px;
   color: var(--text-muted);
+}
+
+/* Whiteboard (plans/talking-whiteboard.md): a read-only tldraw canvas the
+   narrator draws on, with page tabs on top and captions + the command strip
+   at the bottom. Overlays float over the canvas; their sizes match INSETS in
+   components/WhiteboardView.tsx, which keeps the drawing clear of them. */
+.whiteboard {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #101014;
+}
+
+.whiteboard-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+/* tldraw's dark theme, nudged onto the app's background. */
+.whiteboard-canvas .tl-container {
+  --color-background: #101014;
+}
+
+.whiteboard-top {
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+  z-index: 300;
+}
+
+.whiteboard-pages {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  max-width: 100%;
+  pointer-events: auto;
+}
+
+.whiteboard-pages button {
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-raised);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    color 150ms ease;
+}
+
+.whiteboard-pages button:hover {
+  color: var(--text);
+}
+
+.whiteboard-pages button.is-active {
+  background: var(--accent-tint);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--accent);
+}
+
+.whiteboard-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-raised);
+  color: var(--text-muted);
+  font-size: 12px;
+  pointer-events: auto;
+}
+
+.whiteboard-banner.is-building {
+  color: var(--text);
+}
+
+.whiteboard-empty {
+  position: absolute;
+  top: 34%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(460px, calc(100% - 48px));
+  text-align: center;
+  color: var(--text-muted);
+  pointer-events: none;
+  z-index: 200;
+}
+
+.whiteboard-empty h2 {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.whiteboard-empty p {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.whiteboard-hint {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.whiteboard-bottom {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  width: min(720px, calc(100% - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 300;
+}
+
+.whiteboard-caption {
+  align-self: center;
+  max-width: 100%;
+  padding: 7px 14px;
+  border-radius: 8px;
+  background: rgb(0 0 0 / 72%);
+  color: #fff;
+  font-size: 15px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.whiteboard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.whiteboard-strip {
+  /* Just its controls, centered: a full-width strip read as a chat box. */
+  align-self: center;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-muted);
+  box-shadow: 0 4px 18px rgb(0 0 0 / 35%);
+}
+
+.whiteboard-strip-hint {
+  min-width: 0;
+  padding: 0 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.whiteboard-strip .icon-btn.is-active,
+.whiteboard-strip .icon-btn.is-muted {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.whiteboard-timing {
+  align-self: center;
+  color: var(--text-muted);
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.whiteboard-voice {
+  height: 32px;
+  max-width: 130px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+}
+
+.whiteboard-voice:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+/* Browser panel: a right-side column with an address bar over a live page.
+ * The page is a native view main lays over .browser-viewport, so nothing in
+ * the DOM can draw on top of it; the empty and error states show only while
+ * the view is hidden. */
+.browser-panel {
+  /* Gives up width first when the window is tight, down to its min-width;
+   * the main column keeps enough room for its header. */
+  flex-shrink: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  border-left: 1px solid var(--border);
+  background: var(--bg);
+  min-height: 0;
+}
+
+.browser-resizer {
+  position: absolute;
+  top: 0;
+  left: -2px;
+  width: 4px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+}
+
+.browser-resizer:hover,
+body.is-resizing .browser-resizer {
+  background: var(--accent);
+  opacity: 0.4;
+}
+
+.browser-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px;
+  min-height: 48px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-muted);
+  -webkit-app-region: drag;
+}
+
+.browser-bar > * {
+  -webkit-app-region: no-drag;
+}
+
+.browser-bar .icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+  background: transparent;
+  border-color: transparent;
+}
+
+.browser-address {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.browser-address:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.browser-progress {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  background-size: 50% 100%;
+  background-repeat: no-repeat;
+  animation: browser-progress 1.1s linear infinite;
+}
+
+@keyframes browser-progress {
+  from {
+    background-position: -50% 0;
+  }
+  to {
+    background-position: 150% 0;
+  }
+}
+
+.browser-viewport {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  background: var(--bg);
+}
+
+.browser-empty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.browser-empty p {
+  margin: 0;
+  max-width: 340px;
+  line-height: 1.5;
+}
+
+.browser-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.browser-suggestion-from {
+  color: var(--text-muted);
+}
+
+.browser-error {
+  color: var(--error-text);
+}
+
+.browser-error-detail {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.browser-hint {
+  font-size: 12px;
+}
+
+.browser-toggle svg {
+  display: block;
+}
+
+/* With the browser panel open the main column can get narrow: keep a usable
+ * minimum, and let the header put its actions on a second row rather than
+ * slide them under the panel. */
+.main-row:has(.browser-panel) .main-column {
+  min-width: 420px;
+}
+
+.main-row:has(.browser-panel) .header {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+/* Bottom terminal panel (TerminalDock in App.tsx): under the main view, like
+ * VS Code's. Its top edge resizes it; maximized, it takes the whole column. */
+.terminal-dock {
+  position: relative;
+  flex-shrink: 0;
+  flex-direction: column;
+  min-height: 100px;
+  max-height: calc(100% - 120px);
+  border-top: 1px solid var(--border);
+  background: #0e0e11;
+}
+
+.terminal-dock.is-maximized {
+  flex: 1;
+  max-height: none;
+}
+
+.main-column:has(> .terminal-dock.is-maximized)
+  > :not(.terminal-dock):not(.header):not(.drag-strip) {
+  display: none;
+}
+
+.terminal-dock-resizer {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: row-resize;
+  z-index: 10;
+}
+
+.terminal-dock-resizer:hover,
+body.is-resizing-rows .terminal-dock-resizer {
+  background: var(--accent);
+  opacity: 0.4;
+}
+
+body.is-resizing-rows {
+  cursor: row-resize !important;
+  user-select: none;
+}
+
+.terminal-tab-bar-trailing {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 6px;
+  flex-shrink: 0;
+}
+
+.terminal-dock-btn {
+  background: none;
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #8a8a9a;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.terminal-dock-btn:hover {
+  color: #d4d4d4;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* The whiteboard in the Agent panel's thread: the narrator's replies, small
+ * status notes, build hand-offs, and the Whiteboard/Agent switch. */
+.chat-message-narrator .chat-message-role {
+  color: var(--pastel-lavender);
+}
+
+.chat-message-narrator .chat-message-body {
+  border-left: 2px solid var(--pastel-lavender);
+}
+
+.chat-message-handoff .chat-message-body {
+  border: 1px dashed var(--border);
+  background: transparent;
+}
+
+.chat-handoff-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.chat-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 0 2px;
+  line-height: 1.4;
+}
+
+.chat-target {
+  display: inline-flex;
+  align-self: flex-start;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.chat-target button {
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.chat-target button.is-active {
+  background: var(--accent-tint);
+  color: var(--accent);
+}
+
+.chat-status-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  min-width: 0;
+}
+
+.chat-status-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Speech mode (components/SpeechMode.tsx): the sound-wave button, and the
+   listening bar that stands in for the chat box. */
+.chat-input-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.speech-mode-btn {
+  color: var(--text-muted);
+}
+
+.speech-mode-btn:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.speech-mode-btn.is-active {
+  color: var(--accent);
+  background: var(--accent-tint);
+}
+
+.speech-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 60px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  font-size: 13px;
+}
+
+.speech-bar.is-listening,
+.speech-bar.is-hearing {
+  border-color: var(--accent);
+}
+
+.speech-bar-meter {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 28px;
+  flex: none;
+}
+
+.speech-bar-meter span {
+  width: 4px;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transform: scaleY(0.18);
+  transition: transform 80ms linear;
+}
+
+.speech-bar:not(.is-listening):not(.is-hearing) .speech-bar-meter span {
+  background: var(--text-muted);
+  opacity: 0.6;
+}
+
+/* Waiting on something: a slow pulse instead of a level. */
+.speech-bar.is-preparing .speech-bar-meter span,
+.speech-bar.is-transcribing .speech-bar-meter span,
+.speech-bar.is-replying .speech-bar-meter span {
+  animation: speech-wait 1.1s ease-in-out infinite;
+}
+
+.speech-bar-meter span:nth-child(2) {
+  animation-delay: 0.12s;
+}
+.speech-bar-meter span:nth-child(3) {
+  animation-delay: 0.24s;
+}
+.speech-bar-meter span:nth-child(4) {
+  animation-delay: 0.36s;
+}
+.speech-bar-meter span:nth-child(5) {
+  animation-delay: 0.48s;
+}
+
+@keyframes speech-wait {
+  0%,
+  100% {
+    transform: scaleY(0.2);
+  }
+  50% {
+    transform: scaleY(0.55);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .speech-bar-meter span {
+    animation: none !important;
+    transition: none;
+  }
+}
+
+.speech-bar-label {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.speech-bar.is-listening .speech-bar-label,
+.speech-bar.is-hearing .speech-bar-label {
+  color: var(--text);
+}
+
+.speech-bar.is-error .speech-bar-label {
+  color: var(--error-text);
+}
+
+.speech-bar-label.is-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.speech-bar-label.is-button:hover {
+  color: var(--text);
 }

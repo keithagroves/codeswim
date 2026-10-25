@@ -33,6 +33,10 @@ import type {
 import type { LineRange } from './path-utils'
 import type { SurfaceContextRegistry } from './context/surface-context'
 import type { GitSyncOutcome } from './commands/git'
+import type { WhiteboardController } from './whiteboard/controller'
+import type { VoiceSettings } from './whiteboard/voice'
+import type { SpeechMode } from './whiteboard/speech-mode'
+import type { BrowserPanel } from './browser/panel'
 
 export type { LineRange } from './path-utils'
 
@@ -50,7 +54,7 @@ export function prDiffLabel(pr: { number: number; title: string }): string {
 
 export type View = 'diagram' | 'read' | 'code' | 'output' | 'diff'
 export type FileView = 'diagram' | 'read' | 'code'
-export type WorkspaceView = 'kanban' | 'navigator' | 'agents'
+export type WorkspaceView = 'kanban' | 'navigator' | 'agents' | 'whiteboard'
 // Activity-bar / side-panel sections, in no particular order. The user's
 // preferred order lives in AppState.activityOrder.
 export type Section =
@@ -124,6 +128,9 @@ export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   parts: ChatMessagePart[]
+  // When it was sent (ms): opencode's time for loaded messages, the local
+  // clock for new ones. Places whiteboard replies in the same thread.
+  createdAt?: number
 }
 
 // One browser-style tab in the Agents workspace view. Each tab is its own
@@ -210,6 +217,15 @@ export interface AppState {
   // User-controlled order of activity-bar sections (drag-to-reorder).
   // Persisted to localStorage.
   activityOrder: Section[]
+  // The terminal panel along the bottom of the main column (VS Code-style,
+  // toggled with Ctrl+` or the Terminal icon). Open state and height are
+  // persisted to localStorage. 'terminal' in activityOrder is that icon; it
+  // never opens a side-panel section.
+  terminalOpen: boolean
+  terminalHeight: number
+  // Bumped each time the person opens the terminal (not when it's restored
+  // open at startup), so the panel can put the cursor in the shell.
+  terminalFocus: number
   // Which sub-tab of the Tools section is active (skills vs MCP).
   toolsTab: ToolsTab
   // Selected skill in the Skills view (null = nothing picked yet).
@@ -284,6 +300,17 @@ export interface StoreApi {
   // Registry of context blocks contributed by mounted surfaces — see
   // apps/desktop/src/renderer/src/context/useSurfaceContext.ts.
   surfaceContext: SurfaceContextRegistry
+  // The talking whiteboard's conversation, board and build hand-off — one
+  // per StoreProvider, outliving the Whiteboard view's mounts. See
+  // whiteboard/controller.ts.
+  whiteboard: WhiteboardController
+  // The whiteboard's voice choice and the natural voice's install status
+  // (whiteboard/voice.ts).
+  voice: VoiceSettings
+  // Speech mode: hands-free talk with the whiteboard (whiteboard/speech-mode.ts).
+  speech: SpeechMode
+  // The browser panel: open/width and the page's state (browser/panel.ts).
+  browser: BrowserPanel
   pickRoot(): Promise<void>
   navigateRelative(relativePathFromCurrent: string): Promise<void>
   // Reads a workspace file relative to the currently open document without
@@ -318,6 +345,9 @@ export interface StoreApi {
   toggleActiveSection(section: Section): void
   setSidePanelWidth(width: number): void
   setActivityOrder(order: Section[]): void
+  // Show/hide the bottom terminal panel; omit `open` to flip it.
+  toggleTerminal(open?: boolean): void
+  setTerminalHeight(height: number): void
   setCurrentSkill(
     skill: {
       kind?: 'skill' | 'agents'

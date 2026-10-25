@@ -21,6 +21,8 @@ flowchart TD
     Renderer --> Coverage[Coverage<br/>checker]
     Renderer --> Commit[Prompt Commits<br/>synthesized messages]
     Renderer --> Party[Party Server<br/>chat rooms]
+    Renderer --> Whiteboard[Talking Whiteboard<br/>spoken design, then build]
+    Whiteboard --> Main
     Commit --> Main
     Sidecar -.->|edits| FS
     Sidecar -.->|chat_read / chat_send| Party
@@ -34,6 +36,7 @@ flowchart TD
     click Coverage call navigate("./architecture/coverage.md")
     click Commit call navigate("./architecture/prompt-commits.md")
     click Party call navigate("./architecture/party.md")
+    click Whiteboard call navigate("./architecture/whiteboard.md")
 ```
 
 ## Subsystems
@@ -42,6 +45,7 @@ flowchart TD
 - [Preload bridge](./architecture/preload.md) — the typed `window.api` surface that crosses Electron's context isolation boundary.
 - [Renderer](./architecture/renderer.md) — the React UI: state, views, panels, mermaid rendering, markdown parsing.
 - [Agent harness](./architecture/agent-harness.md) — the `opencode` sidecar plus its diagram-first plugin and chat UI.
+- [Talking whiteboard](./architecture/whiteboard.md) — talk through a design while the narrator sketches it, then the agent builds it diagram-first and walks you through the result.
 - [Coverage](./architecture/coverage.md) — the diagram/source drift checker that this very file is meant to satisfy.
 - [Prompt Commits](./architecture/prompt-commits.md) — the Commit side-panel that synthesizes the prompt-that-regenerates-the-diff as the commit message, gated on coverage.
 - [Party server](./architecture/party.md) — the Cloudflare Workers PartyServer powering per-project chat rooms (public + GitHub-collaborator-gated).

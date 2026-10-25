@@ -26,6 +26,105 @@ export interface HarnessConnection {
   url: string
 }
 
+// The whiteboard narrator's opencode server (main/sidecar.ts,
+// startNarratorSidecar). `directory` is the empty directory its sessions run
+// in; every request must pass it, never a workspace root.
+export interface WhiteboardConnection {
+  url: string
+  directory: string
+}
+
+// The whiteboard's natural voice (Kokoro, main/voice.ts). `installed` means
+// the model is on disk; `state` is the voice process: 'downloading' and
+// 'loading' while install runs, 'ready' once it can speak. `available` is
+// false where there's no voice process at all (the browser stub).
+export interface VoiceStatus {
+  available: boolean
+  installed: boolean
+  state: 'idle' | 'downloading' | 'loading' | 'ready' | 'error'
+  /** 0..1 while downloading, otherwise null. */
+  progress: number | null
+  error: string | null
+  downloadMb: number
+}
+
+// Speech mode's speech recognition (main/listen.ts): the same lifecycle as
+// the natural voice, an opt-in download, then offline.
+export type ListenStatus = VoiceStatus
+
+// One spoken sentence as mono PCM.
+export interface SpokenAudio {
+  samples: Float32Array
+  sampleRate: number
+}
+
+// The browser panel (main/browser-host.ts): one sandboxed page view inside
+// the app window. `url` is '' until something is opened; `error` is the last
+// main-frame load failure (the view is hidden while it's set, so the panel
+// can say what went wrong).
+export interface BrowserState {
+  url: string
+  title: string
+  loading: boolean
+  canGoBack: boolean
+  canGoForward: boolean
+  error: string | null
+}
+
+// Where the page view sits, in CSS pixels relative to the window's content.
+export interface BrowserBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface PageBox {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+// One visible element worth talking about: a heading, button, link, input or
+// image. `ref` (e1, e2, ...) addresses it in later browser calls until the
+// page navigates. Sizes are CSS pixels; `style` is a few computed properties
+// (font size, colors, padding, radius) for buttons, links and inputs.
+export interface PageElement {
+  ref: string
+  role: string
+  text: string
+  box: PageBox
+  href?: string
+  style?: Record<string, string>
+}
+
+// A bounded, text-only picture of the open page — cheap enough to put in a
+// prompt on every request. `text` is the page's visible text, cut short.
+export interface PageOutline {
+  url: string
+  title: string
+  viewport: { width: number; height: number; scrollY: number; pageHeight: number }
+  elements: PageElement[]
+  text: string
+  truncated: boolean
+}
+
+// What point/measure found for one target (visible text, a ref, or a CSS
+// selector).
+export interface PageMatch {
+  target: string
+  found: boolean
+  element?: PageElement
+}
+
+export interface PageScreenshot {
+  // Workspace-relative path of the PNG (under .codeswim/browser/).
+  path: string
+  width: number
+  height: number
+}
+
 export interface HarnessLogPayload {
   stream: 'stdout' | 'stderr'
   line: string
@@ -491,6 +590,52 @@ export interface DiagramNavApi {
   // PersistedAgentTabs). null from read means no file yet / unreadable.
   agentTabsRead(rootPath: string): Promise<PersistedAgentTabs | null>
   agentTabsWrite(rootPath: string, data: PersistedAgentTabs): Promise<void>
+  // Talking whiteboard (plans/talking-whiteboard.md). whiteboardStart starts
+  // (or reuses) the narrator's own opencode process; read/write persist the
+  // board and conversation to .codeswim/whiteboard/board.json as an opaque
+  // JSON string the renderer validates. null from read means no saved board.
+  whiteboardStart(): Promise<WhiteboardConnection>
+  whiteboardRead(rootPath: string): Promise<string | null>
+  whiteboardWrite(rootPath: string, json: string): Promise<void>
+  // The whiteboard's natural voice (Kokoro). voiceInstall downloads the model
+  // on first use (~163 MB, into userData) and loads it; voiceSpeak turns one
+  // sentence into PCM; voiceCancel drops sentences not yet synthesized.
+  voiceStatus(): Promise<VoiceStatus>
+  voiceInstall(): Promise<VoiceStatus>
+  // `background`: a phrase rendered ahead of time, behind real sentences.
+  voiceSpeak(
+    text: string,
+    voice: string,
+    speed?: number,
+    background?: boolean
+  ): Promise<SpokenAudio>
+  voiceCancel(): Promise<void>
+  onVoiceStatus(cb: (status: VoiceStatus) => void): () => void
+  // Speech mode (main/listen.ts). listenTranscribe takes one utterance as
+  // 16 kHz mono PCM. micAccess asks the OS for the microphone (macOS shows
+  // its prompt once) and says whether it was granted.
+  listenStatus(): Promise<ListenStatus>
+  listenInstall(): Promise<ListenStatus>
+  listenTranscribe(samples: Float32Array): Promise<string>
+  onListenStatus(cb: (status: ListenStatus) => void): () => void
+  micAccess(): Promise<boolean>
+  // The browser panel (main/browser-host.ts). browserOpen accepts http(s)
+  // URLs (a bare "localhost:5173" gets http://); browserSetBounds places the
+  // page view over the panel's viewport, null hides it (the page keeps
+  // running). Inspect/point/measure run in an isolated world, so the page's
+  // own scripts never see them; screenshots land in <root>/.codeswim/browser/.
+  browserOpen(url: string): Promise<BrowserState>
+  browserNavigate(action: 'back' | 'forward' | 'reload' | 'stop'): Promise<BrowserState>
+  browserState(): Promise<BrowserState>
+  browserSetBounds(bounds: BrowserBounds | null): Promise<void>
+  browserClose(): Promise<void>
+  browserInspect(): Promise<PageOutline>
+  browserPoint(target: string, all?: boolean): Promise<PageMatch[]>
+  browserMeasure(targets: string[]): Promise<PageMatch[]>
+  browserScreenshot(rootPath: string): Promise<PageScreenshot>
+  // Reload and wait (bounded) for the page to finish loading.
+  browserReload(): Promise<BrowserState>
+  onBrowserState(cb: (state: BrowserState) => void): () => void
   // App auto-update: main checks + downloads on its own; the renderer listens
   // for status and calls installUpdate to restart into the new version.
   onUpdateStatus(cb: (payload: UpdateStatusPayload) => void): () => void

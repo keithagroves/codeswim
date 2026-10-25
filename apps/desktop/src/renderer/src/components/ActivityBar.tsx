@@ -257,7 +257,8 @@ export function ActivityBar(): React.JSX.Element {
         // The Claude Code tab stays hidden unless the real Claude Spark is
         // available (see claudeSparkUrl) — it looked wrong with our stand-in.
         if (key === 'claude' && !claudeSparkUrl) return null
-        const isActive = active === key
+        // The Terminal icon toggles the bottom panel rather than a side section.
+        const isActive = key === 'terminal' ? state.terminalOpen : active === key
         const isDropTarget = dropBeforeKey === key && dragKey !== key
         const count = badgeFor(key, state)
         return (

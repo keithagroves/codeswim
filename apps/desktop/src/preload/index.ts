@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type {
+  BrowserBounds,
+  BrowserState,
   ClaudeIdeDiff,
   ClaudeIdeEditorState,
   ClaudeIdeOpenFile,
@@ -8,12 +10,19 @@ import type {
   CommandRendererResponse,
   KanbanBoard,
   KanbanWorktreeInfo,
+  PageMatch,
+  PageOutline,
+  PageScreenshot,
   PersistedAgentTabs,
   ScreenContextV2,
   UnbiasedAuthEvent,
   UnbiasedSignInPending,
   UnbiasedStatus,
-  UpdateStatusPayload
+  UpdateStatusPayload,
+  SpokenAudio,
+  VoiceStatus,
+  ListenStatus,
+  WhiteboardConnection
 } from '@codeswim/contract'
 
 export type {
@@ -497,6 +506,55 @@ const api = {
     ipcRenderer.invoke('agent-tabs:read', rootPath),
   agentTabsWrite: (rootPath: string, data: PersistedAgentTabs): Promise<void> =>
     ipcRenderer.invoke('agent-tabs:write', rootPath, data),
+  whiteboardStart: (): Promise<WhiteboardConnection> => ipcRenderer.invoke('whiteboard:start'),
+  whiteboardRead: (rootPath: string): Promise<string | null> =>
+    ipcRenderer.invoke('whiteboard:read', rootPath),
+  whiteboardWrite: (rootPath: string, json: string): Promise<void> =>
+    ipcRenderer.invoke('whiteboard:write', rootPath, json),
+  voiceStatus: (): Promise<VoiceStatus> => ipcRenderer.invoke('voice:status'),
+  voiceInstall: (): Promise<VoiceStatus> => ipcRenderer.invoke('voice:install'),
+  voiceSpeak: (
+    text: string,
+    voice: string,
+    speed?: number,
+    background?: boolean
+  ): Promise<SpokenAudio> => ipcRenderer.invoke('voice:speak', text, voice, speed, background),
+  voiceCancel: (): Promise<void> => ipcRenderer.invoke('voice:cancel'),
+  onVoiceStatus: (cb: (status: VoiceStatus) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, status: VoiceStatus): void => cb(status)
+    ipcRenderer.on('voice:status', listener)
+    return () => ipcRenderer.removeListener('voice:status', listener)
+  },
+  listenStatus: (): Promise<ListenStatus> => ipcRenderer.invoke('listen:status'),
+  listenInstall: (): Promise<ListenStatus> => ipcRenderer.invoke('listen:install'),
+  listenTranscribe: (samples: Float32Array): Promise<string> =>
+    ipcRenderer.invoke('listen:transcribe', samples),
+  onListenStatus: (cb: (status: ListenStatus) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, status: ListenStatus): void => cb(status)
+    ipcRenderer.on('listen:status', listener)
+    return () => ipcRenderer.removeListener('listen:status', listener)
+  },
+  micAccess: (): Promise<boolean> => ipcRenderer.invoke('mic:access'),
+  browserOpen: (url: string): Promise<BrowserState> => ipcRenderer.invoke('browser:open', url),
+  browserNavigate: (action: 'back' | 'forward' | 'reload' | 'stop'): Promise<BrowserState> =>
+    ipcRenderer.invoke('browser:navigate', action),
+  browserState: (): Promise<BrowserState> => ipcRenderer.invoke('browser:state'),
+  browserSetBounds: (bounds: BrowserBounds | null): Promise<void> =>
+    ipcRenderer.invoke('browser:set-bounds', bounds),
+  browserClose: (): Promise<void> => ipcRenderer.invoke('browser:close'),
+  browserInspect: (): Promise<PageOutline> => ipcRenderer.invoke('browser:inspect'),
+  browserPoint: (target: string, all?: boolean): Promise<PageMatch[]> =>
+    ipcRenderer.invoke('browser:point', target, all),
+  browserMeasure: (targets: string[]): Promise<PageMatch[]> =>
+    ipcRenderer.invoke('browser:measure', targets),
+  browserScreenshot: (rootPath: string): Promise<PageScreenshot> =>
+    ipcRenderer.invoke('browser:screenshot', rootPath),
+  browserReload: (): Promise<BrowserState> => ipcRenderer.invoke('browser:reload'),
+  onBrowserState: (cb: (state: BrowserState) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: BrowserState): void => cb(state)
+    ipcRenderer.on('browser:state', listener)
+    return () => ipcRenderer.removeListener('browser:state', listener)
+  },
   onUpdateStatus: (cb: (payload: UpdateStatusPayload) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: UpdateStatusPayload): void =>
       cb(payload)

@@ -123,6 +123,52 @@ describe('formatAppState (ScreenContextV2)', () => {
     expect(out).toContain('Cards running via "Run all": card-2, card-3')
   })
 
+  it('reports the whiteboard: its pages and whether it is building', () => {
+    const out = formatAppState(
+      JSON.stringify({
+        version: 2,
+        workspaceView: 'whiteboard',
+        focus: { surface: 'whiteboard', itemId: null },
+        runningScript: null,
+        surfaces: {
+          whiteboard: {
+            pages: ['Accounts', 'Multiplayer'],
+            currentPage: 'Accounts',
+            mode: 'building'
+          }
+        }
+      })
+    )
+    expect(out).toContain('Whiteboard (spoken design conversation')
+    expect(out).toContain('Whiteboard pages: Accounts, Multiplayer (showing "Accounts")')
+    expect(out).toContain('Whiteboard: building')
+  })
+
+  it('reports the browser panel beside the view', () => {
+    const base = {
+      version: 2,
+      workspaceView: 'navigator',
+      focus: { surface: 'navigator', itemId: null },
+      runningScript: null
+    }
+    const page = (browser: unknown): string =>
+      formatAppState(JSON.stringify({ ...base, surfaces: { browser } }))
+    expect(
+      page({ url: 'http://localhost:5173/', title: 'Acme', loading: false, error: null })
+    ).toContain('Browser panel: "Acme" — http://localhost:5173/')
+    expect(page({ url: '', title: '', loading: false, error: null })).toContain(
+      'Browser panel: open, no page loaded.'
+    )
+    expect(
+      page({
+        url: 'http://localhost:1/',
+        title: '',
+        loading: false,
+        error: 'ERR_CONNECTION_REFUSED'
+      })
+    ).toContain('failed to load (ERR_CONNECTION_REFUSED)')
+  })
+
   it('reports a diff surface', () => {
     const out = formatAppState(
       JSON.stringify({

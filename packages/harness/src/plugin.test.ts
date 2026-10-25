@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { CodeswimPlugin, GATE_NOTE } from './plugin'
+import pluginModule, { CodeswimPlugin, GATE_NOTE } from './plugin'
 
 // The plugin factory doesn't read its input at construction time (it only wires
 // up the session gate and returns hooks), so a bare cast is enough to reach the
@@ -30,6 +30,15 @@ afterEach(async () => {
   await Promise.all(tmpDirs.splice(0).map((d) => rm(d, { recursive: true, force: true })))
   for (const key of envKeys) delete process.env[key]
   vi.unstubAllGlobals()
+})
+
+describe('plugin module', () => {
+  // opencode >= 1.18 rejects a path plugin without an id ("must export id"),
+  // which silently unregistered every harness tool and the diagram gate.
+  it('exports an id alongside the server plugin', () => {
+    expect(pluginModule.id).toBe('codeswim')
+    expect(pluginModule.server).toBe(CodeswimPlugin)
+  })
 })
 
 describe('tool.definition hook', () => {
@@ -156,6 +165,23 @@ describe('run_command tool', () => {
       await hooks.tool!.run_command.execute({ id: 'nav.setWorkspaceView', args: { view: 'kanban' } }, ctx())
     )
     expect(result.output).toMatch(/Ran nav\.setWorkspaceView/)
+  })
+
+  it("puts the command's real result in the output, where the model can read it", async () => {
+    stubCommandBridge()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ ok: true, value: { path: '.codeswim/browser/shot.png', width: 800, height: 600 } }),
+            { status: 200 }
+          )
+      )
+    )
+    const hooks = await loadHooks()
+    const result = asOutput(await hooks.tool!.run_command.execute({ id: 'browser.screenshot' }, ctx()))
+    expect(result.output).toContain('"path": ".codeswim/browser/shot.png"')
   })
 
   it('a command an agent origin is forbidden from still comes back as an error, not a thrown exception', async () => {

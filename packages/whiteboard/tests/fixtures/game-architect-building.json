@@ -1,0 +1,97 @@
+[
+  {
+    "question": "I'm building a little space shooter in the browser, just me on weekends, and I'm using Phaser. Where do I start?",
+    "lines": [
+      "{\"say\": \"Start with one playable scene: move your ship, shoot bullets, and destroy an enemy.\"}",
+      "{\"say\": \"Start with one Phaser scene: a ship that moves and a single enemy to shoot.\"}",
+      "{\"group\": \"scene\", \"from\": [0, 1], \"to\": [2, 1], \"label\": \"First playable scene\"}",
+      "{\"box\": \"ship\", \"at\": [0, 1], \"label\": \"Player ship\", \"color\": \"blue\"}",
+      "{\"box\": \"enemy\", \"at\": [2, 1], \"label\": \"Enemy\", \"color\": \"blue\"}",
+      "{\"say\": \"Wire arrow keys to movement and spacebar to bullets, using plain shapes instead of finished artwork.\"}",
+      "{\"box\": \"bullets\", \"at\": [1, 1], \"label\": \"Bullets\", \"color\": \"orange\"}",
+      "{\"arrow\": [\"ship\", \"bullets\"], \"label\": \"Spacebar\"}",
+      "{\"note\": \"Arrow keys\", \"at\": [0, 2]}",
+      "{\"say\": \"Use Phaser\\u2019s Arcade Physics for collisions, so bullets destroy enemies and touching an enemy ends the run.\"}",
+      "{\"arrow\": [\"bullets\", \"enemy\"], \"label\": \"Destroys\"}",
+      "{\"note\": \"Arcade Physics\", \"at\": [2, 2]}",
+      "{\"say\": \"Then add a score and a restart button; that gives you a complete little game before adding more enemies.\"}",
+      "{\"box\": \"score\", \"at\": [3, 1], \"label\": \"Score\", \"color\": \"grey\"}",
+      "{\"box\": \"restart\", \"at\": [4, 1], \"label\": \"Restart\", \"color\": \"blue\"}",
+      "{\"say\": \"Skip accounts, multiplayer, and fancy art for now; aim for thirty seconds that feels fun.\"}",
+      "{\"say\": \"Have you already got Phaser running in your browser, or are you starting from an empty folder?\"}"
+    ]
+  },
+  {
+    "question": "Okay, I've got a ship flying around and enemies coming at me. Now I want accounts and a global leaderboard. Firebase or Supabase?",
+    "lines": [
+      "{\"say\": \"That comes down to Firebase\\u2019s document model versus Supabase\\u2019s SQL flexibility for leaderboard queries.\"}",
+      "{\"say\": \"Firebase gives you easy accounts and realtime updates, but leaderboard queries need more planning with Firestore.\"}",
+      "{\"option\": \"firebase\", \"at\": [1, 3], \"label\": \"Firebase\", \"pros\": [\"Easy authentication\", \"Realtime updates\"], \"cons\": [\"Leaderboard query constrai\"], \"color\": \"blue\"}",
+      "{\"say\": \"Supabase also handles accounts, and its SQL database makes rankings straightforward, though you\\u2019ll need access policies.\"}",
+      "{\"option\": \"supabase\", \"at\": [3, 3], \"label\": \"Supabase\", \"pros\": [\"Easy authentication\", \"SQL rankings\"], \"cons\": [\"Access policy setup\"], \"color\": \"blue\"}",
+      "{\"say\": \"For your weekend shooter, I lean Supabase because querying scores and rankings fits SQL naturally.\"}",
+      "{\"say\": \"Either way, accounts don\\u2019t prevent cheating; your backend should validate submitted scores rather than trusting the browser.\"}",
+      "{\"say\": \"Does Supabase sound good, or are you already more comfortable with Firebase?\"}"
+    ]
+  },
+  {
+    "question": "I've used Firebase before, so let's go Firebase. How do scores get into the leaderboard without people cheating?",
+    "lines": [
+      "{\"say\": \"Never trust the client; validate the score on the server using Firebase Functions.\"}",
+      "{\"pick\": \"firebase\"}",
+      "{\"say\": \"With Firebase, send results to a Cloud Function that checks submissions before writing to your leaderboard in Firestore.\"}",
+      "{\"box\": \"validator\", \"at\": [2, 0], \"label\": \"Score validator\", \"color\": \"blue\"}",
+      "{\"box\": \"leaderboard\", \"at\": [4, 0], \"label\": \"Firestore leaderboard\", \"color\": \"green\"}",
+      "{\"arrow\": [\"validator\", \"leaderboard\"], \"label\": \"Validated scores\"}",
+      "{\"say\": \"Require Firebase Authentication, and configure Firestore Security Rules to block all direct player writes to leaderboard entries.\"}",
+      "{\"note\": \"No player writes\", \"at\": [5, 0]}",
+      "{\"say\": \"Check server-issued run IDs, elapsed time, and plausible scoring limits; these catch obvious fakes, not determined cheating.\"}",
+      "{\"highlight\": \"validator\"}",
+      "{\"say\": \"For stronger protection, record player inputs and replay each run server-side using deterministic game logic and a server-chosen seed.\"}",
+      "{\"say\": \"The server calculates the score itself; reject reused run IDs so one run can\\u2019t produce multiple submissions.\"}",
+      "{\"say\": \"For your weekend project, start with basic checks, accepting some cheating risk; add replay verification if competition gets serious.\"}"
+    ]
+  },
+  {
+    "question": "That's working. Now my friends want to fly together in real time. What changes?",
+    "lines": [
+      "{\"say\": \"Keep Firebase for accounts; add an authoritative game server to synchronize ships and combat.\"}",
+      "{\"say\": \"Your friends\\u2019 browsers need a persistent game server, connected over WebSockets, rather than Cloud Functions handling every movement.\"}",
+      "{\"box\": \"players\", \"at\": [0, 0], \"label\": \"Player browsers\", \"color\": \"violet\"}",
+      "{\"box\": \"gameserver\", \"at\": [3, 0], \"label\": \"Game server\", \"color\": \"blue\"}",
+      "{\"arrow\": [\"players\", \"gameserver\"], \"label\": \"WebSocket\"}",
+      "{\"say\": \"Browsers send controls, not positions; the server runs movement, enemies, collisions, and scoring for everyone.\"}",
+      "{\"highlight\": \"gameserver\"}",
+      "{\"say\": \"Keep Firebase for accounts and leaderboards; the game server verifies login tokens, while Firestore stays outside the movement loop.\"}",
+      "{\"highlight\": \"firebase\"}",
+      "{\"highlight\": \"leaderboard\"}",
+      "{\"say\": \"The server broadcasts snapshots; browsers predict their own ship\\u2019s movement and smoothly interpolate other ships between updates.\"}",
+      "{\"say\": \"You\\u2019ll need to separate shared game rules from Phaser\\u2019s rendering and host a server that supports long-lived connections.\"}",
+      "{\"say\": \"Start with one two-player room, then test simulated lag and disconnects before adding matchmaking or scaling up.\"}"
+    ]
+  },
+  {
+    "question": "Let's do a server, I don't want cheaters. Can you show me the whole thing now?",
+    "lines": [
+      "{\"say\": \"Server it is: browsers send controls; the server simulates gameplay and writes Firebase scores.\"}",
+      "{\"pick\": \"gameserver\"}",
+      "{\"say\": \"Players sign in through Firebase Authentication, then send their login token to your game server.\"}",
+      "{\"box\": \"auth\", \"at\": [1, 0], \"label\": \"Firebase Authentication\", \"color\": \"blue\"}",
+      "{\"arrow\": [\"players\", \"auth\"], \"label\": \"Sign in\"}",
+      "{\"arrow\": [\"auth\", \"players\"], \"label\": \"Login token\", \"back\": true}",
+      "{\"say\": \"The server verifies that token before admitting players to a room and accepting their controls over WebSockets.\"}",
+      "{\"highlight\": \"gameserver\"}",
+      "{\"note\": \"Authenticated room connections\", \"at\": [4, 3]}",
+      "{\"say\": \"Movement, enemies, collisions, and scoring run on the server; browsers cannot declare hits or award themselves points.\"}",
+      "{\"highlight\": \"gameserver\"}",
+      "{\"note\": \"Authoritative game simulation\", \"at\": [4, 2]}",
+      "{\"say\": \"The server sends snapshots back; Phaser predicts your ship\\u2019s movement and smoothly interpolates everyone else\\u2019s.\"}",
+      "{\"arrow\": [\"gameserver\", \"players\"], \"label\": \"Snapshots\", \"back\": true}",
+      "{\"say\": \"When a run ends, the server writes scores directly to Firestore, replacing the old score-validation function.\"}",
+      "{\"remove\": \"validator\"}",
+      "{\"arrow\": [\"gameserver\", \"leaderboard\"], \"label\": \"Final scores\"}",
+      "{\"say\": \"Players can read the leaderboard, but cannot write scores; server authority blocks forged outcomes, not every cheat.\"}",
+      "{\"arrow\": [\"players\", \"leaderboard\"], \"label\": \"Read rankings\"}"
+    ]
+  }
+]

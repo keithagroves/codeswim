@@ -1,0 +1,70 @@
+[
+  {
+    "question": "I'm building a little space shooter in the browser, just me on weekends. Should I use a game engine like Phaser, or write it on a plain canvas?",
+    "lines": [
+      "{\"say\": \"That comes down to shipping fast versus full control.\"}",
+      "{\"say\": \"Phaser gives you collisions, input, and sprite animation, but you'll spend some time learning its conventions.\"}",
+      "{\"option\": \"phaser\", \"at\": [1, 1], \"label\": \"Phaser\", \"pros\": [\"Built in collisions\", \"Sprite animation\"], \"cons\": [\"Framework learning\"], \"color\": \"blue\"}",
+      "{\"say\": \"Plain canvas gives you complete control, but you'll build collision handling and game structure yourself.\"}",
+      "{\"option\": \"canvas\", \"at\": [3, 1], \"label\": \"Plain canvas\", \"pros\": [\"Complete control\", \"Minimal dependencies\"], \"cons\": [\"Manual collisions\", \"More groundwork\"], \"color\": \"blue\"}",
+      "{\"say\": \"For weekend work, I'd lean toward Phaser so more time goes into making your shooter fun.\"}",
+      "{\"say\": \"Would you rather get a playable shooter quickly, or learn the nuts and bolts by building them yourself?\"}"
+    ]
+  },
+  {
+    "question": "Let's go with Phaser, I'd rather ship than build an engine. Next, I need accounts and a global leaderboard. Firebase or Supabase?",
+    "lines": [
+      "{\"say\": \"That comes down to Firebase\\u2019s integrated tooling versus Supabase\\u2019s SQL flexibility for leaderboards.\"}",
+      "{\"pick\": \"phaser\"}",
+      "{\"say\": \"Firebase makes accounts quick to add, but flexible leaderboard queries take more planning with its document database.\"}",
+      "{\"option\": \"firebase\", \"at\": [1, 3], \"label\": \"Firebase\", \"pros\": [\"Easy authentication\", \"Client SDKs\"], \"cons\": [\"Limited query flexibility\"], \"color\": \"blue\"}",
+      "{\"say\": \"Supabase also handles accounts, and its SQL database suits rankings well, though you'll need database access rules.\"}",
+      "{\"option\": \"supabase\", \"at\": [3, 3], \"label\": \"Supabase\", \"pros\": [\"Built in authentication\", \"Flexible ranking queries\"], \"cons\": [\"Database policy setup\"], \"color\": \"blue\"}",
+      "{\"say\": \"For your weekend shooter, I'd lean toward Supabase because leaderboard queries and future filters fit naturally.\"}",
+      "{\"say\": \"Whichever you choose, validate scores on the server rather than trusting whatever the browser submits.\"}",
+      "{\"say\": \"Does Supabase sound good, or do you already have experience with Firebase?\"}"
+    ]
+  },
+  {
+    "question": "I've used Firebase before and I like the live updates, so let's go Firebase. Now the big one: I want friends to fly together in real time. Peer to peer, or a game server?",
+    "lines": [
+      "{\"say\": \"That comes down to peer networking complexity versus server hosting costs and authoritative gameplay.\"}",
+      "{\"pick\": \"firebase\"}",
+      "{\"say\": \"Peer-to-peer can reduce hosting costs, but browser connections need signaling, sometimes relays, and recovery when the host leaves.\"}",
+      "{\"option\": \"peer\", \"at\": [4, 0], \"label\": \"Peer to peer\", \"pros\": [\"Lower hosting costs\"], \"cons\": [\"Connection complexity\", \"Host departures\"], \"color\": \"blue\"}",
+      "{\"say\": \"A game server keeps everyone synchronized and can validate scores, but adds hosting costs and deployment work.\"}",
+      "{\"option\": \"server\", \"at\": [5, 0], \"label\": \"Game server\", \"pros\": [\"Authoritative game state\", \"Score validation\"], \"cons\": [\"Hosting costs\", \"Server deployment\"], \"color\": \"blue\"}",
+      "{\"say\": \"Firebase can still handle accounts and live leaderboards; its database shouldn't drive your real-time flight simulation.\"}",
+      "{\"highlight\": \"firebase\"}",
+      "{\"say\": \"I'd lean toward a small game server: predictable shared gameplay is worth some hosting overhead when weekends are limited.\"}",
+      "{\"say\": \"Would you trade a modest hosting bill for fewer connection headaches?\"}"
+    ]
+  },
+  {
+    "question": "A server. Cheating would kill the leaderboard. Can you show me what the whole thing looks like now?",
+    "lines": [
+      "{\"say\": \"Phaser for the game, Firebase for accounts and leaderboards, and a game server for real-time flight.\"}",
+      "{\"pick\": \"server\"}",
+      "{\"say\": \"Your Phaser browser sends player inputs to the game server, rather than deciding hits or scores itself.\"}",
+      "{\"move\": \"phaser\", \"at\": [0, 0]}",
+      "{\"move\": \"server\", \"at\": [2, 0]}",
+      "{\"arrow\": [\"phaser\", \"server\"], \"label\": \"Player inputs\"}",
+      "{\"say\": \"Friends connect their browsers too; the server simulates combat and broadcasts the shared state.\"}",
+      "{\"box\": \"friends\", \"at\": [0, 2], \"label\": \"Friends' browsers\", \"color\": \"violet\"}",
+      "{\"arrow\": [\"friends\", \"server\"], \"label\": \"Player inputs\"}",
+      "{\"arrow\": [\"server\", \"friends\"], \"label\": \"Game state\", \"back\": true}",
+      "{\"say\": \"Firebase signs players in, and the game server verifies their authentication tokens before admitting them.\"}",
+      "{\"move\": \"firebase\", \"at\": [4, 2]}",
+      "{\"arrow\": [\"phaser\", \"firebase\"], \"label\": \"Sign in\"}",
+      "{\"arrow\": [\"server\", \"firebase\"], \"label\": \"Verify identity\"}",
+      "{\"say\": \"Only the game server writes earned scores into Firestore, Firebase's database, after calculating them from the match.\"}",
+      "{\"box\": \"scores\", \"at\": [4, 3], \"label\": \"Leaderboard\", \"color\": \"green\", \"shape\": \"ellipse\"}",
+      "{\"arrow\": [\"server\", \"scores\"], \"label\": \"Verified scores\"}",
+      "{\"say\": \"Database security rules let browsers read rankings while blocking direct score writes from players.\"}",
+      "{\"arrow\": [\"phaser\", \"scores\"], \"label\": \"Read only\"}",
+      "{\"say\": \"Browsers receive live leaderboard updates from Firestore, while flight and combat updates come directly from your game server.\"}",
+      "{\"arrow\": [\"scores\", \"phaser\"], \"label\": \"Live rankings\", \"back\": true}",
+      "{\"arrow\": [\"server\", \"phaser\"], \"label\": \"Game state\", \"back\": true}"
+    ]
+  }
+]

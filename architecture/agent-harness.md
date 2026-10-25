@@ -38,6 +38,7 @@ flowchart LR
     Kanban --> KanbanBoard[(.codeswim/board.json)]
     Plugin --> AppTools[open_file / set_view / get_app_state]
     AppTools --> AppViewImpl[tool/app-view.ts]
+    Main -->|spawn, lazily| Narrator[Narrator sidecar<br/>whiteboard agents, no plugin]
 
     click User call navigate("../overview.md")
     click Chat call navigate("../apps/desktop/src/renderer/src/components/ChatPanel.tsx")
@@ -61,12 +62,15 @@ flowchart LR
     click Mutating call navigate("../overview.md")
     click AppTools call navigate("../packages/harness/src/plugin.ts")
     click AppViewImpl call navigate("../packages/harness/src/tool/app-view.ts")
+    click Narrator call navigate("./whiteboard.md")
 ```
 
 ## Notes
 
 - The sidecar config is passed via `OPENCODE_CONFIG_CONTENT` (JSON in an env var) so we never write to the user's workspace or their global `opencode` config.
 - In packaged builds, `opencode-ai`, the platform-specific opencode binary package, and `out/harness` are `asarUnpack`'d so the plugin can be loaded by `file://` URL.
+- The plugin module must export an `id` (`export default { id, server }`). opencode 1.18 refuses a path plugin without one ("must export id"), which silently left every harness tool unregistered and the diagrams-first gate off. A plugin test guards it.
+- The whiteboard narrator runs in a second `opencode serve` (`startNarratorSidecar`). It shares the XDG dirs, and so the auth store, but has no plugin, no instructions and an empty working directory. See [whiteboard.md](./whiteboard.md).
 - `session-gate.ts` is in-memory only — sessions reset gate state on restart, which is fine because each chat session also re-runs the system prompt.
 - The renderer-side `agent.ts` wraps the SDK client with session list/load/create so the chat panel can switch between past sessions for a workspace.
 

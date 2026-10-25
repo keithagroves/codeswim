@@ -22,6 +22,8 @@ flowchart TD
     Index --> Harness[start-harness]
     Index --> Updater[updater.ts<br/>auto-update]
     Index --> Demo[demo.ts<br/>open-demo]
+    Index --> BrowserHost[browser-host.ts<br/>browser panel's page view]
+    BrowserHost -->|sandboxed WebContentsView| Page((Web page))
     Demo -->|copy on first use| DemoWs[(userData/<br/>demo-workspace)]
     Updater -->|update:status| Renderer
     Watcher -->|file-changed,<br/>tree-changed| Renderer
@@ -43,6 +45,8 @@ flowchart TD
     click Updater call navigate("../apps/desktop/src/main/updater.ts")
     click Demo call navigate("../apps/desktop/src/main/demo.ts")
     click DemoWs call navigate("../apps/desktop/src/main/demo.ts")
+    click BrowserHost call navigate("../apps/desktop/src/main/browser-host.ts")
+    click Page call navigate("./renderer.md")
 ```
 
 ## Notes
@@ -51,6 +55,7 @@ flowchart TD
 - The watcher debounces `tree-changed` at 200ms because editors fire multiple events per save (rename + write).
 - Script names are validated against parsed `package.json` scripts before spawning, then shell-quoted.
 - The `detached: true` flag matters: `npm run foo` itself spawns grandchildren (e.g. `tsx`, `vitest`); without a process group we'd leak them on stop.
+- The browser panel's page is a `WebContentsView` child of the main window: sandboxed, no preload, its own `persist:codeswim-browser` session with every permission denied, http(s) only, downloads cancelled. Its reads (outline, point, measure) run in an isolated world the page's scripts can't see. See [renderer.md](./renderer.md#browser-panel).
 
 ## Source
 
@@ -65,6 +70,8 @@ flowchart TD
 - [packages/domain-skills/src/index.ts](../packages/domain-skills/src/index.ts) — domain-skills package entry point.
 - [apps/desktop/src/main/github.ts](../apps/desktop/src/main/github.ts) — GitHub OAuth device-flow handler in the main process.
 - [apps/desktop/src/main/updater.ts](../apps/desktop/src/main/updater.ts) — background auto-update from GitHub releases via electron-updater; renderer shows the restart button.
+- [apps/desktop/src/main/browser-host.ts](../apps/desktop/src/main/browser-host.ts) — the browser panel's native page view: layout over the panel's viewport, navigation, load errors, screenshots into `.codeswim/browser/`.
+- [apps/desktop/src/main/browser-page.ts](../apps/desktop/src/main/browser-page.ts) — its Electron-free half: which URLs load, the isolated-world page script, and checks on what the script returns.
 - [apps/desktop/src/main/demo.ts](../apps/desktop/src/main/demo.ts) — "Try the demo": resolves the bundled example (extraResource in packaged builds, `examples/sample-architecture` in dev) and copies it into `userData/demo-workspace` on first use.
 - [packages/domain-github/src/github-auth.ts](../packages/domain-github/src/github-auth.ts) — GitHub OAuth device-flow authentication for the chat feature.
 - [packages/domain-github/src/index.ts](../packages/domain-github/src/index.ts) — domain-github package entry point.
@@ -80,4 +87,5 @@ flowchart TD
 - [packages/domain-github/src/room.test.ts](../packages/domain-github/src/room.test.ts) — covers the room identity logic.
 - [packages/domain-skills/src/source-explanations.test.ts](../packages/domain-skills/src/source-explanations.test.ts) — covers explanation path resolution.
 - [apps/desktop/src/main/updater.test.ts](../apps/desktop/src/main/updater.test.ts) — covers the updater's event-to-status mapping and install IPC against mocked electron modules.
+- [apps/desktop/src/main/browser-page.test.ts](../apps/desktop/src/main/browser-page.test.ts) — URL rules, script argument escaping, and bounding of page data. [e2e/browser-panel.spec.ts](../apps/desktop/e2e/browser-panel.spec.ts) drives the real native view.
 - [apps/desktop/src/main/demo.test.ts](../apps/desktop/src/main/demo.test.ts) — covers demo source-dir resolution (dev vs packaged) and the copy-once semantics of the demo workspace.

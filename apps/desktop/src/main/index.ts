@@ -5,16 +5,23 @@ import {
   ipcMain,
   dialog,
   Menu,
-  type MenuItemConstructorOptions
+  type MenuItemConstructorOptions,
+  systemPreferences,
+  utilityProcess
 } from 'electron'
 import { join, basename, dirname, sep } from 'path'
-import { promises as fs } from 'fs'
+import { existsSync, promises as fs } from 'fs'
 import { spawn, ChildProcess } from 'child_process'
 import chokidar, { FSWatcher } from 'chokidar'
 import * as pty from 'node-pty'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { startSidecar, type SidecarHandle } from './sidecar'
+import {
+  startNarratorSidecar,
+  startSidecar,
+  type NarratorHandle,
+  type SidecarHandle
+} from './sidecar'
 import { initUpdater } from './updater'
 import { demoSourceDir, ensureDemoWorkspace } from './demo'
 import {
@@ -46,7 +53,14 @@ import {
 } from '@codeswim/domain-git'
 import { getRoomIdentity } from '@codeswim/domain-github'
 import { readAgentTabsFile, writeAgentTabsFile } from './agent-tabs-file'
+import { readWhiteboardFile, writeWhiteboardFile } from './whiteboard-file'
+import { isVoiceId, MAX_SPOKEN_CHARS, VoiceHost } from './voice'
+import type { FromVoiceWorker } from './voice-protocol'
+import { ListenHost } from './listen'
+import { LISTEN_MAX_SAMPLES, type FromListenWorker } from './listen-protocol'
 import { ClaudeIdeBridge } from './claude-ide'
+import { BrowserHost } from './browser-host'
+import { isTarget } from './browser-page'
 import {
   UNBIASED_PROVIDER_ID,
   cancelSignIn as unbiasedCancelSignIn,
@@ -108,11 +122,24 @@ let activeRun: ScriptRun | null = null
 let sidecar: SidecarHandle | null = null
 let sidecarRoot: string | null = null
 let sidecarStarting: Promise<SidecarHandle> | null = null
+// The whiteboard narrator's own opencode process (sidecar.ts,
+// startNarratorSidecar). App-wide rather than per workspace: it never sees a
+// workspace — the renderer sends it the project summary in each request.
+let narrator: NarratorHandle | null = null
+let narratorStarting: Promise<NarratorHandle> | null = null
 
 // Loopback bridge for the harness's find_command/run_command/open_file
 // tools — one instance for the app's lifetime; issueCapability/revoke rotate
 // which workspace (if any) it currently trusts. See command-server.ts.
 const commandServer = new CommandServer(() => mainWindow)
+
+// The browser panel's sandboxed page view (browser-host.ts), in the main window.
+const browser = new BrowserHost(
+  () => mainWindow,
+  (state) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('browser:state', state)
+  }
+)
 
 // Codeswim as "the IDE" for the `claude` CLI in the Claude Code tab — see
 // claude-ide.ts. Its lockfile tracks the watched workspace (startWatching /
@@ -174,6 +201,79 @@ async function ensureSidecar(rootPath: string): Promise<SidecarHandle> {
   sidecar = await sidecarStarting
   sidecarRoot = rootPath
   return sidecar
+}
+
+// The speech models shipped with the app (scripts/fetch-models.mjs): next to
+// the asar when packaged, apps/desktop/models in dev (if fetched).
+const bundledModels = app.isPackaged
+  ? join(process.resourcesPath, 'models')
+  : join(app.getAppPath(), 'models')
+
+// The whiteboard's natural voice (voice.ts). The utility process is spawned
+// on first install/use; the model ships with the app, or is downloaded into
+// userData/kokoro when it doesn't.
+const voice = new VoiceHost({
+  cacheDir: join(app.getPath('userData'), 'kokoro'),
+  bundledDir: bundledModels,
+  exists: (file) => existsSync(file),
+  notify: (status) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('voice:status', status)
+  },
+  spawn: () => {
+    const child = utilityProcess.fork(join(__dirname, 'voice-worker.js'), [], {
+      serviceName: 'codeswim voice'
+    })
+    return {
+      post: (message) => child.postMessage(message),
+      onMessage: (handler) => child.on('message', (m) => handler(m as FromVoiceWorker)),
+      onExit: (handler) => child.on('exit', handler),
+      kill: () => void child.kill()
+    }
+  }
+})
+
+// Speech mode's speech recognition (listen.ts): Whisper in its own utility
+// process, spawned on first install/use; bundled like the voice, or
+// downloaded into userData/whisper.
+const listen = new ListenHost({
+  cacheDir: join(app.getPath('userData'), 'whisper'),
+  bundledDir: bundledModels,
+  exists: (file) => existsSync(file),
+  notify: (status) => {
+    if (mainWindow && !mainWindow.isDestroyed())
+      mainWindow.webContents.send('listen:status', status)
+  },
+  spawn: () => {
+    const child = utilityProcess.fork(join(__dirname, 'listen-worker.js'), [], {
+      serviceName: 'codeswim speech recognition'
+    })
+    return {
+      post: (message) => child.postMessage(message),
+      onMessage: (handler) => child.on('message', (m) => handler(m as FromListenWorker)),
+      onExit: (handler) => child.on('exit', handler),
+      kill: () => void child.kill()
+    }
+  }
+})
+
+// Starts (or reuses) the narrator sidecar. Lazy: nothing runs until the
+// Whiteboard view is first used.
+async function ensureNarrator(): Promise<NarratorHandle> {
+  if (narrator) return narrator
+  narratorStarting ??= startNarratorSidecar({
+    onStderr: (line) =>
+      mainWindow?.webContents.send('harness:log', {
+        stream: 'stderr',
+        line: `[whiteboard] ${line}`
+      }),
+    onExit: () => {
+      narrator = null
+    }
+  }).finally(() => {
+    narratorStarting = null
+  })
+  narrator = await narratorStarting
+  return narrator
 }
 
 // Writes/removes a provider credential in opencode's auth store. The store
@@ -952,6 +1052,110 @@ app.whenReady().then(async () => {
     sidecarRoot = null
   })
 
+  ipcMain.handle('whiteboard:start', async () => {
+    const handle = await ensureNarrator()
+    return { url: handle.url.toString(), directory: handle.directory }
+  })
+
+  ipcMain.handle('whiteboard:read', async (_event, rootPath: string) => {
+    return readWhiteboardFile(rootPath)
+  })
+
+  ipcMain.handle('whiteboard:write', async (_event, rootPath: string, json: string) => {
+    await writeWhiteboardFile(rootPath, json)
+  })
+
+  ipcMain.handle('voice:status', () => voice.status())
+
+  ipcMain.handle('voice:install', async () => {
+    await voice.install()
+    return voice.status()
+  })
+
+  ipcMain.handle(
+    'voice:speak',
+    async (_event, text: unknown, voiceId: unknown, speed: unknown, background: unknown) => {
+      if (typeof text !== 'string' || text.length > MAX_SPOKEN_CHARS * 2) {
+        throw new Error('voice:speak expects a sentence')
+      }
+      if (!isVoiceId(voiceId)) throw new Error('voice:speak: unknown voice')
+      const rate = typeof speed === 'number' && speed >= 0.5 && speed <= 2 ? speed : 1
+      return voice.speak(text, voiceId, rate, background === true)
+    }
+  )
+
+  ipcMain.handle('voice:cancel', () => voice.cancel())
+
+  ipcMain.handle('listen:status', () => listen.status())
+
+  ipcMain.handle('listen:install', async () => {
+    await listen.install()
+    return listen.status()
+  })
+
+  ipcMain.handle('listen:transcribe', async (_event, samples: unknown) => {
+    if (!(samples instanceof Float32Array) || samples.length > LISTEN_MAX_SAMPLES * 2) {
+      throw new Error('listen:transcribe expects 16 kHz audio')
+    }
+    return listen.transcribe(samples)
+  })
+
+  // macOS asks once; after a "no", only System Settings can change it.
+  ipcMain.handle('mic:access', async () => {
+    if (process.platform !== 'darwin') return true
+    if (systemPreferences.getMediaAccessStatus('microphone') === 'granted') return true
+    return systemPreferences.askForMediaAccess('microphone')
+  })
+
+  ipcMain.handle('browser:open', (_event, url: unknown) => {
+    if (typeof url !== 'string') throw new Error('browser:open expects an address')
+    return browser.open(url)
+  })
+  ipcMain.handle('browser:navigate', (_event, action: unknown) => {
+    if (action !== 'back' && action !== 'forward' && action !== 'reload' && action !== 'stop') {
+      throw new Error('browser:navigate: unknown action')
+    }
+    return browser.navigate(action)
+  })
+  ipcMain.handle('browser:state', () => browser.state())
+  ipcMain.handle('browser:set-bounds', (_event, bounds: unknown) => {
+    if (bounds === null) return browser.setBounds(null)
+    const b = bounds as Record<string, unknown>
+    const ok = ['x', 'y', 'width', 'height'].every(
+      (k) => typeof b?.[k] === 'number' && Number.isFinite(b[k] as number)
+    )
+    if (!ok) throw new Error('browser:set-bounds expects {x, y, width, height}')
+    browser.setBounds({
+      x: b.x as number,
+      y: b.y as number,
+      width: b.width as number,
+      height: b.height as number
+    })
+  })
+  ipcMain.handle('browser:close', () => browser.close())
+  ipcMain.handle('browser:inspect', () => browser.inspect())
+  ipcMain.handle('browser:point', (_event, target: unknown, all: unknown) => {
+    if (!isTarget(target)) throw new Error('browser:point expects a target')
+    return browser.point(target, all === true)
+  })
+  ipcMain.handle('browser:measure', (_event, targets: unknown) => {
+    if (
+      !Array.isArray(targets) ||
+      !targets.length ||
+      targets.length > 20 ||
+      !targets.every(isTarget)
+    ) {
+      throw new Error('browser:measure expects 1 to 20 targets')
+    }
+    return browser.measure(targets)
+  })
+  ipcMain.handle('browser:screenshot', (_event, rootPath: unknown) => {
+    if (typeof rootPath !== 'string' || !rootPath)
+      throw new Error('browser:screenshot expects a workspace')
+    return browser.screenshot(rootPath)
+  })
+  ipcMain.handle('browser:reload', () => browser.reload())
+
   // The renderer's reply to a 'command:request' event — see command-server.ts.
   ipcMain.handle('command:reply', (_event, response: CommandRendererResponse) => {
     commandServer.resolveReply(response)
@@ -1290,4 +1494,10 @@ app.on('before-quit', () => {
     sidecar = null
     sidecarRoot = null
   }
+  if (narrator) {
+    void narrator.stop()
+    narrator = null
+  }
+  voice.dispose()
+  listen.dispose()
 })

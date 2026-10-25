@@ -1,10 +1,12 @@
 import type {
+  BrowserSurfaceContext,
   DiffSurfaceContext,
   FocusSurface,
   KanbanSurfaceContext,
   ScreenContextV2,
   ScriptOutputSurfaceContext,
-  TerminalSurfaceContext
+  TerminalSurfaceContext,
+  WhiteboardSurfaceContext
 } from '@codeswim/contract'
 import type { AppState } from '../store'
 import { boundedTail, stripAnsiToPlainLines } from '../ansi'
@@ -42,8 +44,8 @@ function deriveFocus(
   if (state.view === 'output') {
     return { surface: 'script-output', itemId: state.runningScript?.name ?? null }
   }
-  if (state.activeSection === 'terminal' || state.activeSection === 'claude') {
-    const terminal = blocks[`terminal:${state.activeSection}`] as TerminalSurfaceContext | undefined
+  if (state.activeSection === 'claude') {
+    const terminal = blocks['terminal:claude'] as TerminalSurfaceContext | undefined
     return { surface: 'terminal', itemId: terminal?.activeTabId ?? null }
   }
   if (state.workspaceView === 'kanban') {
@@ -52,6 +54,10 @@ function deriveFocus(
   }
   if (state.workspaceView === 'agents') {
     return { surface: 'agents', itemId: state.activeAgentTabId }
+  }
+  if (state.workspaceView === 'whiteboard') {
+    const whiteboard = blocks.whiteboard as WhiteboardSurfaceContext | undefined
+    return { surface: 'whiteboard', itemId: whiteboard?.currentPage ?? null }
   }
   return { surface: 'navigator', itemId: state.currentFile }
 }
@@ -80,6 +86,13 @@ export function composeScreenContext(
   const kanban = blocks.kanban as KanbanSurfaceContext | undefined
   if (kanban) surfaces.kanban = kanban
 
+  const whiteboard = blocks.whiteboard as WhiteboardSurfaceContext | undefined
+  if (state.workspaceView === 'whiteboard' && whiteboard) surfaces.whiteboard = whiteboard
+
+  // The browser panel sits beside whatever view is showing.
+  const browser = blocks.browser as BrowserSurfaceContext | undefined
+  if (browser) surfaces.browser = browser
+
   if (state.view === 'diff') {
     const diff: DiffSurfaceContext = { path: state.diffPath, hunkCount: countHunks(state.diffContent) }
     surfaces.diff = diff
@@ -87,8 +100,13 @@ export function composeScreenContext(
 
   // Terminal/script-output content is bounded but still nontrivial — only
   // publish it while it's actually the focused surface.
+  // The bottom terminal panel sits under whatever view is showing, so it's
+  // published while open without taking focus (its block is small).
   if (focus.surface === 'terminal') {
-    const terminal = blocks[`terminal:${state.activeSection}`] as TerminalSurfaceContext | undefined
+    const terminal = blocks['terminal:claude'] as TerminalSurfaceContext | undefined
+    if (terminal) surfaces.terminal = terminal
+  } else if (state.terminalOpen) {
+    const terminal = blocks['terminal:terminal'] as TerminalSurfaceContext | undefined
     if (terminal) surfaces.terminal = terminal
   }
 

@@ -1,0 +1,93 @@
+[
+  {
+    "question": "I'm building a little space shooter in the browser, just me on weekends, and I'm using Phaser. Where do I start?",
+    "lines": [
+      "{\"say\": \"Start with one Phaser scene: a movable ship, keyboard controls, and bullets.\"}",
+      "{\"say\": \"Start with one playable screen: a ship you can move and enemies drifting down toward it.\"}",
+      "{\"page\": \"Space Shooter\"}",
+      "{\"box\": \"ship\", \"at\": [0, 1], \"label\": \"Player ship\", \"color\": \"blue\"}",
+      "{\"box\": \"enemies\", \"at\": [2, 1], \"label\": \"Enemies\", \"color\": \"blue\"}",
+      "{\"say\": \"Make shooting your first milestone: shots hit enemies, and enemies disappear.\"}",
+      "{\"box\": \"shots\", \"at\": [1, 1], \"label\": \"Shots\", \"color\": \"orange\"}",
+      "{\"arrow\": [\"ship\", \"shots\"], \"label\": \"Fires\"}",
+      "{\"arrow\": [\"shots\", \"enemies\"], \"label\": \"Hits\"}",
+      "{\"say\": \"Use Phaser's Arcade Physics for movement and overlaps, with plain rectangles until the shooting feels fun.\"}",
+      "{\"note\": \"Arcade Physics\", \"at\": [1, 0]}",
+      "{\"say\": \"Then add a score, player damage, and a restart button so you've got a complete little game loop.\"}",
+      "{\"say\": \"Skip accounts, upgrades, and fancy art for now; keep your first weekend focused on making that loop fun.\"}",
+      "{\"say\": \"Have you already got a Phaser scene running, or are you starting from an empty project?\"}"
+    ]
+  },
+  {
+    "question": "Okay, I've got a ship flying around and enemies coming at me. Now I want accounts and a global leaderboard. Firebase or Supabase?",
+    "lines": [
+      "{\"say\": \"That comes down to Firebase\\u2019s integrated tooling versus Supabase\\u2019s SQL flexibility for leaderboard queries.\"}",
+      "{\"say\": \"Firebase makes browser authentication easy, but Firestore gets awkward when you want richer leaderboard queries.\"}",
+      "{\"page\": \"Accounts\"}",
+      "{\"option\": \"firebase\", \"at\": [1, 1], \"label\": \"Firebase\", \"pros\": [\"Easy browser auth\"], \"cons\": [\"Limited ranking queries\"], \"color\": \"blue\"}",
+      "{\"say\": \"Supabase also handles accounts, and its SQL database suits leaderboards, though you'll need to configure access policies.\"}",
+      "{\"option\": \"supabase\", \"at\": [3, 1], \"label\": \"Supabase\", \"pros\": [\"Flexible SQL rankings\"], \"cons\": [\"Access policy setup\"], \"color\": \"blue\"}",
+      "{\"say\": \"I'd lean Supabase for your weekend project because scores, players, and rankings fit naturally into tables.\"}",
+      "{\"say\": \"Either way, accounts won't prevent cheating; browser-submitted scores need server-side checks before reaching your global leaderboard.\"}",
+      "{\"say\": \"Does Supabase sound good, or are you already more comfortable with Firebase?\"}"
+    ]
+  },
+  {
+    "question": "I've used Firebase before, so let's go Firebase. How do scores get into the leaderboard without people cheating?",
+    "lines": [
+      "{\"say\": \"Validate scores on a server, like a Firebase Cloud Function, before updating the leaderboard.\"}",
+      "{\"pick\": \"firebase\"}",
+      "{\"say\": \"Firebase it is. Now, the honest truth: any client-side score can be faked, so we verify before it lands on the board.\"}",
+      "{\"box\": \"client\", \"at\": [0, 1], \"label\": \"Browser\", \"color\": \"violet\"}",
+      "{\"box\": \"api\", \"at\": [1, 1], \"label\": \"Verify API\", \"color\": \"blue\"}",
+      "{\"box\": \"db\", \"at\": [2, 1], \"label\": \"Firestore\", \"color\": \"green\", \"shape\": \"ellipse\"}",
+      "{\"arrow\": [\"client\", \"api\"], \"label\": \"Score\"}",
+      "{\"arrow\": [\"api\", \"db\"], \"label\": \"Valid score\"}",
+      "{\"say\": \"Your game sends the score to a small endpoint you control, which checks it before writing to Firestore.\"}",
+      "{\"say\": \"For a weekend project, a simple rule like 'reject scores above a plausible max' stops most casual cheating.\"}",
+      "{\"say\": \"That limit only catches obvious fakes; cheaters can still submit believable scores.\"}",
+      "{\"say\": \"Use Firestore rules to block browser leaderboard writes, and require verified Firebase authentication at your scoring endpoint.\"}",
+      "{\"say\": \"For stronger protection, issue server-generated runs and replay submitted inputs server-side, calculating scores rather than trusting browser totals.\"}"
+    ]
+  },
+  {
+    "question": "That's working. Now my friends want to fly together in real time. What changes?",
+    "lines": [
+      "{\"say\": \"That shifts you from a database to a real-time WebSocket sync engine.\"}",
+      "{\"say\": \"Your Phaser game now needs a persistent room server, separate from your score-checking endpoint.\"}",
+      "{\"page\": \"Multiplayer\"}",
+      "{\"box\": \"player\", \"at\": [0, 1], \"label\": \"Your browser\", \"color\": \"violet\"}",
+      "{\"box\": \"room\", \"at\": [2, 1], \"label\": \"Room server\", \"color\": \"blue\"}",
+      "{\"say\": \"Both browsers send controls; the server runs movement, enemies, collisions, and scoring instead of trusting either player.\"}",
+      "{\"box\": \"friend\", \"at\": [0, 2], \"label\": \"Friend browser\", \"color\": \"violet\"}",
+      "{\"arrow\": [\"player\", \"room\"], \"label\": \"Controls\"}",
+      "{\"arrow\": [\"friend\", \"room\"], \"label\": \"Controls\"}",
+      "{\"say\": \"The server broadcasts world updates, while Phaser smooths remote movement and predicts your ship locally to hide latency.\"}",
+      "{\"arrow\": [\"room\", \"player\"], \"label\": \"World updates\", \"back\": true}",
+      "{\"arrow\": [\"room\", \"friend\"], \"label\": \"World updates\", \"back\": true}",
+      "{\"say\": \"Keep Firebase for accounts and leaderboards, but don't use Firestore as your real-time movement transport.\"}",
+      "{\"say\": \"For Phaser, I'd start with Colyseus, a multiplayer server framework, hosted somewhere that supports persistent WebSocket connections.\"}",
+      "{\"say\": \"Build one two-player cooperative room first, and have its server verify Firebase logins and submit final scores.\"}"
+    ]
+  },
+  {
+    "question": "Let's do a server, I don't want cheaters. Can you show me the whole thing now?",
+    "lines": [
+      "{\"say\": \"Here's the full picture: one room server running the real game, with Firebase handling accounts and verified scores.\"}",
+      "{\"pick\": \"room\"}",
+      "{\"say\": \"Firebase handles player sign-in, and your room server verifies each player's identity before admitting them.\"}",
+      "{\"box\": \"auth\", \"at\": [2, 0], \"label\": \"Firebase Auth\", \"color\": \"blue\"}",
+      "{\"arrow\": [\"player\", \"auth\"], \"label\": \"Sign in\"}",
+      "{\"arrow\": [\"room\", \"auth\"], \"label\": \"Verify identity\"}",
+      "{\"say\": \"Your room server owns the simulation, rejecting impossible movement and firing rates rather than trusting browser claims.\"}",
+      "{\"highlight\": \"room\"}",
+      "{\"note\": \"Authoritative simulation\", \"at\": [3, 2]}",
+      "{\"say\": \"When a run ends, that server writes its calculated scores into Firestore, using credentials never shared with browsers.\"}",
+      "{\"box\": \"scores\", \"at\": [4, 1], \"label\": \"Firestore leaderboard\", \"color\": \"green\", \"shape\": \"ellipse\"}",
+      "{\"arrow\": [\"room\", \"scores\"], \"label\": \"Final scores\"}",
+      "{\"say\": \"Browsers can read leaderboard results, but Firestore rules must deny their score writes, including through your old submission endpoint.\"}",
+      "{\"say\": \"Deploy the room server on hosting that supports persistent WebSockets; Phaser still runs on ordinary static hosting.\"}",
+      "{\"say\": \"This blocks fabricated scores and impossible actions, but bots remain possible, so add rate limits and monitor suspicious play.\"}"
+    ]
+  }
+]

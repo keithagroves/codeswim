@@ -10,7 +10,13 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { app } from 'electron'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { buildSidecarEnv, type SidecarChatConfig, type SidecarCommandConfig } from './sidecar-env'
+import { narratorAgentConfig } from '@codeswim/whiteboard'
+import {
+  buildNarratorEnv,
+  buildSidecarEnv,
+  type SidecarChatConfig,
+  type SidecarCommandConfig
+} from './sidecar-env'
 
 export interface SidecarHandle {
   url: URL
@@ -39,11 +45,7 @@ function resolveOpencodeBinary(): string {
   // opencode-ai's postinstall.mjs); those packages are asarUnpack'd, so the
   // path is real on disk in packaged builds too.
   const platform =
-    process.platform === 'win32'
-      ? 'windows'
-      : process.platform === 'darwin'
-        ? 'darwin'
-        : 'linux'
+    process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'darwin' : 'linux'
   const arch = process.arch === 'arm64' ? 'arm64' : 'x64'
   const binaryName = platform === 'windows' ? 'opencode.exe' : 'opencode'
   const rel = path.join('node_modules', `opencode-${platform}-${arch}`, 'bin', binaryName)
@@ -95,8 +97,29 @@ interface StartOptions {
 
 const STDERR_TAIL_LIMIT = 40
 
+// Unbiased AI's `pareto` model, OpenAI-compatible. No apiKey here — opencode
+// fills it in from its own auth store (client.auth.set, same path the
+// 'Configure an AI provider' UI uses for every other provider), so a key
+// pasted in-app takes effect without a restart.
+const PARETO_PROVIDER = {
+  pareto: {
+    npm: '@ai-sdk/openai-compatible',
+    options: {
+      baseURL: 'https://api.unbiased.ai/v1'
+    },
+    models: {
+      pareto: {}
+    }
+  }
+}
+
+// One shared XDG root for every opencode process the app runs, so they all
+// read the same auth store (see sidecar-env.ts).
+function xdgRoot(): string {
+  return path.join(app.getPath('userData'), 'opencode-xdg')
+}
+
 export async function startSidecar(opts: StartOptions): Promise<SidecarHandle> {
-  const binary = resolveOpencodeBinary()
   const harness = resolveHarness()
 
   const config = {
@@ -113,33 +136,57 @@ export async function startSidecar(opts: StartOptions): Promise<SidecarHandle> {
     // this setting. A future permission-prompt UI can replace this with
     // `"ask"` for opencode's own sensitive tools.
     permission: 'allow',
-    // Unbiased AI's `pareto` model, OpenAI-compatible. No apiKey here —
-    // opencode fills it in from its own auth store (client.auth.set, same
-    // path the 'Configure an AI provider' UI uses for every other
-    // provider), so a key pasted in-app takes effect without a restart.
-    provider: {
-      pareto: {
-        npm: '@ai-sdk/openai-compatible',
-        options: {
-          baseURL: 'https://api.unbiased.ai/v1'
-        },
-        models: {
-          pareto: {}
-        }
-      }
-    }
+    provider: PARETO_PROVIDER
   }
 
   // Isolation + config injection rationale lives in sidecar-env.ts.
-  const { env, xdgDirs } = buildSidecarEnv(
-    process.env,
-    path.join(app.getPath('userData'), 'opencode-xdg'),
-    config,
-    opts.chat,
-    opts.command
-  )
+  const { env, xdgDirs } = buildSidecarEnv(process.env, xdgRoot(), config, opts.chat, opts.command)
   for (const dir of xdgDirs) mkdirSync(dir, { recursive: true })
+  return spawnOpencode(opts.workspaceRoot, env, opts)
+}
 
+interface NarratorStartOptions {
+  onStderr?: (line: string) => void
+  onExit?: (code: number | null, info: ExitInfo) => void
+}
+
+export interface NarratorHandle extends SidecarHandle {
+  // The empty directory the narrator's sessions run in. Requests must pass
+  // it as `directory` so opencode never resolves a workspace's AGENTS.md.
+  directory: string
+}
+
+// A second, app-wide opencode process for the whiteboard narrator
+// (plans/talking-whiteboard.md). Same binary and same auth store as the
+// coding agent's sidecar, so the Unbiased key still lives only in opencode's
+// auth store and never crosses IPC. What differs is everything that would
+// otherwise leak into a spoken reply: no harness plugin, no instruction
+// files, Claude-compat prompt files off, and an empty working directory
+// instead of the workspace. opencode 1.18 appends instructions and the
+// workspace's AGENTS.md/CLAUDE.md *after* the plugin system-prompt hook, so
+// they can't be stripped per session inside the main sidecar; this cut the
+// narrator's system prompt from ~34k to ~7k characters (Phase 0 spike).
+export async function startNarratorSidecar(
+  opts: NarratorStartOptions = {}
+): Promise<NarratorHandle> {
+  const directory = path.join(app.getPath('userData'), 'whiteboard-narrator')
+  mkdirSync(directory, { recursive: true })
+  const config = {
+    provider: PARETO_PROVIDER,
+    agent: narratorAgentConfig()
+  }
+  const { env, xdgDirs } = buildNarratorEnv(process.env, xdgRoot(), config)
+  for (const dir of xdgDirs) mkdirSync(dir, { recursive: true })
+  const handle = await spawnOpencode(directory, env, opts)
+  return { ...handle, directory }
+}
+
+async function spawnOpencode(
+  cwd: string,
+  env: NodeJS.ProcessEnv,
+  opts: Pick<StartOptions, 'onStdout' | 'onStderr' | 'onExit'>
+): Promise<SidecarHandle> {
+  const binary = resolveOpencodeBinary()
   const stderrTail: string[] = []
   const recordStderr = (line: string): void => {
     stderrTail.push(line)
@@ -148,7 +195,7 @@ export async function startSidecar(opts: StartOptions): Promise<SidecarHandle> {
   }
 
   const child = spawn(binary, ['serve', '--port', '0', '--hostname', '127.0.0.1'], {
-    cwd: opts.workspaceRoot,
+    cwd,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
     // No-op off Windows; on Windows it stops a console window flashing up.
@@ -206,7 +253,8 @@ function waitForServerUrl(
     // Track early exit during startup; the post-startup exit listener in
     // startSidecar handles later exits.
     child.once('exit', (code, signal) => {
-      const detail = stderrSeen.length > 0 ? `\n  stderr:\n    ${stderrSeen.slice(-5).join('\n    ')}` : ''
+      const detail =
+        stderrSeen.length > 0 ? `\n  stderr:\n    ${stderrSeen.slice(-5).join('\n    ')}` : ''
       settle(() =>
         reject(
           new Error(

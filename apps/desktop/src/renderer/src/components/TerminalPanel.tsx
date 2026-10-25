@@ -37,14 +37,17 @@ interface TabInfo {
 function TerminalInstance({
   cwd,
   active,
-  command
+  command,
+  focusSignal
 }: {
   cwd: string | null
   active: boolean
   command?: string
+  focusSignal: number
 }): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const fitRef = useRef<FitAddon | null>(null)
+  const termRef = useRef<Terminal | null>(null)
   const prevActiveRef = useRef(active)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -55,6 +58,11 @@ function TerminalInstance({
     }
     prevActiveRef.current = active
   }, [active])
+
+  // The panel asked for keyboard focus (it was just opened, or a tab was picked).
+  useEffect(() => {
+    if (active && focusSignal > 0) requestAnimationFrame(() => termRef.current?.focus())
+  }, [active, focusSignal])
 
   useEffect(() => {
     const el = containerRef.current
@@ -105,6 +113,7 @@ function TerminalInstance({
         term.open(el)
         fitAddon.fit()
         fitRef.current = fitAddon
+        termRef.current = term
 
         const scheduleResize = (): void => {
           fitAddon?.fit()
@@ -150,6 +159,7 @@ function TerminalInstance({
       if (terminalId) window.api.terminalDestroy(terminalId)
       term?.dispose()
       fitRef.current = null
+      termRef.current = null
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -182,13 +192,19 @@ export function TerminalPanel({
   // App.tsx) — must match the Section value under which this panel is
   // rendered, since compose-screen-context.ts looks it up as
   // `terminal:${state.activeSection}`.
-  surfaceId = 'terminal'
+  surfaceId = 'terminal',
+  focusSignal = 0,
+  trailing
 }: {
   // When set, every tab launches this command instead of a bare shell (the
   // Claude Code tab passes `claude`). Otherwise it's a plain terminal.
   command?: string
   labelPrefix?: string
   surfaceId?: string
+  // Bump to move keyboard focus into the active terminal.
+  focusSignal?: number
+  // Controls at the right end of the tab bar (the bottom panel's maximize/close).
+  trailing?: React.ReactNode
 } = {}): React.JSX.Element {
   const { state } = useStore()
   const cwdRef = useRef(state.rootPath)
@@ -256,6 +272,7 @@ export function TerminalPanel({
         >
           +
         </button>
+        {trailing ? <div className="terminal-tab-bar-trailing">{trailing}</div> : null}
       </div>
       <div className="terminal-instances">
         {tabs.map((tab) => (
@@ -264,6 +281,7 @@ export function TerminalPanel({
             cwd={cwdRef.current}
             active={tab.id === activeTab}
             command={command}
+            focusSignal={focusSignal}
           />
         ))}
       </div>

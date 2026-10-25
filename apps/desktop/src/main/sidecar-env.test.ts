@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import path from 'node:path'
-import { buildSidecarEnv } from './sidecar-env'
+import { buildNarratorEnv, buildSidecarEnv } from './sidecar-env'
 
 const XDG_ROOT = path.join('/tmp', 'userData', 'opencode-xdg')
 
@@ -101,5 +101,31 @@ describe('buildSidecarEnv', () => {
     })
     expect(env.CODESWIM_COMMAND_URL).toBe('http://127.0.0.1:54321')
     expect(env.CODESWIM_COMMAND_TOKEN).toBe('cap-token')
+  })
+})
+
+describe('buildNarratorEnv', () => {
+  it('shares the XDG dirs (and so the auth store) with the coding agent', () => {
+    const narrator = buildNarratorEnv({}, XDG_ROOT, {})
+    const main = buildSidecarEnv({}, XDG_ROOT, {})
+    expect(narrator.xdgDirs).toEqual(main.xdgDirs)
+    expect(narrator.env.XDG_DATA_HOME).toBe(main.env.XDG_DATA_HOME)
+  })
+
+  it('turns off Claude-compat prompt files and project config', () => {
+    const { env } = buildNarratorEnv({}, XDG_ROOT, { agent: {} })
+    expect(env.OPENCODE_DISABLE_CLAUDE_CODE).toBe('1')
+    expect(env.OPENCODE_DISABLE_PROJECT_CONFIG).toBe('1')
+    expect(JSON.parse(env.OPENCODE_CONFIG_CONTENT!)).toEqual({ agent: {} })
+  })
+
+  it('carries no workspace-scoped capability, even if inherited', () => {
+    const { env } = buildNarratorEnv(
+      { CODESWIM_COMMAND_TOKEN: 'leak', CODESWIM_CHAT_TOKEN: 'leak', PATH: '/bin' },
+      XDG_ROOT,
+      {}
+    )
+    expect(Object.keys(env).filter((k) => k.startsWith('CODESWIM_'))).toEqual([])
+    expect(env.PATH).toBe('/bin')
   })
 })

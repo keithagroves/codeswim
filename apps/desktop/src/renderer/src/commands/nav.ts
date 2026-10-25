@@ -395,11 +395,13 @@ export function registerNavCommands(registry: CommandRegistry): void {
     id: 'nav.setWorkspaceView',
     domain: 'nav',
     title: 'Switch workspace view',
-    description: 'Switches the main workspace surface (navigator, kanban, agents).',
+    description: 'Switches the main workspace surface (navigator, kanban, agents, whiteboard).',
     schema: {
       type: 'object',
       required: ['view'],
-      properties: { view: { type: 'string', enum: ['navigator', 'kanban', 'agents'] } }
+      properties: {
+        view: { type: 'string', enum: ['navigator', 'kanban', 'agents', 'whiteboard'] }
+      }
     },
     agent: 'listed',
     run: async (args, ctx) => {

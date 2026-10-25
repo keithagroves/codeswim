@@ -25,11 +25,12 @@
     "smoke": "node scripts/smoke-electron.mjs",
     "capture-demo": "node scripts/capture-demo.mjs",
     "rebuild-deps": "electron-builder install-app-deps",
-    "build:unpack": "npm run build && electron-builder --dir",
-    "build:win": "npm run build && electron-builder --win",
-    "build:mac": "npm run build && electron-builder --mac",
-    "build:mac:signed": "npm run build && electron-builder --mac -c.mac.notarize=true",
-    "build:linux": "npm run build && electron-builder --linux"
+    "fetch:models": "node scripts/fetch-models.mjs",
+    "build:unpack": "npm run build && npm run fetch:models && electron-builder --dir",
+    "build:win": "npm run build && npm run fetch:models && electron-builder --win",
+    "build:mac": "npm run build && npm run fetch:models && electron-builder --mac",
+    "build:mac:signed": "npm run build && npm run fetch:models && electron-builder --mac -c.mac.notarize=true",
+    "build:linux": "npm run build && npm run fetch:models && electron-builder --linux"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.0",
@@ -51,6 +52,7 @@
     "@codeswim/domain-kanban": "*",
     "@codeswim/domain-skills": "*",
     "@codeswim/domain-unbiased": "*",
+    "@codeswim/whiteboard": "*",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@lezer/highlight": "^1.2.3",
@@ -63,12 +65,15 @@
     "js-yaml": "^5.3.0",
     "mermaid": "^11.17.0",
     "node-pty": "^1.1.0",
+    "onnxruntime-common": "1.21.0",
+    "onnxruntime-node": "1.21.0",
     "opencode-ai": "^1.18.21",
     "ws": "^8.22.0"
   },
   "devDependencies": {
     "@opencode-ai/plugin": "^1.18.21",
     "@playwright/test": "^1.62.1",
+    "@tldraw/assets": "^5.5.2",
     "@types/js-yaml": "^4.0.9",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
@@ -78,8 +83,10 @@
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "esbuild": "^0.28.2",
+    "kokoro-js": "^1.2.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "tldraw": "^5.5.2",
     "vite": "^7.3.6",
     "vitest": "^4.1.11"
   }
