@@ -253,8 +253,11 @@ describe('CommandServer request/reply proxying', () => {
     const second = post(`${cap.url}/find`, cap.token, { sessionId: 's', worktree: root, query: 'b' })
     await vi.waitFor(() => expect(seen).toHaveLength(2))
 
-    // Reply to the second request first.
-    const [reqA, reqB] = seen
+    // Reply to the second request first. The two requests can reach the
+    // server in either order, so find each by its query.
+    const byQuery = (q: string): CommandRendererRequest =>
+      seen.find((r) => r.kind === 'find' && r.query === q)!
+    const [reqA, reqB] = [byQuery('a'), byQuery('b')]
     server.resolveReply({ id: reqB.id, kind: 'find', commands: [{ id: 'b', domain: '', title: '', description: '', schema: {}, agent: 'listed' }] })
     server.resolveReply({ id: reqA.id, kind: 'find', commands: [{ id: 'a', domain: '', title: '', description: '', schema: {}, agent: 'listed' }] })
 
