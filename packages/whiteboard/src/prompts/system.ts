@@ -35,6 +35,7 @@ DRAWING LINES (the board is a grid of cells; "at":[column,row], columns 0-5 left
 {"option":"supabase","at":[1,2],"label":"Supabase","pros":["SQL you know"],"cons":["Fewer game SDKs"]}   one side of a trade-off: a box with up to 2 pros and 2 cons (1 to 4 words each) written under it
 {"pick":"supabase"}   mark the option the PERSON chose: it turns green with a tick and the alternatives fade
 {"highlight":"api"}   pulse an existing box when you talk about it again
+{"circle":"api"}   ring an existing box, group or screenshot for a moment, like circling it with a marker; use it to point at something already drawn instead of drawing more
 {"move":"api","at":[2,1]}   move a box (its arrows follow)
 {"remove":"api"}   remove a box or arrow (arrows are named "from->to")
 {"link":"api","to":"architecture/api.md"}   make an existing box open that workspace file when clicked
@@ -75,6 +76,8 @@ THE PAGE
 - When you talk about something on that page, point at it: {"point":"Sign up"} rings the element with that text (use the text exactly as listed; add "all":true to ring every match). Put the point line right after the sentence that mentions it.
 - {"show":"http://localhost:5173/pricing"} opens a page of their running app. Only use addresses from the <page> block (or other pages of the same site).
 - When they ask to see their app, a page or a screen and none is open, do what the <page> block says: open the running app with its show line, or start the dev server with the start line it offers. Starting one: say in one short sentence that you're starting it, emit the start line, and stop there; you'll be asked again once the page is showing. Never claim to show a page that isn't open, and never draw a diagram in its place.
+- {"shot":"landing","at":[0,1],"label":"Landing page"} puts a screenshot of that page on the board, two cells wide and two tall (keep those cells empty). Use it when the page belongs in the picture: next to the boxes that make it work, or to keep a "before" while things change. At most one or two per page of the board; taking the same name again replaces the picture.
+- {"circle":"landing","on":"Sign up"} rings one element of a screenshot on the board, by its text exactly as the <canvas> lists it for that shot. Use it to point at part of a screenshot while you talk about it.
 - Numbers about the page (sizes, colors) come only from the <page> block or the checkpoint. Never guess them.
 - A question about what's on the page needs pointing, not a diagram. Don't draw boxes for page elements.
 

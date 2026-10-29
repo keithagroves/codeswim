@@ -12,7 +12,7 @@
 // Ported from the prototype's renderer (~/projects/anim/canvas/src/main.tsx),
 // where the same rules lived in module-level maps beside tldraw calls.
 
-import { GRID, type Cell, type Cmd, type Color, type Geo } from './protocol'
+import { GRID, type Cell, type Cmd, type Color, type Geo, type ShotImage } from './protocol'
 
 export interface Page {
   id: string
@@ -74,7 +74,21 @@ export interface GroupEl extends Base {
   label: string
 }
 
-export type El = BoxEl | ArrowEl | TextEl | GroupEl
+/** A screenshot of the page beside the board, in a labelled frame. */
+export interface ShotEl extends Base {
+  kind: 'shot'
+  name: string
+  x: number
+  y: number
+  w: number
+  h: number
+  label: string
+  image: ShotImage
+  /** Bumped when the picture is retaken, so the view swaps it. */
+  rev: number
+}
+
+export type El = BoxEl | ArrowEl | TextEl | GroupEl | ShotEl
 
 export type Effect =
   | { fx: 'page'; page: Page }
@@ -84,6 +98,8 @@ export type Effect =
   | { fx: 'fade'; ids: string[]; opacity: number; ms: number }
   | { fx: 'delete'; ids: string[]; ms: number }
   | { fx: 'pulse'; id: string; ms: number }
+  /** A ring drawn around an area for a moment, then gone; nothing is added to the board. */
+  | { fx: 'circle'; page: string; bounds: Bounds; ms: number }
 
 export interface BoardState {
   version: 1
@@ -111,6 +127,10 @@ const MARGIN = 20
 const TITLE_Y = -150
 const NOTE_H = 40
 const OPTION_NOTES_H = 130
+/** A screenshot spans two cells each way, at most. */
+const SHOT_MAX = { w: GRID.col + GRID.w, h: GRID.row + GRID.h }
+/** Screenshots per board; each is a file on disk. */
+export const MAX_SHOTS = 12
 
 export function emptyBoard(): BoardState {
   return {
@@ -138,7 +158,8 @@ export function textBounds(t: TextEl): Bounds {
 }
 
 export function boundsOf(el: El): Bounds | null {
-  if (el.kind === 'box' || el.kind === 'group') return { x: el.x, y: el.y, w: el.w, h: el.h }
+  if (el.kind === 'box' || el.kind === 'group' || el.kind === 'shot')
+    return { x: el.x, y: el.y, w: el.w, h: el.h }
   if (el.kind === 'text') return textBounds(el)
   return null
 }
@@ -188,10 +209,11 @@ export class BoardModel {
     return [...this.s.offered]
   }
 
-  /** A named box, group or arrow on a page (default: the current one). */
-  named(name: string, page = this.s.current): BoxEl | GroupEl | ArrowEl | undefined {
+  /** A named box, group, screenshot or arrow on a page (default: the current one). */
+  named(name: string, page = this.s.current): BoxEl | GroupEl | ShotEl | ArrowEl | undefined {
     return this.s.els.find(
-      (e): e is BoxEl | GroupEl | ArrowEl => e.kind !== 'text' && e.page === page && e.name === name
+      (e): e is BoxEl | GroupEl | ShotEl | ArrowEl =>
+        e.kind !== 'text' && e.page === page && e.name === name
     )
   }
 
@@ -256,6 +278,10 @@ export class BoardModel {
         el.link = cmd.to
         return [{ fx: 'update', el: { ...el }, ms: 0 }]
       }
+      case 'shot':
+        return this.shot(cmd)
+      case 'circle':
+        return this.circle(cmd.name, cmd.on)
     }
   }
 
@@ -324,6 +350,64 @@ export class BoardModel {
     }
     this.s.els.push(el)
     return [{ fx: 'add', el: { ...el }, ms: 400 }]
+  }
+
+  private shot(cmd: Extract<Cmd, { op: 'shot' }>): Effect[] {
+    const image = cmd.image
+    if (!image || image.width <= 0 || image.height <= 0) return []
+    const existing = this.named(cmd.name)
+    if (existing?.kind === 'shot') {
+      // The same picture taken again (after a change): swap it in place.
+      existing.image = image
+      existing.rev++
+      return [{ fx: 'update', el: { ...existing }, ms: 0 }]
+    }
+    if (existing) return [{ fx: 'pulse', id: existing.id, ms: 900 }]
+    if (this.s.els.filter((e) => e.kind === 'shot').length >= MAX_SHOTS) return []
+    const aspect = image.height / image.width
+    const w = Math.round(Math.min(SHOT_MAX.w, SHOT_MAX.h / aspect))
+    const h = Math.round(w * aspect)
+    const [c, r] = cmd.at
+    const spot = this.freeSpot(c * GRID.col, r * GRID.row, w, h)
+    const el: ShotEl = {
+      kind: 'shot',
+      id: this.idFor('shot', cmd.name),
+      page: this.s.current,
+      name: cmd.name,
+      x: spot.x,
+      y: spot.y,
+      w,
+      h,
+      label: cmd.label,
+      image,
+      rev: 1,
+      opacity: 1
+    }
+    this.s.els.push(el)
+    return [{ fx: 'add', el: { ...el }, ms: 500 }]
+  }
+
+  private circle(name: string, on?: string): Effect[] {
+    const el = this.named(name)
+    if (!el || el.kind === 'arrow') return []
+    let bounds: Bounds = { x: el.x, y: el.y, w: el.w, h: el.h }
+    if (on) {
+      // One element of a screenshot, by its text: exact first, then a close match.
+      if (el.kind !== 'shot') return []
+      const want = on.toLowerCase()
+      const marks = el.image.marks
+      const mark =
+        marks.find((m) => m.text.toLowerCase() === want) ??
+        marks.find((m) => m.text.toLowerCase().includes(want))
+      if (!mark) return []
+      bounds = {
+        x: el.x + mark.x * el.w,
+        y: el.y + mark.y * el.h,
+        w: mark.w * el.w,
+        h: mark.h * el.h
+      }
+    }
+    return [{ fx: 'circle', page: this.s.current, bounds, ms: 2400 }]
   }
 
   private option(cmd: Extract<Cmd, { op: 'option' }>): Effect[] {
@@ -522,7 +606,8 @@ export class BoardModel {
     const taken = this.elements()
       .filter(
         (e) =>
-          !skip.includes(e.id) && (e.kind === 'box' || (e.kind === 'text' && e.role !== 'title'))
+          !skip.includes(e.id) &&
+          (e.kind === 'box' || e.kind === 'shot' || (e.kind === 'text' && e.role !== 'title'))
       )
       .map(boundsOf)
       .filter((b): b is Bounds => b !== null)
@@ -548,7 +633,9 @@ export class BoardModel {
   /** Whether the straight line from a to b crosses a box (other than the ones it connects). */
   private crossesBox(a: [number, number], b: [number, number], skip: string[]): boolean {
     const boxes = this.elements()
-      .filter((e): e is BoxEl => e.kind === 'box' && !skip.includes(e.id))
+      .filter(
+        (e): e is BoxEl | ShotEl => (e.kind === 'box' || e.kind === 'shot') && !skip.includes(e.id)
+      )
       .map((e) => ({ x: e.x, y: e.y, w: e.w, h: e.h }))
     for (let i = 1; i < 20; i++) {
       const x = a[0] + ((b[0] - a[0]) * i) / 20
@@ -619,6 +706,8 @@ export class BoardModel {
           )
         } else if (e.kind === 'group') {
           out.push(`- Group: ${e.label}`)
+        } else if (e.kind === 'shot') {
+          out.push(`- Screenshot of the running app: ${e.label}`)
         } else if (e.role === 'note') {
           out.push(`- Note: ${e.text}`)
         }
@@ -635,7 +724,7 @@ export class BoardModel {
     return p
   }
 
-  private idFor(kind: 'box' | 'arrow' | 'group', name: string): string {
+  private idFor(kind: 'box' | 'arrow' | 'group' | 'shot', name: string): string {
     return `${this.s.current}~${kind}~${name}`
   }
 
@@ -675,6 +764,18 @@ function describeEl(e: El): string {
     }
     case 'arrow':
       return `arrow ${e.name}${e.label ? ` ${JSON.stringify(e.label)}` : ''}${e.dashed ? ' (back)' : ''}`
+    case 'shot': {
+      const span = (size: number, step: number, unit: number): number =>
+        Math.max(1, Math.ceil((size - unit) / step - 0.01) + 1)
+      const cells = `${span(e.w, GRID.col, GRID.w)}x${span(e.h, GRID.row, GRID.h)}`
+      const marks = e.image.marks.length
+        ? `; circle its parts with "on": ${e.image.marks
+            .slice(0, 12)
+            .map((m) => JSON.stringify(m.text))
+            .join(', ')}`
+        : ''
+      return `shot ${e.name} ${JSON.stringify(e.label)} at ${at(e.x, e.y)}, a screenshot of the page covering ${cells} cells${marks}`
+    }
     case 'group':
       return `group ${e.name} ${JSON.stringify(e.label)} from ${at(e.x + 40, e.y + 50)} to ${at(e.x + e.w - 40 - GRID.w, e.y + e.h - 50 - GRID.h)}`
     case 'text':

@@ -7,6 +7,9 @@
 // doesn't have, shapes it doesn't know, paths that escape the workspace — is
 // cleaned up here, in code, rather than trusted to the prompt.
 //
+// `shot` lines need a capture of the page beside the board first; the
+// controller adds the picture before the board places it.
+//
 // `say`, `more`, `build` and `research` lines are not drawing; the turn
 // scheduler (turn.ts) handles them.
 
@@ -48,6 +51,27 @@ export type Geo = (typeof GEOS)[number]
 
 export type Cell = [col: number, row: number]
 
+/**
+ * Where one element of the page sat in a screenshot, as fractions of the
+ * picture (0..1), so a circle can ring it on the board.
+ */
+export interface ShotMark {
+  text: string
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/** A picture of the page beside the board, saved under .codeswim/whiteboard/shots/. */
+export interface ShotImage {
+  /** The file's name in the shots folder. */
+  file: string
+  width: number
+  height: number
+  marks: ShotMark[]
+}
+
 /** A raw line as the model wrote it. Fields are unvalidated until `toCmd`. */
 export type RawLine = Record<string, unknown>
 
@@ -73,6 +97,10 @@ export type Cmd =
   | { op: 'remove'; name: string }
   | { op: 'clear' }
   | { op: 'link'; name: string; to: string }
+  /** A screenshot of the page beside the board; `image` is filled in by whoever captures it. */
+  | { op: 'shot'; name: string; at: Cell; label: string; image?: ShotImage }
+  /** Ring a shape for a moment; `on` rings one element of a screenshot by its text. */
+  | { op: 'circle'; name: string; on?: string }
 
 /**
  * One reply line as an object, or null (code fences, stray brackets, broken
@@ -247,6 +275,18 @@ export function toCmd(o: RawLine): Cmd | null {
     return { op: 'remove', name }
   }
   if (o.clear === true) return { op: 'clear' }
+  if (typeof o.shot === 'string' && o.shot.trim()) {
+    return {
+      op: 'shot',
+      name: cleanName(o.shot),
+      at: toCell(o.at),
+      label: clean(o.label ?? o.shot, 40)
+    }
+  }
+  if (typeof o.circle === 'string' && o.circle.trim()) {
+    const on = typeof o.on === 'string' ? clean(o.on, 80) : ''
+    return { op: 'circle', name: cleanName(o.circle), ...(on ? { on } : {}) }
+  }
   if (typeof o.link === 'string' && o.link.trim() && typeof o.to === 'string') {
     const to = toLink(o.to)
     return to ? { op: 'link', name: cleanName(o.link), to } : null

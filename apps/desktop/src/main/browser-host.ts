@@ -296,6 +296,31 @@ export class BrowserHost {
     return { path: `${SCREENSHOT_DIR}/${name}`, width: size.width, height: size.height }
   }
 
+  /**
+   * What the panel shows, as a JPEG at most 1280 pixels wide: small enough to
+   * keep several on the whiteboard (whiteboard-file.ts saves it there). A
+   * tall view (the panel is often narrow) keeps only its top, at most 4:3,
+   * so the picture is still readable at board size; `kept` is the share of
+   * the view's height that's in it.
+   */
+  async capture(): Promise<{ jpeg: Buffer; width: number; height: number; kept: number }> {
+    const wc = this.page()
+    if (!this.view?.getVisible()) throw new Error('Open the browser panel to take a screenshot.')
+    let image = await wc.capturePage()
+    if (image.isEmpty()) throw new Error('The page has nothing to capture yet.')
+    const full = image.getSize()
+    const top = Math.min(full.height, Math.round(full.width * 0.75))
+    if (top < full.height) image = image.crop({ x: 0, y: 0, width: full.width, height: top })
+    if (image.getSize().width > 1280) image = image.resize({ width: 1280, quality: 'good' })
+    const size = image.getSize()
+    return {
+      jpeg: image.toJPEG(80),
+      width: size.width,
+      height: size.height,
+      kept: top / full.height
+    }
+  }
+
   private destroy(): void {
     const view = this.view
     const owner = this.owner

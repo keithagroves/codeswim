@@ -22,7 +22,8 @@ import type {
   SpokenAudio,
   VoiceStatus,
   ListenStatus,
-  WhiteboardConnection
+  WhiteboardConnection,
+  WhiteboardShot
 } from '@codeswim/contract'
 
 export type {
@@ -511,6 +512,10 @@ const api = {
     ipcRenderer.invoke('whiteboard:read', rootPath),
   whiteboardWrite: (rootPath: string, json: string): Promise<void> =>
     ipcRenderer.invoke('whiteboard:write', rootPath, json),
+  whiteboardCaptureShot: (rootPath: string): Promise<WhiteboardShot> =>
+    ipcRenderer.invoke('whiteboard:capture-shot', rootPath),
+  whiteboardReadShot: (rootPath: string, file: string): Promise<string | null> =>
+    ipcRenderer.invoke('whiteboard:read-shot', rootPath, file),
   voiceStatus: (): Promise<VoiceStatus> => ipcRenderer.invoke('voice:status'),
   voiceInstall: (): Promise<VoiceStatus> => ipcRenderer.invoke('voice:install'),
   voiceSpeak: (

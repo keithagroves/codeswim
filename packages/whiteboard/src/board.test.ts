@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { BoardModel, boundsOf, type BoxEl, type Effect } from './board'
-import { GRID, toCmd, type Cmd } from './protocol'
+import { BoardModel, boundsOf, MAX_SHOTS, type BoxEl, type Effect, type ShotEl } from './board'
+import { GRID, toCmd, type Cmd, type ShotImage } from './protocol'
 
 const cmd = (line: Record<string, unknown>): Cmd => {
   const c = toCmd(line)
@@ -248,5 +248,115 @@ describe('describe', () => {
     expect(again.describe()).toBe(b.describe())
     expect(BoardModel.fromJSON({ version: 2 }).isBlank).toBe(true)
     expect(BoardModel.fromJSON(null).isBlank).toBe(true)
+  })
+})
+
+describe('screenshots and circles', () => {
+  const image = (file = 'shot-1.jpg'): ShotImage => ({
+    file,
+    width: 1200,
+    height: 800,
+    marks: [
+      { text: 'Sign up', x: 0.5, y: 0.25, w: 0.1, h: 0.05 },
+      { text: 'Pricing plans', x: 0.1, y: 0.6, w: 0.3, h: 0.1 }
+    ]
+  })
+  const shot = (
+    b: BoardModel,
+    name = 'landing',
+    at: [number, number] = [0, 1],
+    file?: string
+  ): Effect[] => b.apply({ op: 'shot', name, at, label: 'Landing page', image: image(file) })
+  const shots = (b: BoardModel): ShotEl[] =>
+    b.elements().filter((e): e is ShotEl => e.kind === 'shot')
+
+  it('places a screenshot up to two cells each way, keeping its shape, clear of boxes', () => {
+    const b = boardWith({ box: 'api', at: [0, 1] })
+    const fx = shot(b)
+    expect(fx.map((f) => f.fx)).toEqual(['add'])
+    const [s] = shots(b)
+    // As big as two cells each way allows, keeping the picture's 3:2 shape.
+    expect(s.h).toBe(GRID.row + GRID.h)
+    expect(s.w).toBeLessThanOrEqual(GRID.col + GRID.w)
+    expect(s.w / s.h).toBeCloseTo(1.5, 1)
+    const api = boundsOf(boxes(b)[0])!
+    const pic = boundsOf(s)!
+    const overlap =
+      api.x < pic.x + pic.w &&
+      api.x + api.w > pic.x &&
+      api.y < pic.y + pic.h &&
+      api.y + api.h > pic.y
+    expect(overlap).toBe(false)
+    // A box drawn afterwards keeps out of it too.
+    b.apply(cmd({ box: 'web', at: [s.x / GRID.col, s.y / GRID.row] }))
+    const web = boundsOf(boxes(b).find((x) => x.name === 'web')!)!
+    expect(web.x >= pic.x + pic.w || web.y >= pic.y + pic.h || web.x + web.w <= pic.x).toBe(true)
+  })
+
+  it('needs a picture, and retaking one swaps it in place', () => {
+    const b = new BoardModel()
+    expect(b.apply(cmd({ shot: 'landing', at: [0, 0] }))).toEqual([])
+    shot(b)
+    const before = shots(b)[0]
+    const fx = shot(b, 'landing', [3, 3], 'shot-2.jpg')
+    expect(fx).toMatchObject([{ fx: 'update' }])
+    const after = shots(b)[0]
+    expect(shots(b)).toHaveLength(1)
+    expect([after.x, after.y, after.rev, after.image.file]).toEqual([
+      before.x,
+      before.y,
+      2,
+      'shot-2.jpg'
+    ])
+  })
+
+  it('arrows join screenshots, and the board describes them with their parts', () => {
+    const b = boardWith({ box: 'api', at: [3, 1] })
+    shot(b)
+    expect(b.apply(cmd({ arrow: ['landing', 'api'], label: 'calls' }))).toMatchObject([
+      { fx: 'add' }
+    ])
+    expect(b.describe()).toContain('shot landing "Landing page"')
+    expect(b.describe()).toContain('covering 2x2 cells')
+    expect(b.describe()).toContain('"Sign up"')
+    expect(b.describePages()).toContain('Screenshot of the running app: Landing page')
+  })
+
+  it('stops at the screenshot limit', () => {
+    const b = new BoardModel()
+    for (let i = 0; i < MAX_SHOTS; i++) shot(b, `s${i}`, [0, i])
+    expect(shot(b, 'one-more')).toEqual([])
+  })
+
+  it('circles a shape for a moment without adding anything', () => {
+    const b = boardWith({ box: 'api', at: [1, 1] })
+    const count = b.elements().length
+    const [fx] = b.apply(cmd({ circle: 'api' }))
+    const api = boxes(b)[0]
+    expect(fx).toEqual({
+      fx: 'circle',
+      page: b.currentPage.id,
+      bounds: { x: api.x, y: api.y, w: api.w, h: api.h },
+      ms: 2400
+    })
+    expect(b.elements()).toHaveLength(count)
+    expect(b.apply(cmd({ circle: 'nothing' }))).toEqual([])
+  })
+
+  it('circles one element of a screenshot by its text', () => {
+    const b = new BoardModel()
+    shot(b)
+    const s = shots(b)[0]
+    const [fx] = b.apply(cmd({ circle: 'landing', on: 'sign up' }))
+    expect(fx).toMatchObject({
+      fx: 'circle',
+      bounds: { x: s.x + 0.5 * s.w, y: s.y + 0.25 * s.h, w: 0.1 * s.w, h: 0.05 * s.h }
+    })
+    // A close match counts; something that isn't on the picture rings nothing.
+    expect(b.apply(cmd({ circle: 'landing', on: 'pricing' }))).toHaveLength(1)
+    expect(b.apply(cmd({ circle: 'landing', on: 'Checkout' }))).toEqual([])
+    // "on" only means something for a screenshot.
+    b.apply(cmd({ box: 'api', at: [4, 0] }))
+    expect(b.apply(cmd({ circle: 'api', on: 'Sign up' }))).toEqual([])
   })
 })

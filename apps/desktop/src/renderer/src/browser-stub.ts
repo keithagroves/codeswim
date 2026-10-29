@@ -443,6 +443,8 @@ The companion document belongs at \`${documentPath}\`.
     whiteboardWrite: async (rootPath: string, json: string) => {
       localStorage.setItem(`codeswim:test:whiteboard:${rootPath}`, json)
     },
+    whiteboardCaptureShot: notInBrowser('whiteboardCaptureShot'),
+    whiteboardReadShot: async () => null,
     // No voice process in a plain browser: the whiteboard uses the system voice.
     voiceStatus: async () => ({
       available: false,

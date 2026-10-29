@@ -184,6 +184,22 @@ describe('toCmd', () => {
     expect(toCmd({ say: 'hi' })).toBeNull()
     expect(toCmd({ clear: 'yes' })).toBeNull()
   })
+
+  it('reads screenshot and circle lines', () => {
+    expect(toCmd({ shot: 'Landing', at: [0, 1], label: 'Landing page' })).toEqual({
+      op: 'shot',
+      name: 'landing',
+      at: [0, 1],
+      label: 'Landing page'
+    })
+    expect(toCmd({ circle: 'API' })).toEqual({ op: 'circle', name: 'api' })
+    expect(toCmd({ circle: 'landing', on: '<b>Sign up</b>' })).toEqual({
+      op: 'circle',
+      name: 'landing',
+      on: 'Sign up'
+    })
+    expect(toCmd({ shot: ' ' })).toBeNull()
+  })
 })
 
 describe('toSay / toBuild', () => {

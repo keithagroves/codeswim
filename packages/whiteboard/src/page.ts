@@ -14,7 +14,7 @@
 // goes into the walkthrough's checkpoint, so "they're 280 pixels wide now"
 // comes from a measurement rather than the model's guess.
 
-import { clean, type Cmd, type RawLine } from './protocol'
+import { clean, type Cmd, type RawLine, type ShotMark } from './protocol'
 
 /** One element of the page, as the browser panel outlines it (structurally the contract's PageElement). */
 export interface PageItem {
@@ -55,6 +55,47 @@ export function toPageCmd(o: RawLine): PageCmd | null {
     return name && name.length <= 60 ? { op: 'start', name } : null
   }
   return null
+}
+
+/** The page as the browser panel outlines it, with positions (structurally the contract's PageOutline). */
+export interface PageLayout {
+  viewport: { width: number; height: number; scrollY: number }
+  elements: { text: string; box: { x: number; y: number; width: number; height: number } }[]
+}
+
+const MAX_MARKS = 40
+
+/**
+ * Where the page's labelled elements sit in a screenshot of what's on
+ * screen, as fractions of the picture, so the narrator can circle one on the
+ * board by its text. Element boxes are in page coordinates; the screenshot
+ * is the viewport (or its top `kept` share, for a tall one), so anything
+ * outside it is left out.
+ */
+export function shotMarks(page: PageLayout, kept = 1): ShotMark[] {
+  const { width, scrollY } = page.viewport
+  const height = page.viewport.height * Math.min(1, Math.max(0, kept))
+  if (width <= 0 || height <= 0) return []
+  const out: ShotMark[] = []
+  for (const e of page.elements) {
+    const text = clean(e.text, 80)
+    if (!text || e.box.width <= 0 || e.box.height <= 0) continue
+    const x0 = Math.max(0, e.box.x)
+    const y0 = Math.max(0, e.box.y - scrollY)
+    const x1 = Math.min(width, e.box.x + e.box.width)
+    const y1 = Math.min(height, e.box.y - scrollY + e.box.height)
+    if (x1 <= x0 || y1 <= y0) continue
+    const r = (v: number): number => Math.round(v * 1000) / 1000
+    out.push({
+      text,
+      x: r(x0 / width),
+      y: r(y0 / height),
+      w: r((x1 - x0) / width),
+      h: r((y1 - y0) / height)
+    })
+    if (out.length >= MAX_MARKS) break
+  }
+  return out
 }
 
 const NOT_A_SERVER =

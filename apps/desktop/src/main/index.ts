@@ -53,7 +53,12 @@ import {
 } from '@codeswim/domain-git'
 import { getRoomIdentity } from '@codeswim/domain-github'
 import { readAgentTabsFile, writeAgentTabsFile } from './agent-tabs-file'
-import { readWhiteboardFile, writeWhiteboardFile } from './whiteboard-file'
+import {
+  readWhiteboardFile,
+  readWhiteboardShot,
+  writeWhiteboardFile,
+  writeWhiteboardShot
+} from './whiteboard-file'
 import { isVoiceId, MAX_SPOKEN_CHARS, VoiceHost } from './voice'
 import type { FromVoiceWorker } from './voice-protocol'
 import { ListenHost } from './listen'
@@ -1063,6 +1068,20 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('whiteboard:write', async (_event, rootPath: string, json: string) => {
     await writeWhiteboardFile(rootPath, json)
+  })
+
+  ipcMain.handle('whiteboard:capture-shot', async (_event, rootPath: unknown) => {
+    if (typeof rootPath !== 'string' || !rootPath)
+      throw new Error('whiteboard:capture-shot expects a workspace')
+    const { jpeg, width, height, kept } = await browser.capture()
+    const file = await writeWhiteboardShot(rootPath, jpeg)
+    return { file, src: `data:image/jpeg;base64,${jpeg.toString('base64')}`, width, height, kept }
+  })
+
+  ipcMain.handle('whiteboard:read-shot', async (_event, rootPath: unknown, file: unknown) => {
+    if (typeof rootPath !== 'string' || typeof file !== 'string') return null
+    const jpeg = await readWhiteboardShot(rootPath, file)
+    return jpeg ? `data:image/jpeg;base64,${jpeg.toString('base64')}` : null
   })
 
   ipcMain.handle('voice:status', () => voice.status())

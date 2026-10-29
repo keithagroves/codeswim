@@ -487,6 +487,21 @@ a packaged-build bug: tldraw's asset formatter turned `file://` URLs into
 `file:///file:///…`, so the canvas fonts and translations failed to load
 outside dev.
 
+### Screenshots and circles on the board (2026-10-25)
+
+The narrator can put a screenshot of the page beside the board onto the
+board (`shot`) and ring things for a moment (`circle`), including one
+element of a screenshot by its text. These are the first two items from a
+review of what tldraw can do that the narrator couldn't. Freehand drawing and
+free placement were left out on purpose: they cost the most and help least
+for explaining a design, and the grid is what keeps layouts clean. Still
+open: tldraw-style sticky notes, curved arrows and sizes.
+
+Checked in the built app with a mock narrator: a narrow browser panel's
+1118×1800 capture went on the board as a 4:3 crop (413×310), the ring landed
+on "Sign up" on the picture, `board.json` stayed at 2 KB with one JPEG beside
+it, and reopening the workspace in a fresh app loaded the picture from disk.
+
 ### Bundled speech models and speech mode (2026-10-24)
 
 Speech mode (the sound-wave button) adds local speech recognition: Whisper

@@ -339,6 +339,65 @@ describe('WhiteboardController with the browser panel', () => {
     expect(controller.getSnapshot().blank).toBe(true)
   })
 
+  it('puts a screenshot of the page on the board and circles part of it', async () => {
+    const transport = scripted({
+      opener: [L({ say: 'Here it is.' })],
+      main: [
+        [
+          L({ say: 'This is your landing page.' }),
+          L({ page: 'Landing' }),
+          L({ shot: 'landing', at: [0, 0], label: 'Landing page' }),
+          L({ say: 'The sign-up button is up top.' }),
+          L({ circle: 'landing', on: 'Sign up' })
+        ].join('\n')
+      ]
+    })
+    const captured: string[] = []
+    const browser: WhiteboardBrowser = {
+      ...fakeBrowser(),
+      capture: async () => {
+        captured.push('shot')
+        return {
+          file: 'shot-abc-123456.jpg',
+          width: 1200,
+          height: 800,
+          marks: [{ text: 'Sign up', x: 0.4, y: 0.1, w: 0.2, h: 0.1 }]
+        }
+      }
+    }
+    const { controller, canvas, saved } = setup(transport, { browser })
+    await controller.open('/ws')
+    await controller.ask('Show me the landing page on the board.')
+    expect(captured).toEqual(['shot'])
+    const shot = controller.model.named('landing')
+    expect(shot).toMatchObject({ kind: 'shot', label: 'Landing page' })
+    expect(canvas.effects.map((f) => f.fx)).toContain('circle')
+    await controller.flush()
+    // The board keeps the picture's file name, never the picture.
+    expect(saved.get('/ws')).toContain('shot-abc-123456.jpg')
+    expect(saved.get('/ws')).not.toContain('base64')
+  })
+
+  it('takes no screenshot without a page open', async () => {
+    const transport = scripted({
+      opener: [L({ say: 'Sure.' })],
+      main: [L({ shot: 'landing', at: [0, 0] })]
+    })
+    let captures = 0
+    const browser: WhiteboardBrowser = {
+      ...fakeBrowser(null),
+      capture: async () => {
+        captures++
+        return null
+      }
+    }
+    const { controller } = setup(transport, { browser })
+    await controller.open('/ws')
+    await controller.ask('Put the page on the board.')
+    expect(captures).toBe(0)
+    expect(controller.model.named('landing')).toBeUndefined()
+  })
+
   it('mentions the running app when no page is open', async () => {
     const transport = scripted({ opener: [L({ say: 'Sure.' })], main: [L({ say: 'Okay.' })] })
     const { controller } = setup(transport, { browser: fakeBrowser(null) })

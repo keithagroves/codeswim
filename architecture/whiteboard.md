@@ -191,6 +191,23 @@ pixels wide".
   the sentence about it is spoken (`"all":true` rings every match).
   `{"show":"…"}` opens a page, but only a local address or another page of
   the site already showing (`canShow`).
+- **Screenshots on the board.** `{"shot":"landing","at":[0,1],"label":"…"}`
+  puts a picture of the page on the board, in a labelled frame up to two
+  cells each way that boxes and arrows treat like any other shape. Main
+  captures the panel as a JPEG; a tall (narrow-panel) view keeps only its
+  top, at most 4:3, so it stays readable at board size. The file goes to
+  `.codeswim/whiteboard/shots/`, under the board's own .gitignore, and the
+  board stores only its name. `board.json` is capped at 2 MB, and pictures
+  inside it would soon push a board past that, so it would fail to load.
+  Saving the board deletes shots it no longer mentions, after a minute's
+  grace. Taking the same name again swaps the picture in place, which is
+  handy for before and after. A board holds up to 12.
+- **Circling.** `{"circle":"api"}` rings any box, group or screenshot with
+  a hand-drawn red ellipse that draws on, stays about 2.4 s and fades. It's
+  an effect, not an element, so nothing is saved. A shot remembers where the
+  page's labelled elements sat in it (`shotMarks`), so
+  `{"circle":"landing","on":"Sign up"}` rings that button on the picture.
+  The `<canvas>` lists those names for each shot.
 - **Measured, not guessed.** When a build starts with a page open, the
   controller outlines the page. When the build finishes, it reloads the page,
   outlines it again, and puts the difference in the checkpoint, for example

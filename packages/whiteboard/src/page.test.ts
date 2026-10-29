@@ -7,6 +7,7 @@ import {
   formatPage,
   isPageCmd,
   looksLikeServer,
+  shotMarks,
   toPageCmd,
   type PageSnapshot
 } from './page'
@@ -181,5 +182,35 @@ describe('asksForChange', () => {
     ]) {
       expect(asksForChange(no), no).toBe(false)
     }
+  })
+})
+
+describe('shotMarks', () => {
+  it('places what is on screen as fractions of the picture, leaving out what is scrolled away', () => {
+    const marks = shotMarks({
+      viewport: { width: 1000, height: 500, scrollY: 100 },
+      elements: [
+        { text: 'Sign up', box: { x: 500, y: 200, width: 100, height: 50 } },
+        { text: 'Above the fold', box: { x: 0, y: 0, width: 100, height: 50 } },
+        { text: 'Far below', box: { x: 0, y: 2000, width: 100, height: 50 } },
+        { text: 'Cut by the edge', box: { x: 900, y: 550, width: 200, height: 100 } },
+        { text: '', box: { x: 10, y: 150, width: 10, height: 10 } }
+      ]
+    })
+    expect(marks).toEqual([
+      { text: 'Sign up', x: 0.5, y: 0.2, w: 0.1, h: 0.1 },
+      { text: 'Cut by the edge', x: 0.9, y: 0.9, w: 0.1, h: 0.1 }
+    ])
+  })
+
+  it('keeps to the top of a tall view that was cut short', () => {
+    const page = {
+      viewport: { width: 500, height: 1000, scrollY: 0 },
+      elements: [
+        { text: 'Sign up', box: { x: 100, y: 150, width: 100, height: 50 } },
+        { text: 'Footer', box: { x: 0, y: 900, width: 500, height: 50 } }
+      ]
+    }
+    expect(shotMarks(page, 0.375)).toEqual([{ text: 'Sign up', x: 0.2, y: 0.4, w: 0.2, h: 0.133 }])
   })
 })

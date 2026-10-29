@@ -75,6 +75,7 @@ import {
   FILLERS,
   formatFiles,
   looksLikeServer,
+  shotMarks,
   mentionedPaths,
   projectSummary,
   WALKTHROUGH_OPENER,
@@ -913,6 +914,13 @@ function createWhiteboardController(refs: {
     toast,
     browser
   } = refs
+  // The board's screenshots as data: URLs, so a redraw doesn't read them from disk again.
+  const shots = new Map<string, string>()
+  const remember = (file: string, src: string): void => {
+    shots.delete(file)
+    shots.set(file, src)
+    if (shots.size > 24) shots.delete(shots.keys().next().value!)
+  }
   // eslint-disable-next-line no-console
   const log = (message: string, detail?: unknown): void => console.info(message, detail ?? '')
   const natural = createNaturalVoice(stateRef, log)
@@ -979,9 +987,32 @@ function createWhiteboardController(refs: {
         s.view !== 'output'
       )
     },
+    shotImage: async (file) => {
+      const cached = shots.get(file)
+      if (cached) return cached
+      const root = stateRef.current.rootPath
+      const src = root ? await window.api.whiteboardReadShot(root, file) : null
+      if (src) remember(file, src)
+      return src
+    },
     browser: {
       snapshot: async () => (browser.currentUrl ? browser.inspect() : null),
       currentUrl: () => browser.currentUrl,
+      capture: async () => {
+        const root = stateRef.current.rootPath
+        if (!root || !browser.currentUrl) return null
+        const [shot, outline] = await Promise.all([
+          window.api.whiteboardCaptureShot(root),
+          browser.inspect().catch(() => null)
+        ])
+        remember(shot.file, shot.src)
+        return {
+          file: shot.file,
+          width: shot.width,
+          height: shot.height,
+          marks: outline ? shotMarks(outline, shot.kept) : []
+        }
+      },
       context: () => {
         const s = stateRef.current
         const run = s.runningScript?.status === 'running' ? s.runningScript : null

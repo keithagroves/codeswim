@@ -118,6 +118,17 @@ export interface PageMatch {
   element?: PageElement
 }
 
+// A screenshot the whiteboard saved beside its board (.codeswim/whiteboard/
+// shots/<file>), with a data: URL of it for the canvas. A tall view is cut
+// to its top; `kept` is the share (0..1] of the view's height in the picture.
+export interface WhiteboardShot {
+  file: string
+  src: string
+  width: number
+  height: number
+  kept: number
+}
+
 export interface PageScreenshot {
   // Workspace-relative path of the PNG (under .codeswim/browser/).
   path: string
@@ -624,6 +635,11 @@ export interface DiagramNavApi {
   // page view over the panel's viewport, null hides it (the page keeps
   // running). Inspect/point/measure run in an isolated world, so the page's
   // own scripts never see them; screenshots land in <root>/.codeswim/browser/.
+  // The whiteboard's screenshots: capture the browser panel into the
+  // workspace's whiteboard folder, and read one back as a data: URL (null if
+  // it's gone). Main deletes the ones the saved board stops mentioning.
+  whiteboardCaptureShot(rootPath: string): Promise<WhiteboardShot>
+  whiteboardReadShot(rootPath: string, file: string): Promise<string | null>
   browserOpen(url: string): Promise<BrowserState>
   browserNavigate(action: 'back' | 'forward' | 'reload' | 'stop'): Promise<BrowserState>
   browserState(): Promise<BrowserState>

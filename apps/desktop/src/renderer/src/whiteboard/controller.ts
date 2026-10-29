@@ -33,6 +33,7 @@ import {
   type PageCmd,
   type PageContext,
   type PageSnapshot,
+  type ShotImage,
   type Speaker,
   type TurnRequest,
   type TurnResult,
@@ -66,6 +67,8 @@ export interface WhiteboardBrowser {
   reload(): Promise<void>
   /** Start a dev-server run; resolves with its local address once printed, or null if none came. */
   startServer(name: string): Promise<string | null>
+  /** Save a screenshot of the page for the board, with where its elements sit; null without a page. */
+  capture?(): Promise<ShotImage | null>
 }
 
 export interface WhiteboardDeps {
@@ -94,6 +97,8 @@ export interface WhiteboardDeps {
   isVisible(): boolean
   /** The browser panel, so the narrator can talk about (and point at) the page beside the board. */
   browser?: WhiteboardBrowser
+  /** A screenshot on the board, as a URL the canvas can show (null if it's gone). */
+  shotImage?(file: string): Promise<string | null>
   notify(message: string, kind?: 'info' | 'error'): void
   log?(message: string, detail?: unknown): void
 }
@@ -234,6 +239,11 @@ export class WhiteboardController {
   }
 
   // ---- canvas
+
+  /** A screenshot on the board, for the canvas to show. */
+  shotImage(file: string): Promise<string | null> {
+    return this.deps.shotImage?.(file) ?? Promise.resolve(null)
+  }
 
   attach(canvas: WhiteboardCanvas): void {
     this.canvas = canvas
@@ -470,8 +480,19 @@ export class WhiteboardController {
   private async draw(cmd: Action, mayClear: boolean, gen: number, question: string): Promise<void> {
     if (gen !== this.generation) return
     if (isPageCmd(cmd)) return this.onPage(cmd, question)
-    const ok = guardCmd(cmd, { mayClear, board: this.board })
+    let ok = guardCmd(cmd, { mayClear, board: this.board })
     if (!ok) return
+    if (ok.op === 'shot') {
+      // A picture of the page beside the board; nothing to take without one.
+      const browser = this.deps.browser
+      if (!browser?.capture || !browser.currentUrl()) return
+      const image = await browser.capture().catch((e: unknown) => {
+        this.deps.log?.('[whiteboard] screenshot failed', e)
+        return null
+      })
+      if (!image || gen !== this.generation) return
+      ok = { ...ok, image }
+    }
     const fx = this.board.apply(ok)
     if (!fx.length) return
     if (ok.op === 'page' || ok.op === 'clear') this.emit()

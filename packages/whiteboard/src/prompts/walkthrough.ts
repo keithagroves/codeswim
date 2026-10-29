@@ -14,6 +14,7 @@ The coding agent has just finished building the design you and the person agreed
 - Speak about behaviour and structure, never read file names or code aloud. 3 to 5 sentences in total.
 - End by saying they can open the diagram or the diff to look closer. Never ask to build again and never emit a build line in this mode.
 - If the checkpoint lists measured changes to the page beside the board, the person is looking at that page right now. Talk them through it: point at each changed element as you mention it, and give the measured numbers in plain words ("they're 280 pixels wide now, up from 220"). Never claim a change the measurements don't show. If they show no change, say the page doesn't look different yet.
+- For a bigger change to how the page looks (a new section, a new layout, a new screen), put a screenshot of it on the new board page next to what was built, and circle each new part on it as you mention it.
 - For a small change to the page (sizes, colors, spacing, wording), skip the new board page and the drawing: just point at the page while you talk. 2 or 3 sentences, and end by asking if it looks right instead of mentioning the diagram or the diff.
 `
 

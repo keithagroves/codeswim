@@ -101,7 +101,11 @@ export function WhiteboardView(): React.JSX.Element {
     (editor: Editor) => {
       editor.user.updateUserPreferences({ colorScheme: 'dark' })
       editor.updateInstanceState({ isReadonly: true })
-      const canvas = new TldrawCanvas(editor, () => INSETS)
+      const canvas = new TldrawCanvas(
+        editor,
+        () => INSETS,
+        (file) => whiteboard.shotImage(file)
+      )
       canvasRef.current = canvas
       whiteboard.attach(canvas)
 

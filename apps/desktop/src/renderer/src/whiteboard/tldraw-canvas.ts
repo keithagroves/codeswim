@@ -2,13 +2,17 @@
 // board.ts) decides what goes where; this file only turns its effects into
 // shapes and animates them: boxes fade in, text types itself on, arrows grow
 // from start to end and then bind to their boxes, removed things fade out.
-// Ported from the prototype's renderer (~/projects/anim/canvas/src/main.tsx).
+// Screenshots are a labelled frame holding the picture (loaded from disk when
+// it isn't in memory), and a circle is a hand-drawn red ring that comes and
+// goes on its own. Ported from the prototype's renderer
+// (~/projects/anim/canvas/src/main.tsx).
 //
 // The editor is read-only for the person (they pan, zoom, flip pages and
 // click links; they never draw). tldraw's readonly mode also blocks the API,
 // so every write lifts it just for the duration of that write.
 
 import {
+  AssetRecordType,
   createShapeId,
   PageRecordType,
   toRichText,
@@ -18,7 +22,16 @@ import {
   type TLPageId,
   type TLShapeId
 } from 'tldraw'
-import type { BoardModel, BoxEl, El, Effect, GroupEl, Page } from '@codeswim/whiteboard'
+import type {
+  BoardModel,
+  Bounds,
+  BoxEl,
+  El,
+  Effect,
+  GroupEl,
+  Page,
+  ShotEl
+} from '@codeswim/whiteboard'
 import type { WhiteboardCanvas } from './controller'
 
 type Pt = [number, number]
@@ -75,13 +88,20 @@ function edgePoint(b: { x: number; y: number; w: number; h: number }, toward: Pt
 }
 
 const boxLabel = (el: BoxEl): string => (el.link ? `${el.label} ↗` : el.label)
+/** The picture inside a screenshot's frame; a retaken picture gets a new one. */
+const shotImageId = (el: ShotEl): TLShapeId => createShapeId(`${el.id}~img~${el.rev}`)
+/** How long a circle takes to draw on and to fade away. */
+const CIRCLE_IN_MS = 350
+const CIRCLE_OUT_MS = 450
 
 export class TldrawCanvas implements WhiteboardCanvas {
   private disposed = false
 
   constructor(
     private readonly editor: Editor,
-    private readonly insets: () => Insets
+    private readonly insets: () => Insets,
+    /** A screenshot's picture by file name, as a URL (null if it's gone). */
+    private readonly loadImage: (file: string) => Promise<string | null> = async () => null
   ) {}
 
   dispose(): void {
@@ -192,7 +212,50 @@ export class TldrawCanvas implements WhiteboardCanvas {
         meta: { elId: el.id },
         props: { w: el.w, h: el.h, name: el.label }
       })
+      if (el.kind === 'shot') void this.fillShot(el)
     }
+  }
+
+  /** Put a screenshot's picture into its frame, once it has loaded. */
+  private async fillShot(el: ShotEl): Promise<void> {
+    const src = await this.loadImage(el.image.file).catch(() => null)
+    const frame = shapeIdFor(el.id)
+    const imageId = shotImageId(el)
+    if (!src || !this.exists(frame) || this.exists(imageId)) return
+    const editor = this.editor
+    const assetId = AssetRecordType.createId(el.image.file.replace(/\.jpg$/, ''))
+    this.write(() => {
+      // A retaken picture replaces the old one.
+      const old = editor.getSortedChildIdsForParent(frame).filter((c) => c !== imageId)
+      if (old.length) editor.deleteShapes(old)
+      if (!editor.getAsset(assetId)) {
+        editor.createAssets([
+          {
+            id: assetId,
+            typeName: 'asset',
+            type: 'image',
+            meta: {},
+            props: {
+              name: el.image.file,
+              src,
+              w: el.image.width,
+              h: el.image.height,
+              mimeType: 'image/jpeg',
+              isAnimated: false
+            }
+          }
+        ])
+      }
+      editor.createShape({
+        id: imageId,
+        type: 'image',
+        parentId: frame,
+        x: 0,
+        y: 0,
+        meta: { elId: el.id },
+        props: { assetId, w: el.w, h: el.h }
+      })
+    })
   }
 
   /** The page bounds of the shape an arrow end names (a box or a group on the arrow's page). */
@@ -200,7 +263,7 @@ export class TldrawCanvas implements WhiteboardCanvas {
     page: string,
     name: string
   ): { id: TLShapeId; b: { x: number; y: number; w: number; h: number } } | null {
-    for (const kind of ['box', 'group']) {
+    for (const kind of ['box', 'group', 'shot']) {
       const id = shapeIdFor(`${page}~${kind}~${name}`)
       const b = this.editor.getShapePageBounds(id)
       if (b) return { id, b: { x: b.x, y: b.y, w: b.w, h: b.h } }
@@ -344,6 +407,9 @@ export class TldrawCanvas implements WhiteboardCanvas {
         this.write(() => editor.deleteShapes(ids.filter((id) => this.exists(id))))
         return
       }
+      case 'circle':
+        await this.circle(fx.page, fx.bounds, fx.ms)
+        return
       case 'pulse': {
         const id = shapeIdFor(fx.id)
         if (!this.exists(id)) return
@@ -431,6 +497,60 @@ export class TldrawCanvas implements WhiteboardCanvas {
     })
   }
 
+  /**
+   * A hand-drawn red ring around an area: it draws on, stays while the
+   * sentence is spoken, then fades away by itself. Only the drawing-on is
+   * waited for, so the next line isn't held up.
+   */
+  private async circle(page: string, b: Bounds, ms: number): Promise<void> {
+    const editor = this.editor
+    const id = createShapeId()
+    const w = b.w * 1.15 + 36
+    const h = b.h * 1.3 + 30
+    const cx = b.x + b.w / 2
+    const cy = b.y + b.h / 2
+    const ring = (scale: number, opacity: number): void => {
+      if (!this.exists(id)) return
+      this.write(() =>
+        editor.updateShape({
+          id,
+          type: 'geo',
+          x: cx - (w * scale) / 2,
+          y: cy - (h * scale) / 2,
+          opacity,
+          props: { w: w * scale, h: h * scale }
+        })
+      )
+    }
+    this.write(() =>
+      editor.createShape({
+        id,
+        type: 'geo',
+        parentId: pageIdFor(page),
+        x: cx - w / 2,
+        y: cy - h / 2,
+        opacity: 0,
+        props: {
+          geo: 'ellipse',
+          w,
+          h,
+          color: 'red',
+          fill: 'none',
+          dash: 'draw',
+          size: 'm',
+          font: 'draw',
+          richText: toRichText('')
+        }
+      })
+    )
+    await animate(CIRCLE_IN_MS, (p) => ring(0.8 + 0.2 * ease(p), ease(p)))
+    void (async () => {
+      await sleep(Math.max(0, ms - CIRCLE_IN_MS - CIRCLE_OUT_MS))
+      await animate(CIRCLE_OUT_MS, (p) => ring(1, 1 - ease(p)))
+      if (this.exists(id)) this.write(() => editor.deleteShapes([id]))
+    })()
+  }
+
   private arrowEnd(
     el: Extract<El, { kind: 'arrow' }>
   ): { dx: number; dy: number; fromId: TLShapeId; toId: TLShapeId } | null {
@@ -449,12 +569,13 @@ export class TldrawCanvas implements WhiteboardCanvas {
     const id = shapeIdFor(el.id)
     const shape = editor.getShape(id)
     if (!shape) return
-    if (el.kind === 'box' || el.kind === 'group') {
-      const target = el as BoxEl | GroupEl
+    if (el.kind === 'box' || el.kind === 'group' || el.kind === 'shot') {
+      const target = el as BoxEl | GroupEl | ShotEl
+      if (el.kind === 'shot') void this.fillShot(el)
       const props =
         el.kind === 'box'
           ? { color: el.color, richText: toRichText(boxLabel(el)) }
-          : { name: (el as GroupEl).label }
+          : { name: (el as GroupEl | ShotEl).label }
       this.write(() =>
         editor.updateShape({
           id,

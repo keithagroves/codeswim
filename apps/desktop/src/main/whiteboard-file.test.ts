@@ -1,8 +1,15 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { MAX_WHITEBOARD_BYTES, readWhiteboardFile, writeWhiteboardFile } from './whiteboard-file'
+import {
+  isShotFile,
+  MAX_WHITEBOARD_BYTES,
+  readWhiteboardFile,
+  readWhiteboardShot,
+  writeWhiteboardFile,
+  writeWhiteboardShot
+} from './whiteboard-file'
 
 const dirs: string[] = []
 async function workspace(): Promise<string> {
@@ -39,5 +46,38 @@ describe('whiteboard file', () => {
       writeWhiteboardFile(root, `"${'x'.repeat(MAX_WHITEBOARD_BYTES)}"`)
     ).rejects.toThrow(/too large/)
     expect(await readWhiteboardFile(root)).toBeNull()
+  })
+})
+
+describe('whiteboard screenshots', () => {
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3])
+
+  it('saves and reads a screenshot beside the board, under its .gitignore', async () => {
+    const root = await workspace()
+    const name = await writeWhiteboardShot(root, jpeg)
+    expect(isShotFile(name)).toBe(true)
+    expect(await readWhiteboardShot(root, name)).toEqual(jpeg)
+    const ignore = await readFile(path.join(root, '.codeswim/whiteboard/.gitignore'), 'utf-8')
+    expect(ignore.trim().split('\n').at(-1)).toBe('*')
+  })
+
+  it('only reads its own file names, never a path', async () => {
+    const root = await workspace()
+    await writeWhiteboardFile(root, '{}')
+    for (const bad of ['../board.json', 'board.json', '/etc/passwd', 'shot-x-123456.png'])
+      expect(await readWhiteboardShot(root, bad)).toBeNull()
+  })
+
+  it('a save deletes screenshots the board no longer mentions, once they are a minute old', async () => {
+    const root = await workspace()
+    const kept = await writeWhiteboardShot(root, jpeg)
+    const dropped = await writeWhiteboardShot(root, jpeg)
+    const fresh = await writeWhiteboardShot(root, jpeg)
+    const old = new Date(Date.now() - 5 * 60_000)
+    for (const f of [kept, dropped])
+      await utimes(path.join(root, '.codeswim/whiteboard/shots', f), old, old)
+    await writeWhiteboardFile(root, JSON.stringify({ els: [{ image: { file: kept } }] }))
+    const left = await readdir(path.join(root, '.codeswim/whiteboard/shots'))
+    expect(left.sort()).toEqual([kept, fresh].sort())
   })
 })
