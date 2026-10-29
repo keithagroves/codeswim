@@ -46,5 +46,10 @@
     "turbo": "^2.10.11",
     "typescript": "^5.9.3",
     "wrangler": "^4.125.0"
+  },
+  "overrides": {
+    "@electron/osx-sign": {
+      "isbinaryfile": "^5.0.7"
+    }
   }
 }
