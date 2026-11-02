@@ -133,6 +133,17 @@ lands. Drawing waits until the opener has played. Each request carries the
 conversation, a `<canvas>` summary in grid terms, and a `<project>` list of
 the workspace's real diagrams, so boxes can link to them.
 
+The model menu under the board picks the narrator's model; the default is
+Pareto when it has a key, otherwise the chat's model
+([narrator-models.ts](../apps/desktop/src/renderer/src/whiteboard/narrator-models.ts)).
+Replies are read off opencode's event stream a line at a time
+([narrator.ts](../apps/desktop/src/renderer/src/whiteboard/narrator.ts)), so
+with a model that streams there's no opener: each sentence plays as it's
+written. A model that's unavailable, out of quota or missing its key is
+skipped for ten minutes and the next one answers. opencode's free models
+aren't offered: their free tier refuses a request with no tools, and the
+narrator's agents have every tool off.
+
 ## One conversation, in the Agent chat
 
 There's no separate whiteboard chat. While the Whiteboard is on screen, the

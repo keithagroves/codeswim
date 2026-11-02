@@ -6268,7 +6268,8 @@ body.is-panning .diagram-canvas-wrap {
   opacity: 0.75;
 }
 
-.whiteboard-voice {
+.whiteboard-voice,
+.whiteboard-model {
   height: 32px;
   max-width: 130px;
   padding: 0 6px;
@@ -6280,7 +6281,8 @@ body.is-panning .diagram-canvas-wrap {
   font-size: 12px;
 }
 
-.whiteboard-voice:focus {
+.whiteboard-voice:focus,
+.whiteboard-model:focus {
   outline: none;
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
 }

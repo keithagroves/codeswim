@@ -19,6 +19,10 @@ interface Scripted {
   replies: Partial<Record<NarratorMode, string[]>>
   /** Delay before each mode's replies arrive. */
   delay?: Partial<Record<NarratorMode, number>>
+  /** Hand over each line this many ms apart (a streaming model), before the reply resolves. */
+  lineDelay?: number
+  /** What the transport's streams() says. */
+  streams?: boolean
 }
 
 /** A transport that answers from a script and records what it was sent. */
@@ -28,23 +32,32 @@ function fakeTransport(
   const sent: { mode: NarratorMode; text: string }[] = []
   const closed: NarratorMode[] = []
   const queues: Partial<Record<NarratorMode, string[]>> = structuredClone(script.replies)
+  const wait = (ms: number, signal: AbortSignal): Promise<void> =>
+    new Promise<void>((resolve, reject) => {
+      const t = setTimeout(resolve, ms)
+      signal.addEventListener('abort', () => {
+        clearTimeout(t)
+        reject(new Error('aborted'))
+      })
+    })
   return {
     sent,
     closed,
+    ...(script.streams !== undefined ? { streams: () => script.streams === true } : {}),
     async open(mode) {
       return {
         close: () => closed.push(mode),
-        async send(text, signal) {
+        async send(text, signal, onLine) {
           sent.push({ mode, text })
-          await new Promise<void>((resolve, reject) => {
-            const t = setTimeout(resolve, script.delay?.[mode] ?? 0)
-            signal.addEventListener('abort', () => {
-              clearTimeout(t)
-              reject(new Error('aborted'))
-            })
-          })
+          await wait(script.delay?.[mode] ?? 0, signal)
           const next = queues[mode]?.shift()
           if (next === undefined) throw new Error(`no scripted reply for ${mode}`)
+          if (script.lineDelay !== undefined && onLine) {
+            for (const line of next.split('\n')) {
+              onLine(line)
+              await wait(script.lineDelay, signal)
+            }
+          }
           return next
         }
       }
@@ -212,6 +225,64 @@ describe('Turn', () => {
     expect(mains[0].text).toContain('<canvas>\n(board)\n</canvas>')
     // Both hidden sessions are released once the turn is over.
     expect(transport.closed.sort()).toEqual(['main', 'opener'])
+  })
+
+  it('with a streaming model, asks for no opener and plays each line as it arrives', async () => {
+    const { turn, events, transport } = setup({
+      replies: {
+        main: [
+          [
+            L({ say: 'The browser talks to the API.' }),
+            L({ box: 'api', at: [1, 0], label: 'API' }),
+            L({ say: 'The API reads the database.' })
+          ].join('\n')
+        ]
+      },
+      lineDelay: 40,
+      streams: true
+    })
+    const result = await turn.done
+    expect(transport.sent.map((s) => s.mode)).toEqual(['main'])
+    expect(transport.sent[0].text).not.toContain('one-sentence summary')
+    expect(events).toEqual([
+      'say:The browser talks to the API.',
+      'draw:box:api',
+      'say:The API reads the database.'
+    ])
+    // The first sentence played long before the last line was written.
+    expect(result.timing.firstAnswerSpoken).toBeLessThan(40)
+    expect(result.timing.parts[0]).toBeGreaterThanOrEqual(110)
+  })
+
+  it('holds streamed lines until the opener has played when the model does not stream', async () => {
+    const { turn, events, transport } = setup({
+      replies: {
+        opener: [L({ say: 'Opening.' })],
+        main: [[L({ say: 'Answer.' }), L({ box: 'b', at: [0, 0], label: 'B' })].join('\n')]
+      },
+      delay: { opener: 30, main: 1 },
+      lineDelay: 1,
+      streams: false
+    })
+    await turn.done
+    expect(transport.sent.map((s) => s.mode).sort()).toEqual(['main', 'opener'])
+    expect(events).toEqual(['say:Opening.', 'say:Answer.', 'draw:box:b'])
+  })
+
+  it('streams follow-up parts too', async () => {
+    const { turn, events, transport } = setup({
+      replies: {
+        main: [
+          [L({ say: 'Part one.' }), L({ more: true })].join('\n'),
+          [L({ say: 'Part two.' })].join('\n')
+        ]
+      },
+      lineDelay: 1,
+      streams: true
+    })
+    await turn.done
+    expect(events).toEqual(['say:Part one.', 'say:Part two.'])
+    expect(transport.sent.map((s) => s.mode)).toEqual(['main', 'main'])
   })
 
   it('only clears when the person asked', async () => {

@@ -13,6 +13,11 @@
 // sentence, an answer that opens by repeating it loses the repeat (but keeps
 // its drawing), and each sentence's drawing plays while it's spoken.
 //
+// A transport whose model streams (most providers other than Pareto: a fast
+// one writes its first line in 1-2 s) hands over each line as it's written.
+// Then there's no opener: the answer's own first sentence comes about as
+// soon, and each line plays as it arrives instead of when its part is done.
+//
 // The speech engine, the canvas and the model transport are all injected, so
 // this runs (and is tested) in plain Node. Ported from the prototype's
 // talk.tsx.
@@ -20,7 +25,16 @@
 import { asksForChange, asksToClear, agreesToBuild, similar } from './guards'
 import { toPageCmd, type PageCmd } from './page'
 import { AFTER_OPENER, type NarratorMode } from './prompts'
-import { parseReply, toBuild, toCmd, toResearch, toSay, type Cmd, type RawLine } from './protocol'
+import {
+  parseLine,
+  parseReply,
+  toBuild,
+  toCmd,
+  toResearch,
+  toSay,
+  type Cmd,
+  type RawLine
+} from './protocol'
 
 export interface Msg {
   role: 'user' | 'assistant'
@@ -36,9 +50,13 @@ export interface Segment {
   filler?: boolean
 }
 
-/** One hidden narrator session. `send` resolves with the whole reply. */
+/**
+ * One hidden narrator session. `send` resolves with the whole reply; a
+ * streaming transport also calls `onLine` with each line as it's written,
+ * every line of the reply (the last one too) before it resolves.
+ */
 export interface NarratorConversation {
-  send(text: string, signal: AbortSignal): Promise<string>
+  send(text: string, signal: AbortSignal, onLine?: (line: string) => void): Promise<string>
   /** The turn is done with it (e.g. delete the hidden session). Best-effort. */
   close?(): void
 }
@@ -46,6 +64,8 @@ export interface NarratorConversation {
 export interface NarratorTransport {
   /** A conversation for this mode, ideally from a pool created ahead of time. */
   open(mode: NarratorMode): Promise<NarratorConversation>
+  /** The model streams its lines, so the turn needs no opener. */
+  streams?(): boolean | Promise<boolean>
 }
 
 export interface Speaker {
@@ -282,8 +302,12 @@ export class Turn {
     })
     const gateTimer = this.clock.setTimeout(() => openGate(), this.delays.gate)
 
+    const streaming = (await this.deps.transport.streams?.()) === true
     let openerDone: Promise<void>
-    if (this.req.mode === 'walkthrough') {
+    if (streaming && this.req.mode === 'talk') {
+      openGate()
+      openerDone = Promise.resolve()
+    } else if (this.req.mode === 'walkthrough') {
       // Nothing to wait for: the checkpoint is news the person is expecting.
       this.deps.speaker.prepare?.(WALKTHROUGH_OPENER)
       this.segs.push({ say: WALKTHROUGH_OPENER, cmds: [] })
@@ -316,18 +340,31 @@ export class Turn {
         files: this.deps.files?.(),
         research: this.req.research,
         checkpoint: this.req.checkpoint,
-        afterOpener: this.req.mode === 'talk'
+        afterOpener: this.req.mode === 'talk' && !streaming
       })
       for (let n = 0; n < MAX_PARTS && !this.aborted; n++) {
-        const reply = await conv.send(prompt, this.ctl.signal)
+        // Lines are taken as they stream in, but not before the opener's gate.
+        const lines: RawLine[] = []
+        let taken = 0
+        let streamed = false
+        let more = false
+        const takeLines = (): void => {
+          if (!gateOpen || this.aborted) return
+          while (taken < lines.length) if (this.take(lines[taken++], false)) more = true
+          this.notify()
+        }
+        const reply = await conv.send(prompt, this.ctl.signal, (raw) => {
+          streamed = true
+          const line = parseLine(raw)
+          if (!line) return
+          lines.push(line)
+          takeLines()
+        })
         this.timing.parts.push(this.since())
+        if (!streamed) lines.push(...parseReply(reply))
         if (n === 0) await gate
         if (this.aborted) break
-        let more = false
-        for (const line of parseReply(reply)) {
-          if (this.take(line, false)) more = true
-        }
-        this.notify()
+        takeLines()
         if (!more) break
         prompt = continuePrompt(this.deps.describe())
       }

@@ -265,6 +265,10 @@ export interface AppState {
   // see the model-switcher dropdown in ChatPanel/AgentsView). null until
   // ensureAgent's first connect resolves a default. Persisted to localStorage.
   selectedModel: SelectedModel | null
+  // The whiteboard narrator's model, picked under the board. null is the
+  // default: Pareto when it has a key, otherwise the chat's model
+  // (whiteboard/narrator-models.ts). Persisted to localStorage.
+  narratorModel: SelectedModel | null
   // Providers opencode already has credentials for, with their model lists.
   // Populated on connect — this is what the model-switcher lists, so
   // switching models never re-prompts for an API key.
@@ -371,6 +375,8 @@ export interface StoreApi {
   // Pins new chat sends (any tab) to this provider/model. Doesn't touch
   // credentials — only ever offers providers already in availableProviders.
   selectModel(model: SelectedModel | null): void
+  // The whiteboard narrator's model; null goes back to the default.
+  selectNarratorModel(model: SelectedModel | null): void
   // Toggles a path in/out of coverageIgnore, persisting to
   // .codeswim/spec-ignore.
   toggleCoverageIgnore(path: string): Promise<void>

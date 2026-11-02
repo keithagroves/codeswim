@@ -459,6 +459,7 @@ export class WhiteboardController {
     if (result.error) {
       this.addEntry('info', result.error)
       // The narrator's server may have gone away; reconnect next time.
+      this.transport?.dispose?.()
       this.transport = null
     }
     const reply = result.reply + (result.aborted ? '\n(interrupted)' : '')

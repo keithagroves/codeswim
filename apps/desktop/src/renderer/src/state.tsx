@@ -83,6 +83,7 @@ import {
 } from '@codeswim/whiteboard'
 import { WhiteboardController, type BuildOutcome } from './whiteboard/controller'
 import { OpencodeNarrator } from './whiteboard/narrator'
+import { narratorCandidates } from './whiteboard/narrator-models'
 import { WhiteboardSpeaker } from './whiteboard/speech'
 import { KokoroSpeaker, type AudioOut } from './whiteboard/kokoro-speaker'
 import { VoiceSettings } from './whiteboard/voice'
@@ -226,6 +227,7 @@ const initialState: AppState = {
   agentTabs: [],
   activeAgentTabId: null,
   selectedModel: null,
+  narratorModel: null,
   availableProviders: [],
   unbiased: { account: null, pending: null, error: null },
   coverageIgnore: []
@@ -354,6 +356,7 @@ export type Action =
   | { type: 'set-change-count'; count: number }
   | { type: 'set-open-pr-count'; count: number }
   | { type: 'set-selected-model'; model: SelectedModel | null }
+  | { type: 'set-narrator-model'; model: SelectedModel | null }
   | { type: 'set-available-providers'; providers: ConfiguredProvider[] }
   | { type: 'set-unbiased'; patch: Partial<AppState['unbiased']> }
   | { type: 'set-coverage-ignore'; paths: string[] }
@@ -771,6 +774,8 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, openPrCount: action.count }
     case 'set-selected-model':
       return { ...state, selectedModel: action.model }
+    case 'set-narrator-model':
+      return { ...state, narratorModel: action.model }
     case 'set-available-providers':
       return { ...state, availableProviders: action.providers }
     case 'set-unbiased':
@@ -780,16 +785,6 @@ function reducer(state: AppState, action: Action): AppState {
     default:
       return state
   }
-}
-
-// The model the whiteboard narrator speaks with: Unbiased's Pareto whenever it
-// has a key (the prototype's measurements were all on Pareto), otherwise the
-// model the chat uses.
-function narratorModel(state: AppState): SelectedModel | undefined {
-  if (state.availableProviders.some((p) => p.id === UNBIASED_PROVIDER)) {
-    return { providerID: UNBIASED_PROVIDER, modelID: UNBIASED_PROVIDER }
-  }
-  return state.selectedModel ?? undefined
 }
 
 // Folders whose markdown is never the project's own diagrams.
@@ -938,7 +933,13 @@ function createWhiteboardController(refs: {
   const controller: WhiteboardController = new WhiteboardController({
     connect: async () => {
       const conn = await window.api.whiteboardStart()
-      return new OpencodeNarrator(conn.url, conn.directory, () => narratorModel(stateRef.current))
+      return new OpencodeNarrator(conn.url, conn.directory, (providers) =>
+        narratorCandidates({
+          choice: stateRef.current.narratorModel,
+          providers,
+          chat: stateRef.current.selectedModel ?? undefined
+        })
+      )
     },
     speaker: new WhiteboardSpeaker(
       () => controller.isMuted,
@@ -2034,6 +2035,10 @@ Explain behavior and intent without pasting the implementation. Use relative Mar
 
   const selectModel = useCallback((model: SelectedModel | null) => {
     dispatch({ type: 'set-selected-model', model })
+  }, [])
+
+  const selectNarratorModel = useCallback((model: SelectedModel | null) => {
+    dispatch({ type: 'set-narrator-model', model })
   }, [])
 
   // Still used directly by `reload` below, which re-reads the current file
@@ -3138,6 +3143,37 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
     }
   }, [state.selectedModel])
 
+  // The whiteboard narrator's model: null is the default (Pareto, else the
+  // chat's model: whiteboard/narrator-models.ts), so only a pick is stored.
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('codeswim:narratorModel')
+      if (stored) {
+        const parsed = JSON.parse(stored) as Partial<SelectedModel>
+        if (typeof parsed.providerID === 'string' && typeof parsed.modelID === 'string') {
+          dispatch({
+            type: 'set-narrator-model',
+            model: { providerID: parsed.providerID, modelID: parsed.modelID }
+          })
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  useEffect(() => {
+    try {
+      if (state.narratorModel) {
+        localStorage.setItem('codeswim:narratorModel', JSON.stringify(state.narratorModel))
+      } else {
+        localStorage.removeItem('codeswim:narratorModel')
+      }
+    } catch {
+      // ignore
+    }
+  }, [state.narratorModel])
+
   // Persist the Agents-view tab strip (id/sessionId/title only — see
   // PersistedAgentTabs in @codeswim/contract) to .codeswim/agent-tabs.json
   // via the main process, so it survives a restart. Keyed off a lightweight
@@ -3216,6 +3252,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       unbiasedCancelSignIn,
       unbiasedSignOut,
       selectModel,
+      selectNarratorModel,
       toggleCoverageIgnore,
       newSession,
       switchSession,
@@ -3325,6 +3362,7 @@ Inspect the changes for correctness bugs, security issues, and whether they keep
       unbiasedCancelSignIn,
       unbiasedSignOut,
       selectModel,
+      selectNarratorModel,
       toggleCoverageIgnore,
       newSession,
       switchSession,

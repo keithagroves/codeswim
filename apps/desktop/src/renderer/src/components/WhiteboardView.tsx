@@ -19,6 +19,7 @@ import { useSurfaceContext } from '../context/useSurfaceContext'
 import { TldrawCanvas, type Insets } from '../whiteboard/tldraw-canvas'
 import { NATURAL_VOICES, type VoicePreference } from '../whiteboard/voice'
 import { speechLabel } from '../whiteboard/speech-mode'
+import { isFree, modelKey } from '../whiteboard/narrator-models'
 import { SpeechModeButton } from './SpeechMode'
 
 // Fonts, icons and translations are bundled by Vite and served from the app
@@ -247,6 +248,7 @@ export function WhiteboardView(): React.JSX.Element {
           ) : snap.connecting ? (
             <span className="whiteboard-strip-hint">Starting the narrator…</span>
           ) : null}
+          <NarratorModelSelect />
           <select
             className="whiteboard-voice"
             aria-label="Voice"
@@ -308,6 +310,55 @@ export function WhiteboardView(): React.JSX.Element {
         ) : null}
       </div>
     </div>
+  )
+}
+
+// The narrator's model: by default Pareto when it has a key, otherwise the
+// chat's model (whiteboard/narrator-models.ts), or any model the chat can use.
+// Models that stream answer sooner: the first sentence plays as it's written.
+// opencode's free models aren't offered: they refuse the narrator's requests.
+// Takes effect from the next question.
+function NarratorModelSelect(): React.JSX.Element {
+  const { state, selectNarratorModel } = useStore()
+  const choice = state.narratorModel
+  const value = choice ? modelKey(choice) : 'default'
+  const providers = state.availableProviders
+    .map((p) => ({
+      ...p,
+      models: p.models.filter((m) => !isFree({ providerID: p.id, modelID: m.id }))
+    }))
+    .filter((p) => p.models.length > 0)
+  const listed = providers.some((p) =>
+    p.models.some((m) => choice && p.id === choice.providerID && m.id === choice.modelID)
+  )
+  return (
+    <select
+      className="whiteboard-model"
+      aria-label="Narrator model"
+      title="The model the narrator talks with"
+      value={value}
+      onChange={(e) => {
+        const v = e.target.value
+        const slash = v.indexOf('/')
+        selectNarratorModel(
+          v === 'default' || slash < 0
+            ? null
+            : { providerID: v.slice(0, slash), modelID: v.slice(slash + 1) }
+        )
+      }}
+    >
+      <option value="default">Default model</option>
+      {choice && !listed ? <option value={value}>{choice.modelID}</option> : null}
+      {providers.map((p) => (
+        <optgroup key={p.id} label={p.name}>
+          {p.models.map((m) => (
+            <option key={m.id} value={modelKey({ providerID: p.id, modelID: m.id })}>
+              {m.name}
+            </option>
+          ))}
+        </optgroup>
+      ))}
+    </select>
   )
 }
 
