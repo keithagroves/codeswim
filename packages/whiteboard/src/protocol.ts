@@ -3,8 +3,8 @@
 // The model writes lines like {"box":"api","at":[1,0],"label":"API"}; this
 // module parses them tolerantly and turns drawing lines into typed board
 // commands (`Cmd`) the board model understands. Everything the model can get
-// wrong in a way that would break the canvas — HTML in labels, colors tldraw
-// doesn't have, shapes it doesn't know, paths that escape the workspace — is
+// wrong in a way that would break the canvas — HTML in labels, colors the
+// canvas doesn't have, shapes it doesn't know, paths that escape the workspace — is
 // cleaned up here, in code, rather than trusted to the prompt.
 //
 // `shot` lines need a capture of the page beside the board first; the
@@ -155,8 +155,8 @@ export function cleanName(value: unknown): string {
 }
 
 /**
- * tldraw rejects (and crashes on) unknown colors, so near misses are mapped
- * and anything else falls back to a default.
+ * The board's colors are a fixed set (the canvas's palette), so near misses
+ * are mapped and anything else falls back to a default.
  */
 export function toColor(value: unknown, fallback: Color = 'blue'): Color {
   const s = String(value ?? '')

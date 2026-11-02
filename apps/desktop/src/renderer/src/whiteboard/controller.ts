@@ -2,7 +2,7 @@
 // build hand-off, outside React.
 //
 // It lives as long as the StoreProvider (one per window) so a conversation
-// and a running build survive switching views. The tldraw canvas attaches
+// and a running build survive switching views. The sketch canvas attaches
 // while the Whiteboard view is mounted and is rebuilt from the board model
 // when it remounts; drawing commands always update the model, and only
 // animate when a canvas is attached.

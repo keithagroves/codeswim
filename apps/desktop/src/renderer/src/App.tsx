@@ -35,7 +35,7 @@ import { StoreProvider } from './state'
 import { useStore } from './store'
 import logoUrl from './assets/codeswim.svg'
 
-// The whiteboard pulls in tldraw, which is large; load it only when opened.
+// The whiteboard (its sketch scene, speech and voices) loads only when opened.
 const WhiteboardView = lazy(() =>
   import('./components/WhiteboardView').then((m) => ({ default: m.WhiteboardView }))
 )

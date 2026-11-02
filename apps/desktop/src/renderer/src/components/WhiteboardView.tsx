@@ -1,6 +1,6 @@
 // The Whiteboard workspace view (plans/talking-whiteboard.md): talk through
 // what to build, and the narrator answers out loud while sketching it on a
-// read-only tldraw canvas. You talk to it in the Agent panel's chat, or out
+// read-only SVG sketch. You talk to it in the Agent panel's chat, or out
 // loud in speech mode (the sound-wave button); the narrator does all the drawing, and its replies land
 // in the same thread as the agent's. Agreeing to a design hands it to the
 // agent, which builds it diagram-first, and the narrator comes back with a
@@ -8,26 +8,18 @@
 //
 // The conversation itself lives in WhiteboardController (outlives this
 // component); this view shows the board, captions and voice controls, and
-// attaches the canvas while mounted.
+// attaches the canvas (an SVG sketch scene, @codeswim/sketch) while mounted.
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { Tldraw, type Editor, type TLEventInfo } from 'tldraw'
-import { getAssetUrlsByImport } from '@tldraw/assets/imports.vite'
-import 'tldraw/tldraw.css'
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { SketchScene } from '@codeswim/sketch'
+import '@fontsource/shantell-sans/400.css'
 import { useStore } from '../store'
 import { useSurfaceContext } from '../context/useSurfaceContext'
-import { TldrawCanvas, type Insets } from '../whiteboard/tldraw-canvas'
+import { SketchCanvas, type Insets } from '../whiteboard/sketch-canvas'
 import { NATURAL_VOICES, type VoicePreference } from '../whiteboard/voice'
 import { speechLabel } from '../whiteboard/speech-mode'
 import { isFree, modelKey } from '../whiteboard/narrator-models'
 import { SpeechModeButton } from './SpeechMode'
-
-// Fonts, icons and translations are bundled by Vite and served from the app
-// itself, not tldraw's CDN, so the CSP stays as it is. The URLs pass through
-// unchanged: tldraw's default formatter only knows http(s) and data URLs, and
-// turned the packaged build's file:// URLs into file:///file:///… .
-const assetUrls = getAssetUrlsByImport((url) => url)
-const licenseKey = (import.meta.env as Record<string, string | undefined>).VITE_TLDRAW_LICENSE_KEY
 
 // What the overlays cover: page tabs on top, captions and the control strip
 // at the bottom. The canvas keeps the drawing clear of them.
@@ -41,9 +33,7 @@ export function WhiteboardView(): React.JSX.Element {
   const snap = useSyncExternalStore(whiteboard.subscribe, whiteboard.getSnapshot)
   const voiceSnap = useSyncExternalStore(voice.subscribe, voice.getSnapshot)
   const speechSnap = useSyncExternalStore(speech.subscribe, speech.getSnapshot)
-  const [licenseBlocked, setLicenseBlocked] = useState(false)
-  const canvasRef = useRef<TldrawCanvas | null>(null)
-  const hostRef = useRef<HTMLDivElement | null>(null)
+  const sceneHostRef = useRef<HTMLDivElement | null>(null)
 
   const currentPage = snap.pages.find((p) => p.id === snap.currentPageId) ?? null
   const showTabs = !snap.blank && (snap.pages.length > 1 || !!snap.pages[0]?.name)
@@ -88,59 +78,30 @@ export function WhiteboardView(): React.JSX.Element {
     return () => window.removeEventListener('keydown', onKey, true)
   }, [whiteboard])
 
-  // tldraw hides the editor in packaged builds without a license key (after
-  // ~5 s). Say so instead of showing an empty board.
+  // The board: a read-only sketch the narrator draws on. Clicking a linked
+  // box opens that diagram or file; dragging pans.
   useEffect(() => {
-    const t = setTimeout(() => {
-      if (hostRef.current?.querySelector('[data-testid="tl-license-expired"]'))
-        setLicenseBlocked(true)
-    }, 6000)
-    return () => clearTimeout(t)
-  }, [])
-
-  const onMount = useCallback(
-    (editor: Editor) => {
-      editor.user.updateUserPreferences({ colorScheme: 'dark' })
-      editor.updateInstanceState({ isReadonly: true })
-      const canvas = new TldrawCanvas(
-        editor,
-        () => INSETS,
-        (file) => whiteboard.shotImage(file)
-      )
-      canvasRef.current = canvas
-      whiteboard.attach(canvas)
-
-      // Clicking a linked box opens that diagram or file. A drag (pan) isn't a click.
-      let down: { x: number; y: number } | null = null
-      const onEvent = (info: TLEventInfo): void => {
-        if (info.type !== 'pointer') return
-        if (info.name === 'pointer_down') down = { x: info.point.x, y: info.point.y }
-        if (info.name !== 'pointer_up' || !down) return
-        const moved = Math.hypot(info.point.x - down.x, info.point.y - down.y)
-        down = null
-        if (moved > 5) return
-        const shape = editor.getShapeAtPoint(editor.inputs.currentPagePoint, { hitInside: true })
-        const link = (shape?.meta as { link?: unknown } | undefined)?.link
-        if (typeof link === 'string') void whiteboard.openLink(link)
-      }
-      editor.on('event', onEvent)
-      return () => {
-        editor.off('event', onEvent)
-        whiteboard.detach(canvas)
-        canvas.dispose()
-        canvasRef.current = null
-      }
-    },
-    [whiteboard]
-  )
+    const host = sceneHostRef.current
+    if (!host) return
+    const scene = new SketchScene(host, { onLink: (link) => void whiteboard.openLink(link) })
+    const canvas = new SketchCanvas(
+      scene,
+      () => INSETS,
+      (file) => whiteboard.shotImage(file)
+    )
+    whiteboard.attach(canvas)
+    return () => {
+      whiteboard.detach(canvas)
+      canvas.dispose()
+      scene.destroy()
+    }
+  }, [whiteboard])
 
   const lastBuild = snap.lastBuild
 
   return (
-    <div className="whiteboard" ref={hostRef}>
-      <div className="whiteboard-canvas">
-        <Tldraw hideUi onMount={onMount} assetUrls={assetUrls} licenseKey={licenseKey} />
-      </div>
+    <div className="whiteboard">
+      <div className="whiteboard-canvas" ref={sceneHostRef} />
 
       <div className="whiteboard-top">
         {showTabs ? (
@@ -181,9 +142,9 @@ export function WhiteboardView(): React.JSX.Element {
         <VoiceBanner />
       </div>
 
-      {/* Only before the first question, and never under the license notice:
-          a conversation about the page beside the board can leave it blank. */}
-      {snap.blank && !snap.talking && snap.entries.length === 0 && !licenseBlocked ? (
+      {/* Only before the first question: a conversation about the page beside
+          the board can leave it blank. */}
+      {snap.blank && !snap.talking && snap.entries.length === 0 ? (
         <div className="whiteboard-empty">
           <h2>Talk through what to build</h2>
           <p>
@@ -192,16 +153,6 @@ export function WhiteboardView(): React.JSX.Element {
           </p>
           <p className="whiteboard-hint">
             Type in the Agent chat, or press the sound-wave button to talk to it out loud.
-          </p>
-        </div>
-      ) : null}
-
-      {licenseBlocked ? (
-        <div className="whiteboard-empty">
-          <h2>The canvas needs a tldraw license</h2>
-          <p>
-            tldraw hides its editor in packaged builds without a license key. Set
-            VITE_TLDRAW_LICENSE_KEY when building. Captions and the conversation still work.
           </p>
         </div>
       ) : null}

@@ -5,7 +5,7 @@ tags: [whiteboard, narrator, renderer, agent]
 ---
 
 The Whiteboard view is where you talk through what to build. The narrator
-answers out loud and sketches the design on a read-only tldraw canvas, lays
+answers out loud and sketches the design on a read-only SVG sketch, lays
 real choices side by side for you to make, and, once you say yes, hands an
 agreed design brief to the workspace's agent. The agent builds it the usual
 way (`diagram_edit` first, then code) while the whiteboard stays quiet. At the
@@ -36,7 +36,7 @@ flowchart TD
     Kokoro -->|IPC: PCM| VoiceHost[VoiceHost<br/>main]
     VoiceHost -->|utility process| VoiceWorker[voice-worker<br/>Kokoro on onnxruntime-node]
     Turn -->|draw while spoken| Board[BoardModel<br/>layout + guards]
-    Board -->|effects| Canvas[TldrawCanvas<br/>read-only tldraw]
+    Board -->|effects| Canvas[SketchCanvas<br/>read-only SVG sketch]
     Turn --> Transport[OpencodeNarrator<br/>hidden sessions]
     Transport -->|HTTP| Narrator[Narrator sidecar<br/>opencode serve, no plugin]
     Turn -->|build line after a yes| Build[runWhiteboardBuild]
@@ -63,7 +63,7 @@ flowchart TD
     click VoiceHost call navigate("../apps/desktop/src/main/voice.ts")
     click VoiceWorker call navigate("../apps/desktop/src/main/voice-worker.ts")
     click Board call navigate("../packages/whiteboard/src/board.ts")
-    click Canvas call navigate("../apps/desktop/src/renderer/src/whiteboard/tldraw-canvas.ts")
+    click Canvas call navigate("../apps/desktop/src/renderer/src/whiteboard/sketch-canvas.ts")
     click Transport call navigate("../apps/desktop/src/renderer/src/whiteboard/narrator.ts")
     click Narrator call navigate("../apps/desktop/src/main/sidecar.ts")
     click Build call navigate("../apps/desktop/src/renderer/src/whiteboard/build.ts")
@@ -77,7 +77,7 @@ flowchart TD
 ## Source
 
 - [packages/whiteboard](../packages/whiteboard/src/index.ts): the pure,
-  tested core (no Electron, no tldraw):
+  tested core (no Electron, no DOM):
   - the line protocol and its parser ([protocol.ts](../packages/whiteboard/src/protocol.ts))
   - the board model ([board.ts](../packages/whiteboard/src/board.ts))
   - the guards ([guards.ts](../packages/whiteboard/src/guards.ts))
@@ -92,7 +92,10 @@ flowchart TD
     [opener](../packages/whiteboard/src/prompts/opener.ts),
     [after-opener](../packages/whiteboard/src/prompts/after-opener.ts) and
     [walkthrough](../packages/whiteboard/src/prompts/walkthrough.ts)
-- Renderer: the view, controller, tldraw canvas, narrator transport, speech,
+- [packages/sketch](../packages/sketch/src/index.ts): the SVG scene the board
+  is drawn on, with its geometry (outlines, curved arrows cut at each shape's
+  edge, wrapping, the camera) and the hand-drawn wobble tested in Node
+- Renderer: the view, controller, sketch canvas, narrator transport, speech,
   build hand-off and research ([research.ts](../apps/desktop/src/renderer/src/whiteboard/research.ts))
   under [whiteboard/](../apps/desktop/src/renderer/src/whiteboard/controller.ts),
   and the shared thread in the Agent panel
@@ -302,7 +305,7 @@ The prototype found the model breaks each of these even when told not to:
   narrator asks first. `whiteboard.ask` is human-only on the command bus, so
   an agent can't say yes for you.
 - `show` only opens the person's running app or the site already showing.
-- Labels are plain words, and colors and shapes are mapped to tldraw's set.
+- Labels are plain words, and colors and shapes are mapped to the board's set.
 - Boxes never overlap, and arrows curve around boxes in their way.
 - An answer that repeats the opener loses the repeat.
 
@@ -319,12 +322,12 @@ characters.
 
 ## Notes
 
-- tldraw needs a license key in packaged builds (`VITE_TLDRAW_LICENSE_KEY`).
-  Without one it hides the editor after a few seconds, and the view says so.
-  Dev builds work without a key. The board model is canvas-agnostic, so
-  swapping libraries means replacing `tldraw-canvas.ts` alone.
-- The view is lazy-loaded, so tldraw (about 4 MB) only loads when the
-  Whiteboard opens. Its fonts and translations are bundled, not fetched from
-  a CDN, so the CSP is unchanged.
+- The board is drawn by our own SVG scene (`@codeswim/sketch`), not a
+  canvas library: tldraw needed a production license key, and the narrator
+  uses only a read-only sliver of an editor. Each element is one SVG group,
+  redrawn from its spec when it changes; a shape's wobble is seeded by its
+  id, so it stays put while it moves. The font (Shantell Sans, OFL) is
+  bundled, so the CSP is unchanged. The board model is canvas-agnostic, so
+  the scene only ever sees `sketch-canvas.ts`.
 - `.codeswim/whiteboard/` carries its own `.gitignore`, so design
   conversations stay local unless you delete it.

@@ -33,6 +33,9 @@ electron-vite bundles the workspace source directly:
 - `@codeswim/whiteboard` — the talking whiteboard's pure core: line
   protocol, board model, guards, turn scheduler and narrator prompts
   ([architecture/whiteboard.md](architecture/whiteboard.md)).
+- `@codeswim/sketch` — the read-only SVG scene the whiteboard draws on
+  (hand-drawn shapes, curved arrows, pan/zoom), with its geometry tested in
+  Node. Our own rather than tldraw, which needs a production license key.
 - `@codeswim/harness` — the opencode plugin, session gate, tools, and
   prompts that get bundled into `out/harness/`.
 

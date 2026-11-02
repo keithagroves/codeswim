@@ -487,6 +487,18 @@ a packaged-build bug: tldraw's asset formatter turned `file://` URLs into
 `file:///file:///…`, so the canvas fonts and translations failed to load
 outside dev.
 
+### Our own SVG sketch instead of tldraw (2026-11-01)
+
+tldraw's license doesn't allow production use without a key, and a modified
+copy is still under it. The narrator used a read-only sliver of the editor
+(five element kinds, eight effects), so the board is now drawn by
+`@codeswim/sketch`: an SVG scene with hand-drawn shapes (seeded wobble),
+curved arrows cut at each shape's real outline, pan and zoom, and link
+clicks. The whiteboard's bundle went from 3.9 MB to 48 KB, and the license
+notice is gone. Checked in the built app: a saved board with every element
+kind redraws, a live narrator turn animates, zoom and pan work, and a click on
+a linked box opens its diagram.
+
 ### Screenshots and circles on the board (2026-10-25)
 
 The narrator can put a screenshot of the page beside the board onto the

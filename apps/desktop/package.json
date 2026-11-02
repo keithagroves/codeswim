@@ -52,9 +52,11 @@
     "@codeswim/domain-kanban": "*",
     "@codeswim/domain-skills": "*",
     "@codeswim/domain-unbiased": "*",
+    "@codeswim/sketch": "*",
     "@codeswim/whiteboard": "*",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "@fontsource/shantell-sans": "^5.3.0",
     "@lezer/highlight": "^1.2.3",
     "@opencode-ai/sdk": "^1.18.21",
     "chokidar": "^5.0.0",
@@ -73,7 +75,6 @@
   "devDependencies": {
     "@opencode-ai/plugin": "^1.18.21",
     "@playwright/test": "^1.62.1",
-    "@tldraw/assets": "^5.5.2",
     "@types/js-yaml": "^4.0.9",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
@@ -86,7 +87,6 @@
     "kokoro-js": "^1.2.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "tldraw": "^5.5.2",
     "vite": "^7.3.6",
     "vitest": "^4.1.11"
   }

@@ -6087,7 +6087,7 @@ body.is-panning .diagram-canvas-wrap {
   color: var(--text-muted);
 }
 
-/* Whiteboard (plans/talking-whiteboard.md): a read-only tldraw canvas the
+/* Whiteboard (plans/talking-whiteboard.md): a read-only sketch scene the
    narrator draws on, with page tabs on top and captions + the command strip
    at the bottom. Overlays float over the canvas; their sizes match INSETS in
    components/WhiteboardView.tsx, which keeps the drawing clear of them. */
@@ -6101,11 +6101,6 @@ body.is-panning .diagram-canvas-wrap {
 .whiteboard-canvas {
   position: absolute;
   inset: 0;
-}
-
-/* tldraw's dark theme, nudged onto the app's background. */
-.whiteboard-canvas .tl-container {
-  --color-background: #101014;
 }
 
 .whiteboard-top {

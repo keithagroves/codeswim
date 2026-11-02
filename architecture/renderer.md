@@ -39,7 +39,7 @@ flowchart TD
     Diagram --> ErrBanner[MermaidErrorBanner]
     Read --> Prose[MarkdownProse]
     AppRoot --> ScriptCtl[ScriptControls]
-    AppRoot --> Whiteboard[WhiteboardView<br/>lazy-loaded tldraw]
+    AppRoot --> Whiteboard[WhiteboardView<br/>lazy-loaded SVG sketch]
     Whiteboard --> WbCtl[whiteboard/controller.ts]
     AppRoot --> Browser[BrowserPanelView<br/>right-side column]
     Browser --> BrowserStore[browser/panel.ts]
@@ -97,7 +97,7 @@ The whiteboard uses the same panel: it describes the page to its narrator, point
 
 The fourth workspace view, next to Explore / Plan / Agents. Its conversation
 and board live in `WhiteboardController`, one per `StoreProvider`, so they
-outlive the view's mounts; the tldraw canvas attaches while the view is
+outlive the view's mounts; the sketch canvas attaches while the view is
 mounted and is rebuilt from the board model. You talk to it in the Agent
 panel's chat, whose thread merges the narrator's replies with the agent's
 messages by time ([chat/thread.ts](../apps/desktop/src/renderer/src/chat/thread.ts)).

@@ -56,9 +56,9 @@ describe('clean', () => {
 })
 
 describe('colors and shapes', () => {
-  it('maps near misses onto tldraw colors', () => {
+  it('maps near misses onto the board colors', () => {
     expect(toColor('gray')).toBe('grey')
-    // tldraw has no light grey, so it falls back rather than crashing the canvas.
+    // There's no light grey, so it falls back to the default.
     expect(toColor('light gray')).toBe('blue')
     expect(toColor('purple')).toBe('violet')
     expect(toColor('Light Blue')).toBe('light-blue')

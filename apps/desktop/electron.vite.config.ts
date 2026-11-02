@@ -15,6 +15,7 @@ const bundledWorkspaceDeps = [
   '@codeswim/domain-kanban',
   '@codeswim/domain-unbiased',
   '@codeswim/domain-skills',
+  '@codeswim/sketch',
   '@codeswim/whiteboard'
 ]
 
@@ -77,9 +78,7 @@ export default defineConfig({
     },
     plugins: [react()],
     optimizeDeps: {
-      // @tldraw/assets imports its fonts/icons with `?url`; pre-bundling
-      // drops those imports and getAssetUrlsByImport crashes in dev.
-      exclude: ['ghostty-web', '@tldraw/assets']
+      exclude: ['ghostty-web']
     }
   }
 })

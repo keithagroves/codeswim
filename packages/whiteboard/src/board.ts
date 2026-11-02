@@ -1,7 +1,7 @@
 // The whiteboard's model: pages and the things drawn on them, in page units.
 //
-// This is the source of truth for the board. The tldraw view in the renderer
-// is only a renderer: `apply(cmd)` updates the model and returns the visual
+// This is the source of truth for the board. The sketch canvas in the
+// renderer is only a renderer: `apply(cmd)` updates the model and returns the visual
 // effects (add / update / fade / delete / pulse / page) for the view to
 // animate, and a remounted view rebuilds itself from the model without
 // animation. Keeping layout decisions here — free-cell placement, arrows that
