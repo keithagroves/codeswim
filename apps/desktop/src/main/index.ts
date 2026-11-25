@@ -66,14 +66,6 @@ import { LISTEN_MAX_SAMPLES, type FromListenWorker } from './listen-protocol'
 import { ClaudeIdeBridge } from './claude-ide'
 import { BrowserHost } from './browser-host'
 import { isTarget } from './browser-page'
-import {
-  UNBIASED_PROVIDER_ID,
-  cancelSignIn as unbiasedCancelSignIn,
-  getStatus as unbiasedStatus,
-  signOut as unbiasedSignOut,
-  startSignIn as unbiasedSignIn,
-  type UnbiasedHost
-} from './unbiased'
 import { CommandServer, type CommandRendererResponse } from './command-server'
 import { createCardWorktree, listCardWorktrees, removeCardWorktree } from './kanban-worktree'
 import {
@@ -156,9 +148,7 @@ const claudeIde = new ClaudeIdeBridge({
   }
 })
 
-// Starts (or reuses) the opencode harness for this workspace. Shared by the
-// renderer's harness:start and by main-side callers that need the server,
-// e.g. storing an Unbiased key in opencode's auth store.
+// Starts (or reuses) the opencode harness for this workspace.
 async function ensureSidecar(rootPath: string): Promise<SidecarHandle> {
   if (sidecar && sidecarRoot === rootPath) {
     return sidecar
@@ -279,34 +269,6 @@ async function ensureNarrator(): Promise<NarratorHandle> {
   })
   narrator = await narratorStarting
   return narrator
-}
-
-// Writes/removes a provider credential in opencode's auth store. The store
-// lives in the app's shared opencode XDG dir (sidecar-env.ts), not per
-// workspace, so whichever harness is up can take it; only start one for
-// `rootPath` when none is running or starting.
-async function opencodeAuth(
-  rootPath: string,
-  provider: string,
-  body: { type: 'api'; key: string } | null
-): Promise<void> {
-  const handle = sidecar ?? (await (sidecarStarting ?? ensureSidecar(rootPath)))
-  const res = await fetch(new URL(`auth/${encodeURIComponent(provider)}`, handle.url), {
-    method: body ? 'PUT' : 'DELETE',
-    headers: body ? { 'content-type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined
-  })
-  if (!res.ok) throw new Error(`opencode auth ${body ? 'set' : 'remove'} failed (${res.status})`)
-}
-
-const unbiasedHost: UnbiasedHost = {
-  applyKey: (rootPath, key) => opencodeAuth(rootPath, UNBIASED_PROVIDER_ID, { type: 'api', key }),
-  removeKey: (rootPath) => opencodeAuth(rootPath, UNBIASED_PROVIDER_ID, null),
-  notify: (event) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('unbiased:auth-changed', event)
-    }
-  }
 }
 
 const terminals = new Map<string, pty.IPty>()
@@ -1372,18 +1334,6 @@ app.whenReady().then(async () => {
   })
   ipcMain.handle('github:sign-out', () => githubSignOut())
   ipcMain.handle('github:token', () => githubToken())
-
-  // "Sign in with Unbiased" — device flow like GitHub's, but the result is a
-  // Pareto key stored in opencode's auth store (see unbiased.ts). Completion
-  // is pushed via 'unbiased:auth-changed'.
-  ipcMain.handle('unbiased:status', () => unbiasedStatus())
-  ipcMain.handle('unbiased:sign-in', (_event, rootPath: string) =>
-    unbiasedSignIn(rootPath, unbiasedHost)
-  )
-  ipcMain.handle('unbiased:cancel-sign-in', () => unbiasedCancelSignIn())
-  ipcMain.handle('unbiased:sign-out', (_event, rootPath: string) =>
-    unbiasedSignOut(rootPath, unbiasedHost)
-  )
 
   // Claude Code IDE bridge: the renderer reports the open file/selection and
   // answers proposed diffs (claude-ide.ts pushes 'claude-ide:*' events).

@@ -51,7 +51,6 @@
     "@codeswim/domain-github": "*",
     "@codeswim/domain-kanban": "*",
     "@codeswim/domain-skills": "*",
-    "@codeswim/domain-unbiased": "*",
     "@codeswim/sketch": "*",
     "@codeswim/whiteboard": "*",
     "@electron-toolkit/preload": "^3.0.2",

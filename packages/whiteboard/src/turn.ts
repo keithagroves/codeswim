@@ -1,7 +1,7 @@
 // One narrator turn: ask, then speak each sentence while drawing it.
 //
-// Pareto doesn't stream: every request comes back in one burst, about 2 s
-// plus 18 ms per output token. So a turn sends two requests at once:
+// A model that doesn't stream sends every reply back in one burst. So a
+// turn sends two requests at once:
 //
 // - a tiny *opener* (one sentence, back in 1.5-2.5 s) that is spoken while
 // - the *main* answer is still being generated. The main answer arrives in
@@ -13,10 +13,10 @@
 // sentence, an answer that opens by repeating it loses the repeat (but keeps
 // its drawing), and each sentence's drawing plays while it's spoken.
 //
-// A transport whose model streams (most providers other than Pareto: a fast
-// one writes its first line in 1-2 s) hands over each line as it's written.
-// Then there's no opener: the answer's own first sentence comes about as
-// soon, and each line plays as it arrives instead of when its part is done.
+// A transport whose model streams (a fast one writes its first line in
+// 1-2 s) hands over each line as it's written. Then there's no opener: the
+// answer's own first sentence comes about as soon, and each line plays as it
+// arrives instead of when its part is done.
 //
 // The speech engine, the canvas and the model transport are all injected, so
 // this runs (and is tested) in plain Node. Ported from the prototype's

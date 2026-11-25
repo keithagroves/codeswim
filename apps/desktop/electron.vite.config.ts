@@ -13,7 +13,6 @@ const bundledWorkspaceDeps = [
   '@codeswim/domain-git',
   '@codeswim/domain-github',
   '@codeswim/domain-kanban',
-  '@codeswim/domain-unbiased',
   '@codeswim/domain-skills',
   '@codeswim/sketch',
   '@codeswim/whiteboard'

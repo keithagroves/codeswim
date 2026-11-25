@@ -26,7 +26,7 @@ export const NARRATOR_AGENTS: Record<NarratorMode, string> = {
 
 /**
  * The `agent` block for the narrator sidecar's opencode config. No model is pinned here; the renderer picks one
- * per request (Pareto when it has a key), the same way the chat does.
+ * per request, the same way the chat does.
  */
 export function narratorAgentConfig(): Record<string, unknown> {
   const base = {

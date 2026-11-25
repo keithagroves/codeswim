@@ -97,22 +97,6 @@ interface StartOptions {
 
 const STDERR_TAIL_LIMIT = 40
 
-// Unbiased AI's `pareto` model, OpenAI-compatible. No apiKey here — opencode
-// fills it in from its own auth store (client.auth.set, same path the
-// 'Configure an AI provider' UI uses for every other provider), so a key
-// pasted in-app takes effect without a restart.
-const PARETO_PROVIDER = {
-  pareto: {
-    npm: '@ai-sdk/openai-compatible',
-    options: {
-      baseURL: 'https://api.unbiased.ai/v1'
-    },
-    models: {
-      pareto: {}
-    }
-  }
-}
-
 // One shared XDG root for every opencode process the app runs, so they all
 // read the same auth store (see sidecar-env.ts).
 function xdgRoot(): string {
@@ -135,8 +119,7 @@ export async function startSidecar(opts: StartOptions): Promise<SidecarHandle> {
     // enforced independently, fail-closed for agent origins, regardless of
     // this setting. A future permission-prompt UI can replace this with
     // `"ask"` for opencode's own sensitive tools.
-    permission: 'allow',
-    provider: PARETO_PROVIDER
+    permission: 'allow'
   }
 
   // Isolation + config injection rationale lives in sidecar-env.ts.
@@ -158,8 +141,8 @@ export interface NarratorHandle extends SidecarHandle {
 
 // A second, app-wide opencode process for the whiteboard narrator
 // (plans/talking-whiteboard.md). Same binary and same auth store as the
-// coding agent's sidecar, so the Unbiased key still lives only in opencode's
-// auth store and never crosses IPC. What differs is everything that would
+// coding agent's sidecar, so provider keys still live only in opencode's
+// auth store and never cross IPC. What differs is everything that would
 // otherwise leak into a spoken reply: no harness plugin, no instruction
 // files, Claude-compat prompt files off, and an empty working directory
 // instead of the workspace. opencode 1.18 appends instructions and the
@@ -171,10 +154,7 @@ export async function startNarratorSidecar(
 ): Promise<NarratorHandle> {
   const directory = path.join(app.getPath('userData'), 'whiteboard-narrator')
   mkdirSync(directory, { recursive: true })
-  const config = {
-    provider: PARETO_PROVIDER,
-    agent: narratorAgentConfig()
-  }
+  const config = { agent: narratorAgentConfig() }
   const { env, xdgDirs } = buildNarratorEnv(process.env, xdgRoot(), config)
   for (const dir of xdgDirs) mkdirSync(dir, { recursive: true })
   const handle = await spawnOpencode(directory, env, opts)

@@ -5,7 +5,7 @@
 // harness plugin (esbuild), with no loader config in any of them.
 
 /**
- * Cuts the model's hidden deliberation. On Unbiased Pareto this took a first
+ * Cuts the model's hidden deliberation. In the prototype this took a first
  * part from 11-16 s down to about 6 s with steady token counts, so it goes
  * first in every narrator prompt.
  */
