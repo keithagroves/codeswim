@@ -27,7 +27,7 @@ import {
   type NarratorTransport
 } from '@codeswim/whiteboard'
 import { getConfiguredProviders, type ConfiguredProvider, type SelectedModel } from '../agent'
-import { isUnavailable, modelKey, streams } from './narrator-models'
+import { isUnavailable, modelKey } from './narrator-models'
 
 const MODES: NarratorMode[] = ['opener', 'main', 'walkthrough']
 /** Spare sessions kept ready per mode. */
@@ -99,7 +99,8 @@ export class OpencodeNarrator implements NarratorTransport {
 
   async streams(): Promise<boolean> {
     if (!this.providers.length) await this.loadProviders().catch(() => {})
-    return streams(this.candidates()[0])
+    // With no model to pick, opencode falls back to its own: don't count on that one streaming.
+    return this.candidates().length > 0
   }
 
   async open(mode: NarratorMode): Promise<NarratorConversation> {

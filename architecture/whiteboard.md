@@ -128,16 +128,16 @@ flowchart TD
 
 ## How a turn works
 
-Pareto doesn't stream, so a turn sends two requests at once. A one-sentence
-*opener* comes back in 1.5–2.5 s and is spoken while the *main* answer is
-still being generated. The main answer arrives in parts of at most three
+With a model that doesn't stream, a turn sends two requests at once. A
+one-sentence *opener* comes back first and is spoken while the *main* answer
+is still being generated. The main answer arrives in parts of at most three
 sentences, and each next part is requested as soon as the previous one
 lands. Drawing waits until the opener has played. Each request carries the
 conversation, a `<canvas>` summary in grid terms, and a `<project>` list of
 the workspace's real diagrams, so boxes can link to them.
 
 The model menu under the board picks the narrator's model; the default is
-Pareto when it has a key, otherwise the chat's model
+the chat's model
 ([narrator-models.ts](../apps/desktop/src/renderer/src/whiteboard/narrator-models.ts)).
 Replies are read off opencode's event stream a line at a time
 ([narrator.ts](../apps/desktop/src/renderer/src/whiteboard/narrator.ts)), so
@@ -315,7 +315,7 @@ opencode 1.18 appends the instruction files, the environment block and the
 workspace's `AGENTS.md`/`CLAUDE.md` *after* the plugin's system-prompt hook,
 so the coding agent's sidecar can't give the narrator a clean prompt. The
 narrator runs as its own `opencode serve`. It uses the same binary and auth
-store, so the Unbiased key never crosses IPC. It has no plugin, no
+store, so provider keys never cross IPC. It has no plugin, no
 instructions, Claude-compat prompt files off, and an empty working
 directory. That cut the narrator's system prompt from about 34k to 7k
 characters.

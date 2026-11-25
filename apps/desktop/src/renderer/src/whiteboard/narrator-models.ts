@@ -1,7 +1,6 @@
 // Which model the whiteboard narrator speaks with, in the order to try them:
-// the person's pick (the model menu under the board), then Unbiased's Pareto
-// when it has a key, then the chat's model. The rest are fallbacks for when
-// the one before is unavailable.
+// the person's pick (the model menu under the board), then the chat's model,
+// the fallback for when the pick is unavailable.
 //
 // opencode's free models are left out. They stream fast (measured
 // 2026-10-29: 0.9-2 s to the first line), but the free tier refuses a request
@@ -11,15 +10,9 @@
 import type { ConfiguredProvider, SelectedModel } from '../agent'
 
 export const OPENCODE_PROVIDER = 'opencode'
-export const PARETO_PROVIDER = 'pareto'
 
 export function modelKey(m: SelectedModel): string {
   return `${m.providerID}/${m.modelID}`
-}
-
-/** Pareto answers in one burst (about 6 s for a part); other providers stream. */
-export function streams(m: SelectedModel | undefined): boolean {
-  return m !== undefined && m.providerID !== PARETO_PROVIDER
 }
 
 /** An opencode free-tier model: big-pickle, or any id ending in -free. */
@@ -40,11 +33,9 @@ export function narratorCandidates(opts: {
 }): SelectedModel[] {
   const has = (m: SelectedModel): boolean =>
     opts.providers.some((p) => p.id === m.providerID && p.models.some((x) => x.id === m.modelID))
-  const pareto = { providerID: PARETO_PROVIDER, modelID: PARETO_PROVIDER }
   const all = [
     // Before the server's list has loaded, trust the pick.
     ...(opts.choice && (has(opts.choice) || !opts.providers.length) ? [opts.choice] : []),
-    ...(has(pareto) ? [pareto] : []),
     ...(opts.chat ? [opts.chat] : [])
   ]
   const seen = new Set<string>()

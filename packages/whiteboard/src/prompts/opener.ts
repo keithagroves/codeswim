@@ -2,7 +2,7 @@ import { FAST } from './system'
 
 /**
  * The opener: one quick sentence to say while the full answer is still being
- * generated in parallel. It comes back in 1.5-2.5 s on Pareto, which is what
+ * generated in parallel. It comes back well before the answer, which is what
  * makes the conversation feel live.
  */
 export const OPENER = `${FAST}

@@ -264,8 +264,8 @@ export function WhiteboardView(): React.JSX.Element {
   )
 }
 
-// The narrator's model: by default Pareto when it has a key, otherwise the
-// chat's model (whiteboard/narrator-models.ts), or any model the chat can use.
+// The narrator's model: by default the chat's model
+// (whiteboard/narrator-models.ts), or any model the chat can use.
 // Models that stream answer sooner: the first sentence plays as it's written.
 // opencode's free models aren't offered: they refuse the narrator's requests.
 // Takes effect from the next question.

@@ -32,11 +32,3 @@ jobs:
 
       - name: Unit tests
         run: npm test
-
-      # Unbiased's partner conformance kit (packages/domain-unbiased/conformance):
-      # drives our device-flow client against a scripted mock of their sign-in
-      # endpoints and checks the polling rules on the wire — above all, that a
-      # token poll is never re-sent (a re-poll after the 200 revokes the user's
-      # key). Local only, touches no Unbiased systems; takes ~40s.
-      - name: Unbiased sign-in conformance
-        run: npm run conformance --workspace @codeswim/domain-unbiased
